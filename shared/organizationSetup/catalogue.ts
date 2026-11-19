@@ -301,7 +301,7 @@ function actStep(ctx: SetupCopyContext): SetupStepDefinition {
     key: "act", phase: "prepare",
     title: "Confirm where you're incorporating",
     description: `${placeSentence(ctx)} You chose this when you created the workspace.`,
-    to: "/app/society", actionLabel: "Review legal details",
+    to: "/app/society?tab=legal", actionLabel: "Review legal details",
   });
 }
 
@@ -336,7 +336,7 @@ function officeStep(ctx: SetupCopyContext, variant: SetupVariant): SetupStepDefi
       key: "office", phase: "prepare",
       title: "Check the registered office address",
       description: "Where legal notices are delivered. Make sure it matches the registry.",
-      to: "/app/society#registered-office", actionLabel: "Check the address",
+      to: "/app/society?tab=offices#registered-office", actionLabel: "Check the address",
     });
   }
   const description = ctx.bcSociety ? "A BC address for delivering and mailing records."
@@ -347,7 +347,7 @@ function officeStep(ctx: SetupCopyContext, variant: SetupVariant): SetupStepDefi
     key: "office", phase: "prepare",
     title: "Add the registered office address",
     description,
-    to: "/app/society#registered-office", actionLabel: "Add the address",
+    to: "/app/society?tab=offices#registered-office", actionLabel: "Add the address",
   });
 }
 
@@ -470,7 +470,7 @@ function corporationPreparingSteps(ctx: SetupCopyContext): SetupStepDefinition[]
       key: "records-office", phase: "prepare", allowNotApplicable: true,
       title: "Add the records office address",
       description: "Where the company keeps its records. It can be the same as the registered office.",
-      to: "/app/society#registered-office", actionLabel: "Add the address",
+      to: "/app/society?tab=offices#registered-office", actionLabel: "Add the address",
       reads: ["documents:read"],
     })] : []),
     step({
@@ -591,13 +591,13 @@ function corporationPreparingSteps(ctx: SetupCopyContext): SetupStepDefinition[]
         ? "Corporations Canada usually issues a CRA business number with the certificate. Record it."
         : ctx.bcCompany ? "BC Registries usually arranges a CRA business number with the certificate. Record it."
         : "Get a business number from the Canada Revenue Agency if you don't have one, then record it.",
-      to: "/app/society", actionLabel: "Record the number",
+      to: "/app/society?tab=tax", actionLabel: "Record the number",
     }),
     step({
       key: "provinces", phase: "organize", optional: true, allowNotApplicable: true,
       title: ctx.federal ? "Register in provinces where you do business" : "Register in other provinces where you do business",
       description: `${ctx.federal ? "Each province you operate in" : "Each other province you operate in"} may need its own registration.${ctx.operatingRegions ? ` You said you'll operate in: ${ctx.operatingRegions}.` : ""}`,
-      to: "/app/society#more-organization-details", actionLabel: "Add a registration",
+      to: "/app/society?tab=registrations", actionLabel: "Add a registration",
     }),
     accessStep(ctx, "organize"),
   ];
@@ -658,7 +658,7 @@ function societyPreparingSteps(ctx: SetupCopyContext): SetupStepDefinition[] {
       key: "tax", phase: "organize", allowNotApplicable: true,
       title: "Check CRA accounts and charity status",
       description: "A business number, GST and charity registration are separate from incorporation.",
-      to: "/app/society", actionLabel: "Record tax details",
+      to: "/app/society?tab=tax", actionLabel: "Record tax details",
     }),
     accessStep(ctx, "organize"),
   ];
@@ -677,7 +677,7 @@ function existingSteps(ctx: SetupCopyContext): SetupStepDefinition[] {
       key: "number", phase: "prepare",
       title: `Add your ${ctx.numberLabel}`,
       description: "It's on your certificate and on registry filings.",
-      to: "/app/society", actionLabel: "Add the number",
+      to: "/app/society?tab=legal", actionLabel: "Add the number",
     }),
     officeStep(ctx, "existing"),
     step({

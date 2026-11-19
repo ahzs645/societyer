@@ -39,7 +39,7 @@ const filing = render({ identifiers: [gst], filing: true });
 assert.match(filing, /Copy organization GST\/HST account 123456789RT0001/);
 assert.match(filing, /Current organization account/);
 assert.match(filing, /It does not change or verify a submitted return/);
-assert.match(filing, /\/app\/society#tax-identifiers/);
+assert.match(filing, /\/app\/society\?tab=tax/);
 assert.doesNotMatch(render({ identifiers: [gst], canRead: false, filing: true }), /123456789/);
 assert.match(render({ identifiers: [], filing: true }), /No GST\/HST account is saved/);
 assert.match(render({ filing: true }), /Loading the organization GST\/HST account/);

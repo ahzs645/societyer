@@ -1,53 +1,21 @@
 import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
-import { NaicsSectorField } from "../features/organizationProfile/NaicsSectorField";
-import { isModuleEnabled } from "../lib/modules";
-import { MonthDayPicker } from "../components/MonthDayPicker";
-import { formatAddressText } from "../../shared/structuredAddress";
-import { EntitySetupFields } from "../components/EntitySetupFields";
-import { entitySetupFields, validateEntitySetup } from "../../shared/entitySetup";
-import { IncorporationPreparation } from "../components/IncorporationPreparation";
-import { GoverningDocumentPicker, GoverningDocumentRow, useGoverningDocumentActions } from "../features/governingDocuments/GoverningDocuments";
-import { governingDocumentSlots, type GoverningDocumentField } from "../../shared/governingDocuments";
-import { authenticatedFetch } from "@/lib/authToken";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { validateEntitySetup } from "../../shared/entitySetup";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { FileDown, KeyRound, Landmark, MapPin, Plus, Trash2, Upload } from "lucide-react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { InfoPopover } from "../components/InfoPopover";
-import { Field, LockedField, Badge, Drawer, Banner } from "../components/ui";
+import { Tabs } from "../components/primitives";
 import { ORGANIZATION_SETUP_PATH } from "../../shared/organizationSetup/types";
-import { setupViewStepLink } from "../lib/organizationSetupLinks";
-import { Select } from "../components/Select";
-import { OptionSelect } from "../components/OptionSelect";
-import { GoverningActSelect, jurisdictionChoices } from "../components/GoverningActSelect";
 import { ENTITY_KIND_ENTITY_TYPES, entityKindForType, type IncorporationAct } from "../../shared/incorporationActs";
-import { DatePicker } from "../components/DatePicker";
-import { StructuredAddressFields } from "../components/StructuredAddressFields";
-import { Toggle } from "../components/Controls";
+import { isPreparingIncorporation } from "../../shared/organizationDomain";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
-import { revealAnchor } from "../lib/anchorReveal";
-import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
-import { OPTION_SETS, optionChoices, optionLabel, type OptionSetName } from "../lib/orgHubOptions";
-import {
-  FIELD_TYPES,
-  RecordListTable,
-  RecordTableEmpty,
-  staticRecordTable,
-  type SelectOption,
-} from "@/platform/record-engine";
-import { jurisdictionDisplayCopy, jurisdictionModuleContract, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
-import { homeJurisdictionCode, isCorporation, isPreparingIncorporation, isSociety } from "../../shared/organizationDomain";
-import { organizationVocabulary } from "../lib/organizationVocabulary";
-import { MarkdownEditor } from "../components/MarkdownEditor";
-import { TooltipCopyable } from "../components/TooltipCopyable";
-import { GstAccountReference } from "../components/GstAccountReference";
 import { useAuth } from "../auth/AuthProvider";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import {
@@ -57,17 +25,18 @@ import {
   summarizeWorkspaceBackup,
   type WorkspaceBackupSummary,
 } from "../lib/localWorkspaceExport";
-
-type DrawerKind = "address" | "registration" | "identifier";
-type LifecycleDateKey = "incorporationDate" | "continuanceDate" | "amalgamationDate" | "archivedAtISO" | "removedAtISO";
-
-const LIFECYCLE_DATE_TYPES: { value: LifecycleDateKey; label: string }[] = [
-  { value: "incorporationDate", label: "Incorporation date" },
-  { value: "continuanceDate", label: "Continuance date" },
-  { value: "amalgamationDate", label: "Amalgamation date" },
-  { value: "archivedAtISO", label: "Archived date" },
-  { value: "removedAtISO", label: "Removed date" },
-];
+import { OverviewTab, ProfileHeaderFacts } from "../features/organizationProfile/OverviewTab";
+import { LegalProfileTab } from "../features/organizationProfile/LegalProfileTab";
+import { RegistrationsTab } from "../features/organizationProfile/RegistrationsTab";
+import { OfficesTab } from "../features/organizationProfile/OfficesTab";
+import { TaxTab } from "../features/organizationProfile/TaxTab";
+import { DocumentsTab } from "../features/organizationProfile/DocumentsTab";
+import { useDetailDrawer } from "../features/organizationProfile/useDetailDrawer";
+import { profileUpsertArgs } from "../features/organizationProfile/saveProfile";
+import { useProfileTab } from "../features/organizationProfile/useProfileTab";
+import { unsavedProfileTabs } from "../features/organizationProfile/tabFields";
+import "../features/organizationProfile/organization-profile.scss";
+import { PROFILE_TABS, type OrganizationDetail, type OrganizationRecord, type ProfileDocument, type ProfileForm, type ProfileTab, type SetProfileField } from "../features/organizationProfile/types";
 
 export function SocietyNewPage() {
   const createWorkspace = useMutation(api.society.createWorkspace);
@@ -160,160 +129,51 @@ function RestoreBackupCard({
   );
 }
 
-/* ----------------------------------------------- organization detail registers */
+/* ------------------------------------------------------ organization profile */
 
-/** A register row as the table reads it: the values its columns sort and filter by, plus the row. */
-type DetailRecord<T> = Record<string, unknown> & { _id: string; row: T };
-
-type AddressRow = {
-  _id: string;
-  type?: string;
-  status?: string;
-  unit?: string;
-  street?: string;
-  city?: string;
-  provinceState?: string;
-  postalCode?: string;
-  country?: string;
-  effectiveFrom?: string;
-  effectiveTo?: string;
+const TAB_LABELS: Record<ProfileTab, string> = {
+  overview: "Overview",
+  legal: "Legal profile",
+  registrations: "Registrations",
+  offices: "Offices & contacts",
+  tax: "Tax accounts",
+  documents: "Documents",
 };
 
-type RegistrationRow = {
-  _id: string;
-  jurisdiction?: string;
-  registrationType?: string;
-  assumedName?: string;
-  registrationNumber?: string;
-  nuansNumber?: string;
-  registrationDate?: string;
-  activityCommencementDate?: string;
-  deRegistrationDate?: string;
-  status?: string;
-  representativeIds?: string[];
-};
-
-type IdentifierRow = {
-  _id: string;
-  kind?: string;
-  number?: string;
-  accessLevel?: string;
-  foreignJurisdiction?: string;
-  jurisdiction?: string;
-  status?: string;
-};
-
-/** Select options for an option set; `color` picks each option's tag colour. */
-function detailOptions(setName: OptionSetName, color: (value: string) => NonNullable<SelectOption["color"]> = () => "gray"): SelectOption[] {
-  return OPTION_SETS[setName].map((option) => ({ value: option.value, label: option.label, color: color(option.value) }));
-}
-
-const ADDRESSES_TABLE = staticRecordTable({
-  id: "organization-details:addresses",
-  nameSingular: "organizationAddress",
-  namePlural: "organizationAddresses",
-  labelSingular: "Address",
-  labelPlural: "Addresses",
-  labelIdentifierFieldName: "address",
-  fields: [
-    { name: "type", label: "Type", fieldType: FIELD_TYPES.SELECT, size: 150, config: { options: detailOptions("addressTypes") } },
-    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 110, config: { options: detailOptions("addressStatuses", (value) => (value === "current" ? "green" : "gray")) } },
-    { name: "address", label: "Address", fieldType: FIELD_TYPES.TEXT, size: 320, config: { groupable: false } },
-    { name: "effectiveFrom", label: "Effective from", fieldType: FIELD_TYPES.DATE, size: 130 },
-    { name: "effectiveTo", label: "Until", fieldType: FIELD_TYPES.DATE, size: 120 },
-  ],
-});
-
-const REGISTRATIONS_TABLE = staticRecordTable({
-  id: "organization-details:registrations",
-  nameSingular: "organizationRegistration",
-  namePlural: "organizationRegistrations",
-  labelSingular: "Registration",
-  labelPlural: "Registrations",
-  labelIdentifierFieldName: "jurisdiction",
-  fields: [
-    { name: "jurisdiction", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
-    { name: "registration", label: "Registration", fieldType: FIELD_TYPES.TEXT, size: 220 },
-    { name: "registrationDate", label: "Registered", fieldType: FIELD_TYPES.DATE, size: 120 },
-    { name: "activityCommencementDate", label: "Business started", fieldType: FIELD_TYPES.DATE, size: 140 },
-    { name: "deRegistrationDate", label: "Ended", fieldType: FIELD_TYPES.DATE, size: 120, isVisible: false },
-    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: detailOptions("registrationStatuses", (value) => (value === "active" ? "green" : "amber")) } },
-  ],
-});
-
-const IDENTIFIERS_TABLE = staticRecordTable({
-  id: "organization-details:identifiers",
-  nameSingular: "organizationIdentifier",
-  namePlural: "organizationIdentifiers",
-  labelSingular: "Identifier",
-  labelPlural: "Identifiers",
-  labelIdentifierFieldName: "kind",
-  fields: [
-    { name: "kind", label: "Kind", fieldType: FIELD_TYPES.SELECT, size: 200, config: { options: detailOptions("taxNumberTypes") } },
-    { name: "number", label: "Number", fieldType: FIELD_TYPES.TEXT, size: 180 },
-    { name: "jurisdiction", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 140 },
-    { name: "status", label: "Status", fieldType: FIELD_TYPES.SELECT, size: 120, config: { options: detailOptions("identifierStatuses", (value) => (value === "active" ? "green" : "amber")) } },
-  ],
-});
-
-const NO_DETAIL_ROWS: never[] = [];
-
+/**
+ * The organization profile, in six tabs. This page owns the profile form and
+ * its one "Save changes"; each tab edits part of the form, and a tab with
+ * unsaved edits shows a dot. Register rows (addresses, registrations,
+ * identifiers) save through their own drawers.
+ */
 export function SocietyPage() {
   const society = useSociety();
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("society:write");
-  const detail = useQuery(api.organizationDetails.overview, society ? { societyId: society._id } : "skip");
-  const evidenceDocuments = useQuery(api.documents.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
+  const detail = useQuery(api.organizationDetails.overview, society ? { societyId: society._id } : "skip") as OrganizationDetail | undefined;
+  const evidenceDocuments = useQuery(api.documents.list, society ? { societyId: society._id } : "skip") as ProfileDocument[] | undefined;
   const toast = useToast();
-  const confirm = useConfirm();
   const upsert = useMutation(api.society.upsert);
-  const seedStructuredAddresses = useMutation(api.organizationDetails.seedFromSocietyAddresses);
-  const backfillRecords = useMutation(api.organizationDetails.backfillFromExistingRecords);
-  const upsertAddress = useMutation(api.organizationDetails.upsertAddress);
-  const removeAddress = useMutation(api.organizationDetails.removeAddress);
-  const upsertRegistration = useMutation(api.organizationDetails.upsertRegistration);
-  const removeRegistration = useMutation(api.organizationDetails.removeRegistration);
-  const upsertIdentifier = useMutation(api.organizationDetails.upsertIdentifier);
-  const removeIdentifier = useMutation(api.organizationDetails.removeIdentifier);
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<ProfileForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [importingGovernance, setImportingGovernance] = useState(false);
-  const [choosingField, setChoosingField] = useState<GoverningDocumentField | null>(null);
-  const governingActions = useGoverningDocumentActions(society);
-  const [seededAddressSocietyId, setSeededAddressSocietyId] = useState<string | null>(null);
-  const [autoBackfilledSocietyId, setAutoBackfilledSocietyId] = useState<string | null>(null);
-  const [drawerKind, setDrawerKind] = useState<DrawerKind | null>(null);
-  const [draft, setDraft] = useState<any>(null);
-  const [addingLifecycleDate, setAddingLifecycleDate] = useState(false);
-  const [lifecycleDateType, setLifecycleDateType] = useState<LifecycleDateKey | "">("");
-  const [lifecycleDateValue, setLifecycleDateValue] = useState("");
-  const [searchParams, setSearchParams] = useSearchParams();
-  const moreDetailsRef = useRef<HTMLDetailsElement>(null);
-  /** Open "More organization details" (a collapsed section) and bring a part of it into view. */
-  const openMoreDetails = (targetId = "more-organization-details") => {
-    const details = moreDetailsRef.current;
-    if (!details) return;
-    details.open = true;
-    revealAnchor(targetId);
-  };
+  const drawer = useDetailDrawer(society, canEdit, evidenceDocuments);
+  const { tab, setTab, showTab } = useProfileTab();
+  const backfillExistingRecords = useRecordBackfills(society, detail, canEdit);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const formReady = Boolean(form);
-  // The app's useAnchorReveal owns deep links, including opening this section
-  // and correcting its position while asynchronous profile content settles.
-  // ?intent=address also opens the new-address form.
+  // ?intent=address opens the new-address form over the addresses register.
   useEffect(() => {
     if (!formReady || !permissions.loaded) return;
     if (searchParams.get("intent") !== "address") return;
-    openMoreDetails("registered-office");
-    if (canEdit) {
-      setDrawerKind("address");
-      setDraft({ type: "registered_office", status: "current", country: "Canada", street: "", city: "" });
-    }
-    setSearchParams((previous) => {
-      const next = new URLSearchParams(previous);
-      next.delete("intent");
-      return next;
-    }, { replace: true });
+    if (canEdit) drawer.openAddress();
+    const params = new URLSearchParams(searchParams);
+    params.delete("intent");
+    params.set("tab", "offices");
+    navigate({ pathname: location.pathname, search: `?${params.toString()}`, hash: "#registered-office" }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formReady, permissions.loaded, searchParams]);
 
@@ -324,369 +184,44 @@ export function SocietyPage() {
   // details under another org's name.
   useEffect(() => {
     if (!society) return;
-    setForm((current: any) => (current && current._id === society._id ? current : { ...society }));
+    setForm((current) => (current && current._id === society._id ? current : { ...society }));
   }, [society]);
-
-  useEffect(() => {
-    if (!canEdit || !society || detail === undefined || seededAddressSocietyId === society._id) return;
-    setSeededAddressSocietyId(society._id);
-    const addresses = detail?.addresses ?? [];
-    const hasStructuredRegisteredOffice = addresses.some((row: any) => row.type === "registered_office");
-    const hasStructuredMailing = addresses.some((row: any) => row.type === "mailing");
-    const hasLegacyAddress = Boolean(society.registeredOfficeAddress || society.mailingAddress);
-    if (hasLegacyAddress && (!hasStructuredRegisteredOffice || !hasStructuredMailing)) {
-      void seedStructuredAddresses({ societyId: society._id }).catch((error) => {
-        console.error("Society address backfill failed", error);
-      });
-    }
-  }, [canEdit, detail, seededAddressSocietyId, seedStructuredAddresses, society]);
-
-  useEffect(() => {
-    if (!canEdit || !society || detail === undefined || autoBackfilledSocietyId === society._id) return;
-    setAutoBackfilledSocietyId(society._id);
-    void backfillRecords({ societyId: society._id }).catch((error) => {
-      console.error("Organization detail backfill failed", error);
-    });
-  }, [canEdit, autoBackfilledSocietyId, backfillRecords, detail, society]);
-
-  const addressRecords = useMemo<DetailRecord<AddressRow>[]>(
-    () =>
-      ((detail?.addresses ?? NO_DETAIL_ROWS) as AddressRow[]).map((row) => ({
-        _id: row._id,
-        row,
-        type: row.type ?? "",
-        status: row.status ?? "",
-        address: addressLine(row),
-        effectiveFrom: row.effectiveFrom ?? null,
-        effectiveTo: row.effectiveTo ?? null,
-      })),
-    [detail?.addresses],
-  );
-  const registrationRecords = useMemo<DetailRecord<RegistrationRow>[]>(
-    () =>
-      ((detail?.registrations ?? NO_DETAIL_ROWS) as RegistrationRow[]).map((row) => ({
-        _id: row._id,
-        row,
-        jurisdiction: optionLabel("entityJurisdictions", row.jurisdiction),
-        registration: [row.assumedName || "Legal name", row.registrationNumber, row.nuansNumber ? `NUANS ${row.nuansNumber}` : ""].filter(Boolean).join(" · "),
-        registrationDate: row.registrationDate ?? null,
-        activityCommencementDate: row.activityCommencementDate ?? null,
-        deRegistrationDate: row.deRegistrationDate ?? null,
-        status: row.status ?? "",
-      })),
-    [detail?.registrations],
-  );
-  const identifierRecords = useMemo<DetailRecord<IdentifierRow>[]>(
-    () =>
-      ((detail?.identifiers ?? NO_DETAIL_ROWS) as IdentifierRow[]).map((row) => ({
-        _id: row._id,
-        row,
-        kind: row.kind ?? "",
-        // A restricted number is searched and sorted by its masked form only.
-        number: row.accessLevel === "restricted" ? mask(row.number) : row.number ?? "",
-        jurisdiction: row.foreignJurisdiction || row.jurisdiction || "",
-        status: row.status ?? "",
-      })),
-    [detail?.identifiers],
-  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!form) return null;
 
-  const jurisdictionCopy = jurisdictionDisplayCopy(form);
-  const jurisdictionModule = jurisdictionModuleContract(form);
-  const governance = workspaceGovernanceCopy(form);
-  const corporate = isCorporation(form);
-  // Legal vocabulary follows the entity. Charity registration has its own
-  // dated evidence history below; member-funded status remains Act-specific.
-  const vocab = organizationVocabulary(form);
-  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : k === "formationStatus" ? { organizationStatus: organizationStatusForFormation(v, f.organizationStatus) } : {}) }));
-  // Saved state decides the locks: before incorporation (or while a field is
-  // still empty) editing has no legal consequence, so no unlock is asked for.
-  const savedPreparing = isPreparingIncorporation(society);
-  const lockWhenSet = (value: unknown) => !savedPreparing && hasText(value);
-  // The form decides what status the page shows, so a status change reads
+  const set: SetProfileField = (key, value) => setForm((current) => current && withProfileField(current, key, value));
+  const setGoverningAct = (value: string | undefined, act?: IncorporationAct) => setForm((current) => current && withGoverningAct(current, value, act));
+  // The form decides the status the header shows, so a status change reads
   // back immediately, before it is saved.
   const preparing = isPreparingIncorporation(form);
-  /** A catalogued Act belongs to one jurisdiction and incorporates listed entity kinds; keep the identity consistent with it. */
-  const setGoverningAct = (value: string | undefined, act?: IncorporationAct) => setForm((f: any) => {
-    if (!act || act.actFormedUnder === f.actFormedUnder) return { ...f, actFormedUnder: value };
-    const kind = entityKindForType(f.entityType);
-    const keepsEntity = kind !== undefined && act.entityKinds.includes(kind);
-    return {
-      ...f, actFormedUnder: value, jurisdictionCode: act.jurisdictionCode, legalSubtype: act.legalSubtype,
-      ...(keepsEntity ? {} : { entityType: ENTITY_KIND_ENTITY_TYPES[act.entityKinds[0]], isMemberFunded: false }),
-    };
-  });
-  const governingSlots = governingDocumentSlots(form);
-  const choosingSlot = governingSlots.find((slot) => slot.field === choosingField);
-  const missingGovernanceCount = [
-    society.constitutionDocId,
-    society.bylawsDocId,
-    society.privacyPolicyDocId,
-  ].filter((value) => !value).length;
-  const addresses = detail?.addresses ?? [];
-  const currentRegisteredOffice = findCurrentAddress(addresses, "registered_office");
-  const currentMailingAddress = findCurrentAddress(addresses, "mailing");
-  const registeredOfficeLine = currentRegisteredOffice
-    ? addressLine(currentRegisteredOffice)
-    : form.registeredOfficeAddress ?? "";
-  const mailingAddressLine = currentMailingAddress
-    ? addressLine(currentMailingAddress)
-    : form.mailingAddress ?? "";
-  // Count locations actually shown below, not just structured rows — a legacy
-  // plain-text address (pre-migration) still renders as a location, so the
-  // badge shouldn't read "0" while the two summaries beneath it are populated.
-  const displayedLocationCount =
-    (registeredOfficeLine ? 1 : 0) + (mailingAddressLine ? 1 : 0);
-
-  const lifecycleRows = LIFECYCLE_DATE_TYPES.filter((item) => Boolean(form[item.value]));
-  const missingLifecycleDateOptions = LIFECYCLE_DATE_TYPES.filter((item) => !form[item.value]);
-  const startAddingLifecycleDate = () => {
-    const nextType = missingLifecycleDateOptions[0]?.value ?? "";
-    setLifecycleDateType(nextType);
-    setLifecycleDateValue("");
-    setAddingLifecycleDate(Boolean(nextType));
-  };
-  const addLifecycleDate = () => {
-    if (!lifecycleDateType || !lifecycleDateValue) return;
-    set(lifecycleDateType, lifecycleDateValue);
-    setLifecycleDateType("");
-    setLifecycleDateValue("");
-    setAddingLifecycleDate(false);
-  };
+  const unsaved = unsavedProfileTabs(form, society);
 
   const save = async () => {
     if (!canEdit || saving) return;
     setSaving(true);
     try {
       validateEntitySetup(form);
-      await upsert({
-        id: form._id,
-        name: form.name,
-        incorporationNumber: form.incorporationNumber,
-        incorporationDate: form.incorporationDate,
-        fiscalYearEnd: form.fiscalYearEnd,
-        jurisdictionCode: form.jurisdictionCode || undefined,
-        ...entitySetupFields(form),
-        anniversaryDate: form.anniversaryDate || undefined,
-        entityType: form.entityType,
-        actFormedUnder: form.actFormedUnder,
-        officialEmail: form.officialEmail,
-        numbered: !!form.numbered,
-        distributing: !!form.distributing,
-        solicitingPublicBenefit: !!form.solicitingPublicBenefit,
-        organizationStatus: form.organizationStatus,
-        archivedAtISO: form.archivedAtISO,
-        removedAtISO: form.removedAtISO,
-        continuanceDate: form.continuanceDate,
-        amalgamationDate: form.amalgamationDate,
-        naicsCode: form.naicsCode,
-        naicsSector: form.naicsSector,
-        niceClassification: form.niceClassification,
-        isCharity: form.isCharity,
-        isMemberFunded: form.isMemberFunded,
-        registeredOfficeAddress: society.onboardingAnswersJson && currentRegisteredOffice ? guidedAddressText(currentRegisteredOffice) : registeredOfficeLine,
-        mailingAddress: society.onboardingAnswersJson && currentMailingAddress ? guidedAddressText(currentMailingAddress) : mailingAddressLine,
-        purposes: form.purposes,
-        privacyOfficerName: form.privacyOfficerName,
-        privacyOfficerEmail: form.privacyOfficerEmail,
-        privacyProgramStatus: form.privacyProgramStatus,
-        privacyProgramReviewedAtISO: form.privacyProgramReviewedAtISO,
-        privacyProgramNotes: form.privacyProgramNotes,
-        memberDataAccessStatus: form.memberDataAccessStatus,
-        memberDataGapDocumented: !!form.memberDataGapDocumented,
-        memberDataAccessReviewedAtISO: form.memberDataAccessReviewedAtISO,
-        memberDataAccessNotes: form.memberDataAccessNotes,
-        boardCadence: form.boardCadence,
-        boardCadenceDayOfWeek: form.boardCadenceDayOfWeek,
-        boardCadenceTime: form.boardCadenceTime,
-        boardCadenceNotes: form.boardCadenceNotes,
-        publicSlug: form.publicSlug,
-        publicSummary: form.publicSummary,
-        publicContactEmail: form.publicContactEmail,
-        publicTransparencyEnabled: form.publicTransparencyEnabled,
-        publicShowBoard: form.publicShowBoard,
-        publicShowBylaws: form.publicShowBylaws,
-        publicShowFinancials: form.publicShowFinancials,
-        publicVolunteerIntakeEnabled: form.publicVolunteerIntakeEnabled,
-        publicGrantIntakeEnabled: form.publicGrantIntakeEnabled,
-        demoMode: form.demoMode,
-      });
+      await upsert(profileUpsertArgs(form, society, detail?.addresses ?? []));
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
       toast.success("Organization profile saved");
-    } catch (error: any) {
-      toast.error("Could not save organization", error?.message ?? String(error));
+    } catch (error) {
+      toast.error("Could not save organization", error instanceof Error ? error.message : String(error));
     } finally {
       setSaving(false);
     }
   };
 
-  const backfillExistingRecords = async () => {
-    const result = await backfillRecords({ societyId: society._id });
-    const total = result.addressesCreated + result.minuteBookItemsCreated;
-    toast.success(
-      total ? "Backfill complete" : "No records added",
-      `${result.addressesCreated} addresses, ${result.minuteBookItemsCreated} minute-book records`,
-    );
-  };
-
-  const openNewDetailRow = (kind: DrawerKind) => {
-    setDrawerKind(kind);
-    if (kind === "address") {
-      setDraft({
-        type: "registered_office",
-        status: "current",
-        country: "Canada",
-        street: "",
-        city: "",
-      });
-    }
-    if (kind === "registration") {
-      setDraft({
-        registrationType: "extra_provincial",
-        jurisdiction: homeJurisdictionCode(society),
-        homeJurisdiction: homeJurisdictionCode(society),
-        representativeIds: [],
-        status: "active",
-      });
-    }
-    if (kind === "identifier") {
-      setDraft({
-        kind: "business_number",
-        number: "",
-        status: "active",
-        accessLevel: "restricted",
-      });
-    }
-  };
-
-  const saveDetailDrawer = async () => {
-    if (!drawerKind || !draft) return;
-    try {
-    if (drawerKind === "address") {
-      await upsertAddress({
-        id: draft._id,
-        societyId: society._id,
-        type: draft.type,
-        status: draft.status,
-        effectiveFrom: draft.effectiveFrom || undefined,
-        effectiveTo: draft.effectiveTo || undefined,
-        street: draft.street || "Needs review",
-        unit: draft.unit || undefined,
-        city: draft.city || "Needs review",
-        provinceState: draft.provinceState || undefined,
-        postalCode: draft.postalCode || undefined,
-        country: draft.country || "Canada",
-        notes: draft.notes || undefined,
-      });
-    }
-    if (drawerKind === "registration") {
-      await upsertRegistration({
-        id: draft._id,
-        societyId: society._id,
-        registrationType: draft.registrationType || "extra_provincial",
-        corporationClass: draft.corporationClass || undefined,
-        licenceEvidenceDocumentId: draft.licenceEvidenceDocumentId || undefined,
-        jurisdiction: draft.jurisdiction || "Needs review",
-        homeJurisdiction: draft.homeJurisdiction || undefined,
-        assumedName: draft.assumedName || undefined,
-        registrationNumber: draft.registrationNumber || undefined,
-        registrationDate: draft.registrationDate || undefined,
-        activityCommencementDate: draft.activityCommencementDate || undefined,
-        deRegistrationDate: draft.deRegistrationDate || undefined,
-        nuansNumber: draft.nuansNumber || undefined,
-        officialEmail: draft.officialEmail || undefined,
-        annualReturnDueDate: draft.annualReturnDueDate || undefined,
-        lastAnnualReturnFiledDate: draft.lastAnnualReturnFiledDate || undefined,
-        registryProfileReportDate: draft.registryProfileReportDate || undefined,
-        registryPortalKey: draft.registryPortalKey || undefined,
-        agentForServiceName: draft.agentForServiceName || undefined,
-        agentForServiceAddress: draft.agentForServiceAddress || undefined,
-        principalOfficeAddress: draft.principalOfficeAddress || undefined,
-        representativeIds: csv(draft.representativeIdsText ?? draft.representativeIds),
-        status: draft.status || "active",
-        notes: draft.notes || undefined,
-      });
-    }
-    if (drawerKind === "identifier") {
-      await upsertIdentifier({
-        id: draft._id,
-        societyId: society._id,
-        kind: draft.kind || "other",
-        number: draft.number || "Needs review",
-        jurisdiction: draft.jurisdiction || undefined,
-        foreignJurisdiction: draft.foreignJurisdiction || undefined,
-        registeredAt: draft.registeredAt || undefined,
-        status: draft.status || "active",
-        accessLevel: draft.accessLevel || "restricted",
-        notes: draft.notes || undefined,
-      });
-    }
-    toast.success("Saved");
-    setDrawerKind(null);
-    setDraft(null);
-    } catch (error: any) { toast.error("Could not save record", error?.message ?? String(error)); }
-  };
-
-  const editRegistration = (row: RegistrationRow) => {
-    setDrawerKind("registration");
-    setDraft({ ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") });
-  };
-
-  const removeDetailRow = async (kind: DrawerKind, row: any) => {
-    const ok = await confirm({
-      title: "Remove record?",
-      message: `"${row.title ?? row.jurisdiction ?? row.type ?? row.kind}" will be removed from the organization detail register.`,
-      confirmLabel: "Remove",
-      tone: "danger",
-    });
-    if (!ok) return;
-    if (kind === "address") await removeAddress({ id: row._id });
-    if (kind === "registration") await removeRegistration({ id: row._id });
-    if (kind === "identifier") await removeIdentifier({ id: row._id });
-    toast.success("Removed");
-  };
-
-  const importGovernanceDocuments = async () => {
-    setImportingGovernance(true);
-    try {
-      const response = await authenticatedFetch("/api/v1/browser-connectors/governance-documents/import", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          societyId: society._id,
-          corpNum: society.incorporationNumber,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error?.message ?? payload?.message ?? `Request failed with ${response.status}`);
-      }
-      const data = payload.data ?? {};
-      const imported = Array.isArray(data.imported) ? data.imported : [];
-      const missing = Array.isArray(data.missing) ? data.missing : [];
-      if (imported.length) {
-        toast.success(
-          "Governance documents imported",
-          `${imported.length} document${imported.length === 1 ? "" : "s"} linked from BC Registry.`,
-        );
-      } else if (missing.length) {
-        toast.warn(
-          "No registry documents imported",
-          missing.map((item: any) => item.message ?? item.reason).filter(Boolean).join(" "),
-        );
-      } else {
-        toast.info("Governance documents already on file");
-      }
-    } catch (error: any) {
-      toast.error("Could not import governance documents", error?.message ?? "Open a BC Registry browser session and try again.");
-    } finally {
-      setImportingGovernance(false);
-    }
-  };
+  const tabItems = PROFILE_TABS.map((id) => ({
+    id,
+    label: TAB_LABELS[id],
+    count: id === "registrations" ? detail?.registrations.length || null : null,
+    // Tabs draw the icon slot before the label; CSS moves the dot after it.
+    icon: unsaved.has(id) ? <span className="org-profile-tab-dot" role="img" aria-label="Unsaved changes" title="Unsaved changes" /> : undefined,
+  }));
+  const updated = saved ? "Saved" : `Last updated ${formatDate(society.updatedAt)}`;
 
   return (
     <div className="page page--wide">
@@ -697,587 +232,151 @@ export function SocietyPage() {
           ? form.formationStatus === "submitted"
             ? "Filed with the registry. The registry number and date come from the certificate of incorporation."
             : "Preparing incorporation. The registry number and date come from the certificate of incorporation."
-          : "Governing details, registered office, and key flags."}
+          : "Legal identity, registrations, offices, tax accounts and governing documents."}
         actions={
           <>
-            <span className="muted society-header__updated" style={{ fontSize: "var(--fs-sm)" }}>
-              {saved ? "Saved" : `Last updated ${formatDate(society.updatedAt)}`}
-            </span>
-            <button
-              className="btn btn--accent"
-              onClick={save}
-              disabled={saving || !canEdit}
-              title={saved ? "Saved" : `Last updated ${formatDate(society.updatedAt)}`}
-            >
+            <span className="muted society-header__updated" style={{ fontSize: "var(--fs-sm)" }}>{updated}</span>
+            <Link className="btn btn--sm" to="/app/business-records">Business records</Link>
+            <button className="btn btn--accent" type="button" onClick={save} disabled={saving || !canEdit} title={updated}>
               {saving ? "Saving…" : "Save changes"}
             </button>
           </>
         }
       />
 
-      {["preparing", "submitted"].includes(form.formationStatus ?? "") && (
-        <>
-          <Banner className="society-setup-link" title={form.formationStatus === "submitted" ? "Filed and waiting for the certificate" : "Getting ready to incorporate"}>
-            Track filing and the rest of setup on one page. <Link className="setup-inline-link" to={setupViewStepLink(form.formationStatus === "submitted" ? "certificate" : "file")}>Open setup</Link>
-          </Banner>
-          <IncorporationPreparation organization={form} />
-        </>
-      )}
+      <ProfileHeaderFacts form={form} detail={detail} />
 
-      <div><Link className="btn btn--sm" to="/app/business-records">Business records</Link></div>
-      <GstAccountReference identifiers={detail?.identifiers} actions={<>
-        <button className="btn-action" type="button" onClick={() => openMoreDetails("tax-identifiers")}>Manage tax identifiers</button>
-        {canEdit && <button className="btn-action btn-action--primary" type="button" onClick={() => {
-          setDrawerKind("identifier");
-          setDraft({ kind: "gst", number: "", status: "needs_review", accessLevel: "internal", jurisdiction: "federal__canada_" });
-        }}><Plus size={12} /> Add GST/HST account</button>}
-      </>} />
+      <div className="org-profile-tabs">
+        <Tabs<ProfileTab> value={tab} onChange={setTab} tabRoles ariaLabel="Organization profile sections" items={tabItems} />
+      </div>
 
-      <fieldset disabled={!canEdit} className="society-fieldset">
-      <div className="society-layout">
-        <main className="society-layout__main">
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">Identity</h2>
-              {/* One status for an organization that is not incorporated yet; the detailed
-                  formation and workspace statuses stay under "More organization details". */}
-              {preparing && <Badge tone="info">{form.formationStatus === "submitted" ? "Filed, waiting for the certificate" : "Preparing incorporation"}</Badge>}
-            </div>
-            <div className="card__body">
-              <LockedField
-                label={preparing ? "Proposed name" : "Legal name"}
-                requireUnlock={lockWhenSet(society.name)}
-                reason="Changing the legal name can require a special resolution, name reservation, and registry filing. Review the active jurisdiction guide and governing documents first."
-              >
-                {(locked) => (
-                  <input
-                    className="input"
-                    disabled={locked}
-                    value={form.name}
-                    onChange={(e) => set("name", e.target.value)}
-                  />
-                )}
-              </LockedField>
-
-              <div className="society-field-grid society-field-grid--three society-field-grid--registry-dates">
-                {savedPreparing ? (
-                  <>
-                    {/* Not assigned yet: these come from the certificate of incorporation. */}
-                    <Field label="Incorporation #" hint="From the certificate">
-                      <input className="input" disabled value="" placeholder="Not assigned yet" />
-                    </Field>
-                    <Field label="Incorporation date" hint="From the certificate">
-                      <input className="input" disabled value="" placeholder="Not incorporated yet" />
-                    </Field>
-                  </>
-                ) : (
-                  <>
-                    <LockedField
-                      label="Incorporation #"
-                      requireUnlock={lockWhenSet(society.incorporationNumber)}
-                      reason="The incorporation or corporation number is assigned by the registry and generally stays stable for the life of the organization. Edit only to fix a data-entry error."
-                    >
-                      {(locked) => (
-                        <input
-                          className="input"
-                          disabled={locked}
-                          value={form.incorporationNumber ?? ""}
-                          onChange={(e) => set("incorporationNumber", e.target.value)}
-                        />
-                      )}
-                    </LockedField>
-                    <LockedField
-                      label="Incorporation date"
-                      requireUnlock={lockWhenSet(society.incorporationDate)}
-                      reason="The date of incorporation is a historical fact recorded by the registry. Edit only to fix a data-entry error."
-                    >
-                      {(locked) => (
-                        <DatePicker
-                          disabled={locked}
-                          value={form.incorporationDate ?? ""}
-                          onChange={(v) => set("incorporationDate", v)}
-                        />
-                      )}
-                    </LockedField>
-                  </>
-                )}
-                <LockedField
-                  label="Fiscal year end"
-                  requireUnlock={lockWhenSet(society.fiscalYearEnd)}
-                  reason={corporate
-                    ? `Changing the fiscal year end can require a review of the ${vocab.governingDocuments} and the CRA's rules. Affects every filing deadline downstream.`
-                    : "Changing the fiscal year end can require a bylaw amendment and notification to the CRA. Affects every filing deadline downstream."}
-                >
-                  {(locked) => (
-                    <MonthDayPicker
-                      ariaLabel="Fiscal year end"
-                      disabled={locked}
-                      value={form.fiscalYearEnd}
-                      onChange={(value) => set("fiscalYearEnd", value)}
-                    />
-                  )}
-                </LockedField>
-              </div>
-
-              <LockedField
-                label={governance.purposesLabel}
-                requireUnlock={lockWhenSet(society.purposes)}
-                reason={corporate
-                  ? "Business activities or article restrictions can require shareholder approval and a registry filing to change."
-                  : "Purposes can require member approval and a registry filing to change. Charities may also need CRA review."}
-              >
-                {(locked) => (
-                  <MarkdownEditor
-                    rows={4}
-                    readOnly={locked}
-                    value={form.purposes ?? ""}
-                    onChange={(markdown) => set("purposes", markdown)}
-                  />
-                )}
-              </LockedField>
-
-              <div className="society-field-grid">
-                <Field label="Legal jurisdiction">
-                  <Select
-                    value={form.jurisdictionCode ?? ""}
-                    onChange={(value) => set("jurisdictionCode", value)}
-                    options={jurisdictionChoices(JURISDICTION_OPTIONS, form.jurisdictionCode)}
-                  />
-                </Field>
-
-                {vocab.societyLaw && <LockedField
-                  label="Society classification"
-                  requireUnlock={!savedPreparing}
-                  reason="Member-funded classification should be reviewed against the governing statute and filed documents."
-                >
-                  {(locked) => (
-                    <div className="society-toggle-stack">
-                      {/* Member-funded is a BC Societies Act subtype. */}
-                      {vocab.societyLaw && <Toggle
-                        checked={!!form.isMemberFunded}
-                        onChange={(v) => set("isMemberFunded", v)}
-                        disabled={locked}
-                        label="Member-funded society"
-                      />}
-                    </div>
-                  )}
-                </LockedField>}
-              </div>
-            </div>
-          </div>
-          <NaicsSectorField
-            key={form._id}
-            value={form.naicsSector}
-            detailedCode={form.naicsCode}
-            onChange={(value) => set("naicsSector", value)}
-            onCodeChange={(value) => set("naicsCode", value)}
-            disabled={!canEdit}
+      <div role="tabpanel" aria-label={TAB_LABELS[tab]}>
+        {tab === "overview" ? (
+          <OverviewTab
+            society={society}
+            form={form}
+            detail={detail}
+            canEdit={canEdit}
+            // Phase 2 opens the "Record incorporation" drawer from here.
+            onRecordIncorporation={() => showTab("legal", "more-organization-details")}
+            onOpenTab={showTab}
           />
-        </main>
-
-        <aside className="society-layout__side">
-          <div className="card">
-            <div className="card__head">
-              <div className="row" style={{ gap: 8 }}>
-                <MapPin size={14} />
-                <h2 className="card__title">Registered locations</h2>
-                <Badge>{detail === undefined ? "..." : displayedLocationCount}</Badge>
-              </div>
-              <a
-                className="btn btn--sm"
-                href="#registered-office"
-                style={{ marginLeft: "auto" }}
-                onClick={(event) => {
-                  // Same target as the setup link; works again after the section is collapsed.
-                  event.preventDefault();
-                  window.history.replaceState(window.history.state, "", "#registered-office");
-                  openMoreDetails("registered-office");
-                }}
-              >
-                Manage
-              </a>
-            </div>
-            <div className="card__body">
-              <div className="society-address-list">
-                <AddressSummary
-                  label="Registered office"
-                  row={currentRegisteredOffice}
-                  fallback={form.registeredOfficeAddress}
-                  hint={jurisdictionCopy.registeredOfficeHint}
-                />
-                <AddressSummary
-                  label="Mailing address"
-                  row={currentMailingAddress}
-                  fallback={form.mailingAddress}
-                />
-              </div>
-              <div className="hr" />
-              {/* Stacked: this side card is narrow, and an email needs the full width. */}
-              <div className="col" style={{ gap: 0 }}>
-                <Field label={jurisdictionCopy.privacyOfficerLabel}>
-                  <input className="input" value={form.privacyOfficerName ?? ""} onChange={(e) => set("privacyOfficerName", e.target.value)} />
-                </Field>
-                <Field label="Privacy officer email">
-                  <input className="input" value={form.privacyOfficerEmail ?? ""} onChange={(e) => set("privacyOfficerEmail", e.target.value)} />
-                </Field>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">Governance documents</h2>
-              {jurisdictionModule.registryImportSupported && isModuleEnabled(society, "browserConnectors") && (
-                <button
-                  className="btn btn--sm"
-                  onClick={importGovernanceDocuments}
-                  disabled={importingGovernance || missingGovernanceCount === 0}
-                  style={{ marginLeft: "auto" }}
-                  type="button"
-                  title="Fill missing documents from the registry"
-                >
-                  <FileDown size={12} />
-                  {importingGovernance ? "Checking…" : "Auto-fill"}
-                </button>
-              )}
-            </div>
-            <div className="card__body">
-              <div className="table-wrap society-doc-table-wrap">
-                <table className="table society-doc-table">
-                  <thead>
-                    <tr>
-                      <th>Document</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Uploading or re-filing with the matching category puts the first
-                        document on file; "Choose a document" links any document here.
-                        A BC company's articles take the place of separate by-laws. */}
-                    {governingSlots.map((slot) => (
-                      <GoverningDocumentRow
-                        key={slot.field}
-                        slot={slot}
-                        docId={society[slot.field]}
-                        documents={evidenceDocuments}
-                        organization={form}
-                        canEdit={canEdit}
-                        uploadHref={documentUploadHref(slot.category, slot.categoryLabel)}
-                        onChoose={() => setChoosingField(slot.field)}
-                        onUnlink={() => { void governingActions.unlink(slot); }}
-                      />
-                    ))}
-                    <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} docId={society.privacyPolicyDocId} uploadHref="/app/privacy" uploadLabel="Add" />
-                  </tbody>
-                </table>
-              </div>
-              <GoverningDocumentPicker
-                open={Boolean(choosingSlot)}
-                slot={choosingSlot ?? null}
-                organization={form}
-                currentDocumentId={choosingSlot ? society[choosingSlot.field] : undefined}
-                documents={evidenceDocuments}
-                onClose={() => setChoosingField(null)}
-                onChoose={(document, refile) => governingActions.choose(choosingSlot!, document, refile)}
-              />
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__head"><h2 className="card__title">Board meeting cadence</h2></div>
-            <div className="card__body">
-              <div className="society-field-grid society-field-grid--mobile-pair">
-                <Field label="Cadence">
-                  <Select
-                    value={form.boardCadence ?? ""}
-                    onChange={(v) => set("boardCadence", v)}
-                    clearable
-                    options={["Weekly", "Biweekly", "Monthly", "Bimonthly", "Quarterly", "Ad-hoc"].map((c) => ({ value: c, label: c }))}
-                  />
-                </Field>
-                <Field label="Day of week">
-                  <Select
-                    value={form.boardCadenceDayOfWeek ?? ""}
-                    onChange={(v) => set("boardCadenceDayOfWeek", v)}
-                    clearable
-                    clearLabel="—"
-                    options={["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => ({ value: d, label: d }))}
-                  />
-                </Field>
-              </div>
-              <Field label="Time (24h)">
-                <input className="input" type="time" value={form.boardCadenceTime ?? ""} onChange={(e) => set("boardCadenceTime", e.target.value)} />
-              </Field>
-              <Field label="Notes" hint="e.g. Fourth Thursday of each month, except July & August.">
-                <input className="input" value={form.boardCadenceNotes ?? ""} onChange={(e) => set("boardCadenceNotes", e.target.value)} />
-              </Field>
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      <details id="more-organization-details" ref={moreDetailsRef} className="card">
-        <summary className="org-details-summary">
-          <span className="org-details-summary__title">More organization details</span>
-          <span className="muted org-details-summary__hint">
-            Registry classification, lifecycle dates, extra-provincial registrations, and tax identifiers.
-          </span>
-        </summary>
-        <div className="card__body org-details-body">
-
-          <div className="org-details-top">
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">Registry profile</h2>
-                <span className="card__subtitle">Stable facts used across filings and workflows.</span>
-              </div>
-              <div className="card__body">
-                <div className="org-details-field-grid">
-                  <OptionSelect label="Entity type" setName="entityTypes" value={form.entityType ?? ""} onChange={(value) => { set("entityType", value); set("legalSubtype", "other"); }} emptyLabel="Needs classification" />
-                  {/* While preparing, the legal formation status below is the one status;
-                      the workspace status follows it (see organizationStatusForFormation). */}
-                  {!preparing && <OptionSelect label="Organization status" setName="organizationStatuses" value={form.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />}
-                  <div className="org-details-field-grid__wide">
-                    <GoverningActSelect value={form.actFormedUnder} jurisdictionCode={form.jurisdictionCode} onChange={setGoverningAct} otherActName={setupOtherActName(society.onboardingAnswersJson)} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">Lifecycle dates</h2>
-                <button
-                  className="btn btn--sm"
-                  type="button"
-                  onClick={startAddingLifecycleDate}
-                  disabled={addingLifecycleDate || missingLifecycleDateOptions.length === 0}
-                  style={{ marginLeft: "auto" }}
-                >
-                  <Plus size={12} />
-                  Add date
-                </button>
-              </div>
-              <div className="card__body">
-                <div className="org-details-date-list">
-                  {lifecycleRows.length === 0 && !addingLifecycleDate && (
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No lifecycle dates recorded. Add incorporation or registry events.</div>
-                  )}
-                  {lifecycleRows.map((item) => (
-                    <div className="org-details-date-row" key={item.value}>
-                      <Field label={item.label}>
-                        <DatePicker value={form[item.value] ?? ""} onChange={(value) => set(item.value, value)} />
-                      </Field>
-                      <button
-                        className="btn btn--ghost btn--sm btn--icon"
-                        type="button"
-                        aria-label={`Clear ${item.label}`}
-                        onClick={() => set(item.value, "")}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  {addingLifecycleDate && (
-                    <div className="org-details-date-row org-details-date-row--draft">
-                      <Field label="Date type">
-                        <Select
-                          value={lifecycleDateType}
-                          onChange={(value) => setLifecycleDateType(value as LifecycleDateKey)}
-                          options={missingLifecycleDateOptions}
-                        />
-                      </Field>
-                      <Field label="Date">
-                        <DatePicker value={lifecycleDateValue} onChange={setLifecycleDateValue} />
-                      </Field>
-                      <div className="org-details-date-row__actions">
-                        <button className="btn btn--sm" type="button" onClick={() => setAddingLifecycleDate(false)}>Cancel</button>
-                        <button className="btn btn--sm btn--accent" type="button" onClick={addLifecycleDate} disabled={!lifecycleDateType || !lifecycleDateValue}>Add</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="card org-details-classification-card">
-              <div className="card__head">
-                <h2 className="card__title">Formation, tax and annual dates</h2>
-              </div>
-              <div className="card__body">
-                <EntitySetupFields form={form} set={set} includeDates documents={evidenceDocuments ?? []} />
-                <section className="entity-setup-group">
-                  <h3 className="entity-setup-group__title">Other classification</h3>
-                  <div className="org-details-field-grid">
-                    <Field label="Nice classification" hint="Trademark class, if the organization holds a mark.">
-                      <input className="input" value={form.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
-                    </Field>
-                  </div>
-                  <div className="org-details-toggle-row">
-                    <Toggle checked={!!form.numbered} onChange={(value) => set("numbered", value)} label="Numbered entity" />
-                    <Toggle checked={!!form.distributing} onChange={(value) => set("distributing", value)} label="Distributing" />
-                    <Toggle checked={!!form.solicitingPublicBenefit} onChange={(value) => set("solicitingPublicBenefit", value)} label="Soliciting / public benefit" />
-                  </div>
-                </section>
-              </div>
-            </div>
-          </div>
-
-          <div className="org-detail-registers">
-            <DetailSection
-              id="registered-office"
-              icon={<MapPin size={14} />}
-              title="Structured addresses"
-              count={detail?.addresses?.length ?? 0}
-              action={<button className="btn-action btn-action--primary" onClick={() => openNewDetailRow("address")}><Plus size={12} /> Address</button>}
-            >
-              <RecordListTable<DetailRecord<AddressRow>>
-                variant="card"
-                table={ADDRESSES_TABLE}
-                tableId="organization-addresses"
-                label="Structured addresses"
-                records={addressRecords}
-                loading={detail === undefined}
-                onOpen={(record) => { setDrawerKind("address"); setDraft(record.row); }}
-                renderCell={({ record, field }) => {
-                  const { row } = record;
-                  if (field.name === "type") return <span>{optionLabel("addressTypes", row.type)}</span>;
-                  if (field.name === "status") return <Badge tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>;
-                  return undefined;
-                }}
-                renderRowActions={(record) => <RowActions onEdit={() => { setDrawerKind("address"); setDraft(record.row); }} onRemove={() => removeDetailRow("address", record.row)} />}
-                emptyState={<RecordTableEmpty title="No structured addresses yet" />}
-              />
-            </DetailSection>
-
-            <div className="org-detail-registers__pair">
-              <DetailSection
-                icon={<Landmark size={14} />}
-                title="Registration records"
-                count={detail?.registrations?.length ?? 0}
-                action={<button className="btn-action btn-action--primary" onClick={() => openNewDetailRow("registration")}><Plus size={12} /> Registration</button>}
-              >
-                <RecordListTable<DetailRecord<RegistrationRow>>
-                  variant="card"
-                  table={REGISTRATIONS_TABLE}
-                  tableId="organization-registrations"
-                  label="Registration records"
-                  records={registrationRecords}
-                  loading={detail === undefined}
-                  onOpen={(record) => editRegistration(record.row)}
-                  renderCell={({ record, field }) => {
-                    const { row } = record;
-                    if (field.name === "jurisdiction")
-                      return (
-                        <span className="record-table__identifier-lines">
-                          <strong className="record-table__identifier-primary">{optionLabel("entityJurisdictions", row.jurisdiction)}</strong>
-                          <span className="record-table__identifier-secondary">{optionLabel("registrationTypes", row.registrationType ?? "extra_provincial")}</span>
-                        </span>
-                      );
-                    if (field.name === "registration")
-                      return (
-                        <span className="record-table__identifier-lines">
-                          <strong className="record-table__identifier-primary">{row.assumedName || "Legal name"}</strong>
-                          <span className="record-table__identifier-secondary mono">{row.registrationNumber ? <TooltipCopyable value={row.registrationNumber} label="registration number" /> : "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</span>
-                        </span>
-                      );
-                    if (field.name === "status") return <Badge tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>;
-                    return undefined;
-                  }}
-                  renderRowActions={(record) => <RowActions onEdit={() => editRegistration(record.row)} onRemove={() => removeDetailRow("registration", record.row)} />}
-                  emptyState={<RecordTableEmpty title="No external or extra-provincial registrations yet" />}
-                />
-              </DetailSection>
-
-              <div id="tax-identifiers" style={{ scrollMarginTop: 16 }}><DetailSection
-                icon={<KeyRound size={14} />}
-                title="Tax and registry identifiers"
-                count={detail?.identifiers?.length ?? 0}
-                action={<button className="btn-action btn-action--primary" onClick={() => openNewDetailRow("identifier")}><Plus size={12} /> Identifier</button>}
-              >
-                <RecordListTable<DetailRecord<IdentifierRow>>
-                  variant="card"
-                  table={IDENTIFIERS_TABLE}
-                  tableId="organization-identifiers"
-                  label="Tax and registry identifiers"
-                  records={identifierRecords}
-                  loading={detail === undefined}
-                  onOpen={(record) => { setDrawerKind("identifier"); setDraft(record.row); }}
-                  renderCell={({ record, field }) => {
-                    const { row } = record;
-                    if (field.name === "kind") return <span>{optionLabel("taxNumberTypes", row.kind)}</span>;
-                    if (field.name === "number")
-                      return row.accessLevel === "restricted" || !row.number
-                        ? <span className="mono">{row.accessLevel === "restricted" ? mask(row.number) : row.number}</span>
-                        : <TooltipCopyable value={row.number} label={`${optionLabel("taxNumberTypes", row.kind)} number`} />;
-                    if (field.name === "status") return <Badge tone={row.accessLevel === "restricted" ? "danger" : row.status === "active" ? "success" : "warn"}>{optionLabel("identifierStatuses", row.status)}</Badge>;
-                    return undefined;
-                  }}
-                  renderRowActions={(record) => <RowActions onEdit={() => { setDrawerKind("identifier"); setDraft(record.row); }} onRemove={() => removeDetailRow("identifier", record.row)} />}
-                  emptyState={<RecordTableEmpty title="No tax or registry identifiers yet" />}
-                />
-              </DetailSection></div>
-            </div>
-          </div>
-
-          <div className="org-details-backfill">
-            <span className="muted">Older profiles kept addresses and minute-book items as plain fields. Copy them into the records above.</span>
-            <button className="btn btn--sm" type="button" onClick={backfillExistingRecords}>Backfill records</button>
-          </div>
-        </div>
-      </details>
-      </fieldset>
-
-      <Drawer
-        open={!!drawerKind}
-        onClose={() => { setDrawerKind(null); setDraft(null); }}
-        title={drawerTitle(drawerKind, draft)}
-        footer={
-          <>
-            <button className="btn" onClick={() => { setDrawerKind(null); setDraft(null); }}>Cancel</button>
-            <button className="btn btn--accent" disabled={!canEdit} onClick={saveDetailDrawer}>Save</button>
-          </>
-        }
-      >
-        {drawerKind === "address" && draft && <AddressFields draft={draft} setDraft={setDraft} />}
-        {drawerKind === "registration" && draft && <RegistrationFields draft={draft} setDraft={setDraft} documents={evidenceDocuments ?? []} />}
-        {drawerKind === "identifier" && draft && <IdentifierFields draft={draft} setDraft={setDraft} />}
-      </Drawer>
-    </div>
-  );
-}
-
-function AddressSummary({ label, row, fallback, hint }: { label: string; row?: any; fallback?: string; hint?: string }) {
-  const line = row ? addressLine(row) : fallback;
-  return (
-    <div className="society-address-item">
-      <div className="society-address-item__head">
-        <strong>{label}</strong>
-        {hint && (
-          <InfoPopover label={`About the ${label.toLowerCase()}`}>
-            <p>{hint}</p>
-          </InfoPopover>
-        )}
-        {row ? (
-          <Badge tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>
-        ) : fallback ? (
-          <Badge tone="warn">Legacy</Badge>
         ) : (
-          <Badge>Missing</Badge>
+          <fieldset disabled={!canEdit} className="society-fieldset">
+            {tab === "legal" && <LegalProfileTab society={society} form={form} set={set} setGoverningAct={setGoverningAct} canEdit={canEdit} documents={evidenceDocuments ?? []} />}
+            {tab === "registrations" && (
+              <RegistrationsTab
+                society={society}
+                form={form}
+                detail={detail}
+                onAdd={() => drawer.openRegistration()}
+                onEdit={drawer.openRegistration}
+                onRemove={(row) => { void drawer.remove("registration", row); }}
+              />
+            )}
+            {tab === "offices" && (
+              <OfficesTab
+                form={form}
+                set={set}
+                detail={detail}
+                onAddAddress={() => drawer.openAddress()}
+                onEditAddress={drawer.openAddress}
+                onRemoveAddress={(row) => { void drawer.remove("address", row); }}
+                onBackfill={() => { void backfillExistingRecords(); }}
+              />
+            )}
+            {tab === "tax" && (
+              <TaxTab
+                form={form}
+                set={set}
+                detail={detail}
+                canEdit={canEdit}
+                onNewIdentifier={drawer.openIdentifier}
+                onEditIdentifier={drawer.openIdentifier}
+                onRemoveIdentifier={(row) => { void drawer.remove("identifier", row); }}
+              />
+            )}
+            {tab === "documents" && <DocumentsTab society={society} form={form} canEdit={canEdit} documents={evidenceDocuments} />}
+          </fieldset>
         )}
       </div>
-      <div className={line ? "society-address-item__line" : "society-address-item__line muted"}>
-        {line || "No address on file"}
-      </div>
-      {row?.effectiveFrom && (
-        <div className="field__hint">Effective {formatDate(row.effectiveFrom)}</div>
-      )}
+
+      {drawer.element}
     </div>
   );
 }
 
-function hasText(value: unknown) {
-  return typeof value === "string" ? value.trim() !== "" : value !== undefined && value !== null;
+/**
+ * Older profiles kept addresses and minute-book items as plain fields. For an
+ * editor, copy them into the registers once per workspace when the profile
+ * opens; "Backfill records" (the returned function) runs it again on demand.
+ */
+function useRecordBackfills(society: OrganizationRecord | null | undefined, detail: OrganizationDetail | undefined, canEdit: boolean) {
+  const toast = useToast();
+  const seedStructuredAddresses = useMutation(api.organizationDetails.seedFromSocietyAddresses);
+  const backfillRecords = useMutation(api.organizationDetails.backfillFromExistingRecords);
+  const [seededAddressSocietyId, setSeededAddressSocietyId] = useState<string | null>(null);
+  const [autoBackfilledSocietyId, setAutoBackfilledSocietyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canEdit || !society || detail === undefined || seededAddressSocietyId === society._id) return;
+    setSeededAddressSocietyId(society._id);
+    const addresses = detail?.addresses ?? [];
+    const hasStructuredRegisteredOffice = addresses.some((row) => row.type === "registered_office");
+    const hasStructuredMailing = addresses.some((row) => row.type === "mailing");
+    const hasLegacyAddress = Boolean(society.registeredOfficeAddress || society.mailingAddress);
+    if (hasLegacyAddress && (!hasStructuredRegisteredOffice || !hasStructuredMailing)) {
+      void seedStructuredAddresses({ societyId: society._id }).catch((error: unknown) => {
+        console.error("Society address backfill failed", error);
+      });
+    }
+  }, [canEdit, detail, seededAddressSocietyId, seedStructuredAddresses, society]);
+
+  useEffect(() => {
+    if (!canEdit || !society || detail === undefined || autoBackfilledSocietyId === society._id) return;
+    setAutoBackfilledSocietyId(society._id);
+    void backfillRecords({ societyId: society._id }).catch((error: unknown) => {
+      console.error("Organization detail backfill failed", error);
+    });
+  }, [canEdit, autoBackfilledSocietyId, backfillRecords, detail, society]);
+
+  return async () => {
+    if (!society) return;
+    try {
+      const result = await backfillRecords({ societyId: society._id });
+      const total = result.addressesCreated + result.minuteBookItemsCreated;
+      toast.success(
+        total ? "Backfill complete" : "No records added",
+        `${result.addressesCreated} addresses, ${result.minuteBookItemsCreated} minute-book records`,
+      );
+    } catch (error) {
+      toast.error("Could not backfill records", error instanceof Error ? error.message : String(error));
+    }
+  };
+}
+
+/** Set one profile field, with the fields that move with it. */
+function withProfileField(current: ProfileForm, key: string, value: unknown): ProfileForm {
+  return {
+    ...current,
+    [key]: value,
+    ...(key === "isCharity" ? { charityStatus: value ? "registered" : "not_applied" }
+      : key === "isMemberFunded" ? { legalSubtype: value ? "member_funded_society" : "ordinary_society" }
+      : key === "legalSubtype" ? { isMemberFunded: value === "member_funded_society" }
+      : key === "formationStatus" ? { organizationStatus: organizationStatusForFormation(typeof value === "string" ? value : undefined, current.organizationStatus) }
+      : {}),
+  };
+}
+
+/** A catalogued Act belongs to one jurisdiction and incorporates listed entity kinds; keep the identity consistent with it. */
+function withGoverningAct(current: ProfileForm, value: string | undefined, act?: IncorporationAct): ProfileForm {
+  if (!act || act.actFormedUnder === current.actFormedUnder) return { ...current, actFormedUnder: value };
+  const kind = entityKindForType(current.entityType);
+  const keepsEntity = kind !== undefined && act.entityKinds.includes(kind);
+  return {
+    ...current, actFormedUnder: value, jurisdictionCode: act.jurisdictionCode, legalSubtype: act.legalSubtype,
+    ...(keepsEntity ? {} : { entityType: ENTITY_KIND_ENTITY_TYPES[act.entityKinds[0]], isMemberFunded: false }),
+  };
 }
 
 /**
@@ -1290,188 +389,4 @@ function organizationStatusForFormation(formationStatus: string | undefined, cur
   if (formationStatus === "preparing" || formationStatus === "submitted") return "pre_incorporation";
   if ((formationStatus === "incorporated" || formationStatus === "unverified_existing") && (!current || current === "pre_incorporation")) return "active";
   return current;
-}
-
-function documentUploadHref(category: string, title: string) {
-  return `/app/documents?${new URLSearchParams({ intent: "new", category, title }).toString()}`;
-}
-
-function DocTableRow({ label, docId, uploadHref, uploadLabel = "Upload" }: { label: string; docId?: string; uploadHref: string; uploadLabel?: string }) {
-  const present = Boolean(docId);
-  return (
-    <tr className="gov-doc-row">
-      <td>
-        <strong>{label}</strong>
-        <div className="gov-doc-row__actions">
-          {present
-            ? <Link className="btn btn--ghost btn--sm" to={`/app/documents/${docId}`} aria-label={`Open ${label}`}>Open</Link>
-            : <Link className="btn btn--sm" to={uploadHref} aria-label={`${uploadLabel} ${label}`}>{uploadLabel}</Link>}
-        </div>
-      </td>
-      <td>
-        <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
-      </td>
-    </tr>
-  );
-}
-
-function findCurrentAddress(addresses: any[], type: string) {
-  return addresses.find((row) => row.type === type && row.status === "current")
-    ?? addresses.find((row) => row.type === type);
-}
-
-function addressLine(row: any) {
-  return [row.unit, row.street, row.city, row.provinceState, row.postalCode, row.country]
-    .filter(isAddressPart)
-    .join(", ");
-}
-
-function guidedAddressText(row: Record<string, any>) {
-  return formatAddressText(Object.fromEntries(["unit", "street", "city", "provinceState", "postalCode", "country"].map((key) => [key, isAddressPart(row[key]) ? row[key] : ""])));
-}
-
-function isAddressPart(value: unknown) {
-  if (!value) return false;
-  const text = String(value).trim();
-  return Boolean(text) && text.toLowerCase() !== "needs review";
-}
-
-function DetailSection({ id, icon, title, count, action, children }: any) {
-  return (
-    <div id={id} className="card org-detail-section">
-      <div className="card__head">
-        <div className="row" style={{ gap: 8 }}>
-          {icon}
-          <h2 className="card__title">{title}</h2>
-          <Badge>{count}</Badge>
-        </div>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function RowActions({ onEdit, onRemove }: { onEdit: () => void; onRemove: () => void }) {
-  return (
-    <div className="row org-row-actions">
-      <button className="btn btn--ghost btn--sm" onClick={onEdit}>Edit</button>
-      <button className="btn btn--ghost btn--sm btn--icon" aria-label="Remove" onClick={onRemove}><Trash2 size={12} /></button>
-    </div>
-  );
-}
-
-function AddressFields({ draft, setDraft }: any) {
-  return (
-    <>
-      <div className="row" style={{ gap: 12 }}>
-        <OptionSelect label="Type" setName="addressTypes" value={draft.type ?? ""} onChange={(value) => setDraft({ ...draft, type: value })} />
-        <OptionSelect label="Status" setName="addressStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
-      </div>
-      <StructuredAddressFields value={draft} onChange={(value) => setDraft({ ...draft, ...value })} />
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Effective from"><DatePicker value={draft.effectiveFrom ?? ""} onChange={(value) => setDraft({ ...draft, effectiveFrom: value })} /></Field>
-        <Field label="Effective to"><DatePicker value={draft.effectiveTo ?? ""} onChange={(value) => setDraft({ ...draft, effectiveTo: value })} /></Field>
-      </div>
-      <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
-    </>
-  );
-}
-
-function RegistrationFields({ draft, setDraft, documents }: any) {
-  return (
-    <>
-      <div className="row" style={{ gap: 12 }}>
-        <OptionSelect label="Registration type" setName="registrationTypes" value={draft.registrationType ?? ""} onChange={(value) => setDraft({ ...draft, registrationType: value })} emptyLabel="No type" />
-        <OptionSelect label="Registration jurisdiction" setName="entityJurisdictions" value={draft.jurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, jurisdiction: value })} emptyLabel="No jurisdiction" />
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <OptionSelect label="Home jurisdiction" setName="entityJurisdictions" value={draft.homeJurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, homeJurisdiction: value })} emptyLabel="No home jurisdiction" />
-      </div>
-      <Field label="Corporation registration class" hint="Ontario EPCA licence obligations apply to the licensed foreign class; ordinary federal corporations need a separate assessment."><Select value={draft.corporationClass ?? ""} onChange={(value) => setDraft({ ...draft, corporationClass: value })} options={[{ value: "", label: "Unclassified / needs review" }, { value: "federal_corporation", label: "Federal corporation" }, { value: "foreign_epca_licensed", label: "Ontario licensed foreign corporation (EPCA)" }, { value: "other", label: "Other — assess registry obligations" }]} /></Field>
-      <Field label="Licence evidence document" hint="Required before selecting Ontario licensed foreign corporation."><Select value={draft.licenceEvidenceDocumentId ?? ""} onChange={(value) => setDraft({ ...draft, licenceEvidenceDocumentId: value })} options={[{ value: "", label: "Select an evidence document" }, ...documents.map((document: any) => ({ value: document._id, label: document.title }))]} /></Field>
-      <Field label="Assumed name"><input className="input" value={draft.assumedName ?? ""} onChange={(e) => setDraft({ ...draft, assumedName: e.target.value })} /></Field>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Registration number"><input className="input" value={draft.registrationNumber ?? ""} onChange={(e) => setDraft({ ...draft, registrationNumber: e.target.value })} /></Field>
-        <Field label="NUANS number"><input className="input" value={draft.nuansNumber ?? ""} onChange={(e) => setDraft({ ...draft, nuansNumber: e.target.value })} /></Field>
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Registration date"><DatePicker value={draft.registrationDate ?? ""} onChange={(value) => setDraft({ ...draft, registrationDate: value })} /></Field>
-        <Field label="Activity commenced"><DatePicker value={draft.activityCommencementDate ?? ""} onChange={(value) => setDraft({ ...draft, activityCommencementDate: value })} /></Field>
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="De-registration date"><DatePicker value={draft.deRegistrationDate ?? ""} onChange={(value) => setDraft({ ...draft, deRegistrationDate: value })} /></Field>
-        <OptionSelect label="Status" setName="registrationStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Annual return due"><DatePicker value={draft.annualReturnDueDate ?? ""} onChange={(value) => setDraft({ ...draft, annualReturnDueDate: value })} /></Field>
-        <Field label="Last annual return filed"><DatePicker value={draft.lastAnnualReturnFiledDate ?? ""} onChange={(value) => setDraft({ ...draft, lastAnnualReturnFiledDate: value })} /></Field>
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Profile report date"><DatePicker value={draft.registryProfileReportDate ?? ""} onChange={(value) => setDraft({ ...draft, registryProfileReportDate: value })} /></Field>
-        <Field label="Registry portal key"><input className="input" value={draft.registryPortalKey ?? ""} onChange={(e) => setDraft({ ...draft, registryPortalKey: e.target.value })} /></Field>
-      </div>
-      <Field label="Principal office"><input className="input" value={draft.principalOfficeAddress ?? ""} onChange={(e) => setDraft({ ...draft, principalOfficeAddress: e.target.value })} /></Field>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Agent for service"><input className="input" value={draft.agentForServiceName ?? ""} onChange={(e) => setDraft({ ...draft, agentForServiceName: e.target.value })} /></Field>
-        <Field label="Agent address"><input className="input" value={draft.agentForServiceAddress ?? ""} onChange={(e) => setDraft({ ...draft, agentForServiceAddress: e.target.value })} /></Field>
-      </div>
-      <Field label="Official email"><input className="input" value={draft.officialEmail ?? ""} onChange={(e) => setDraft({ ...draft, officialEmail: e.target.value })} /></Field>
-      <Field label="Representatives"><input className="input" value={draft.representativeIdsText ?? (draft.representativeIds ?? []).join(", ")} onChange={(e) => setDraft({ ...draft, representativeIdsText: e.target.value })} placeholder="Name or record IDs, comma separated" /></Field>
-      <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
-    </>
-  );
-}
-
-function IdentifierFields({ draft, setDraft }: any) {
-  return (
-    <>
-      <div className="row" style={{ gap: 12 }}>
-        <OptionSelect label="Kind" setName="taxNumberTypes" value={draft.kind ?? ""} onChange={(value) => setDraft({ ...draft, kind: value, ...(value === "pst" ? { jurisdiction: "CA-BC" } : {}) })} />
-        <OptionSelect label="Status" setName="identifierStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
-      </div>
-      <Field label="Number"><input className="input mono" value={draft.number ?? ""} onChange={(e) => setDraft({ ...draft, number: e.target.value })} /></Field>
-      {["gst", "pst", "sales_tax"].includes(draft.kind) && <p className="muted" style={{ fontSize: 13 }}>
-        {draft.kind === "gst" ? "Use the full GST/HST account number, such as 123456789RT0001. A nine-digit business number alone is not a GST/HST account." : draft.kind === "pst" ? "Use the BC PST number, such as PST-1234-5678." : "For invoice use, choose GST/HST registration or BC PST registration and save each number separately."}
-        {" "}Only active registrations effective on the invoice date are used. New issued invoices save these numbers. Keep unconfirmed numbers marked Needs review.
-      </p>}
-      <div className="row" style={{ gap: 12 }}>
-        <OptionSelect label="Jurisdiction" setName="entityJurisdictions" value={draft.jurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, jurisdiction: value })} emptyLabel="No jurisdiction" />
-        <Field label="Foreign jurisdiction"><input className="input" value={draft.foreignJurisdiction ?? ""} onChange={(e) => setDraft({ ...draft, foreignJurisdiction: e.target.value })} /></Field>
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label={draft.kind === "gst" || draft.kind === "pst" ? "Registration effective date" : "Registered at"}><DatePicker value={draft.registeredAt ?? ""} onChange={(value) => setDraft({ ...draft, registeredAt: value })} /></Field>
-        <OptionSelect label="Access level" setName="accessLevels" value={draft.accessLevel ?? ""} onChange={(value) => setDraft({ ...draft, accessLevel: value })} />
-      </div>
-      <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
-    </>
-  );
-}
-
-function drawerTitle(kind: DrawerKind | null, draft: any) {
-  if (!kind) return "Organization detail";
-  const prefix = draft?._id ? "Edit" : "New";
-  return `${prefix} ${kind}`;
-}
-
-function csv(value: any) {
-  if (Array.isArray(value)) return value.map(String).filter(Boolean);
-  return String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
-}
-
-function mask(value?: string) {
-  const text = String(value ?? "");
-  if (text.length <= 4) return "restricted";
-  return `**** ${text.slice(-4)}`;
-}
-
-/** The Act's name recorded at setup when "Another Act" was chosen. */
-function setupOtherActName(onboardingAnswersJson?: string): string | undefined {
-  if (!onboardingAnswersJson) return undefined;
-  try {
-    const name = JSON.parse(onboardingAnswersJson)?.otherActName;
-    return typeof name === "string" && name.trim() ? name.trim() : undefined;
-  } catch {
-    return undefined;
-  }
 }

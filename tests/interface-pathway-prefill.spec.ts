@@ -63,7 +63,7 @@ test("a solo founder's pathway is filled in from the workspace and reviewed by t
   await expect(addressDrawer).toBeHidden();
 
   // A document to attach as the prepared packet.
-  await page.goto("/app/society");
+  await page.goto("/app/society?tab=documents");
   await page.locator(".society-doc-table tr", { hasText: "Articles" }).getByRole("link", { name: "Upload Articles", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Document saved", { exact: true })).toBeVisible();

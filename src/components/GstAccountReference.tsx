@@ -29,7 +29,7 @@ export function GstAccountReference({ identifiers, canRead = true, asOfDate, act
             ? "Saved for this organization. Active registrations are available when you prepare invoices and GST/HST filings."
             : reference.message}</p>
           {filing && <p className="muted" style={{ marginBottom: 0 }}>
-            This shows the current organization record. It does not change or verify a submitted return. <Link to="/app/society#tax-identifiers">Manage organization tax identifiers</Link>
+            This shows the current organization record. It does not change or verify a submitted return. <Link to="/app/society?tab=tax">Manage organization tax identifiers</Link>
           </p>}
         </>}
     </div>

@@ -118,13 +118,12 @@ test("rejected certificate and formation evidence stays visible without unhandle
   await expect(dialog.getByLabel("Certificate number", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await selectDemoOrganization(page, "society");
-  await page.goto("/demo/app/society");
-  await page.getByText("More organization details", { exact: false }).click();
-  await page.getByLabel("Legal formation status", { exact: true }).click();
+  await page.goto("/demo/app/society?tab=legal");
+  await page.getByLabel("Status", { exact: true }).click();
   await page.getByRole("option", { name: "Incorporated — certificate evidence verified", exact: true }).click();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByText("Could not save organization", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Legal formation status", { exact: true })).toContainText("certificate evidence verified");
+  await expect(page.getByLabel("Status", { exact: true })).toContainText("certificate evidence verified");
   expect(errors).toEqual([]);
 });
 

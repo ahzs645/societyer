@@ -92,8 +92,7 @@ test("existing company collects its Act, addresses and share planning without fa
   expect(saved.tables.rightsholdingTransfers ?? []).toHaveLength(0);
   expect(saved.tables.roleHolders ?? []).toHaveLength(0);
   // Exercise the shared editor in the generic organization-location drawer too.
-  await page.goto("/app/society");
-  await page.locator("#more-organization-details > summary").click();
+  await page.goto("/app/society?tab=offices");
   await page.getByRole("button", { name: "Address", exact: true }).click();
   const address = page.getByRole("dialog", { name: "New address", exact: true });
   await address.getByLabel("Country", { exact: true }).fill("Canada");
@@ -244,8 +243,7 @@ test("Alberta records only: province picker, plain-language note and a records-o
     .toEqual(["CA-AB", "corporation__business_", "business_corporations_act__alberta_", "other"]);
   expect(JSON.parse(organization.onboardingAnswersJson).pathwayKey).toBe("records_only");
   // Settings show the catalogued Act and keep the stored jurisdiction.
-  await page.goto("/app/society");
-  await page.locator("#more-organization-details > summary").click();
+  await page.goto("/app/society?tab=legal");
   await expect(page.getByLabel("Act formed under", { exact: true })).toContainText("Business Corporations Act");
   await expect(page.getByLabel("Legal jurisdiction", { exact: true })).toContainText("Alberta");
   await fits(page);

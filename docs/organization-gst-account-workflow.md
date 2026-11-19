@@ -2,11 +2,11 @@
 
 ## Save the business account once
 
-Open **Organization** (`/app/society`). The **Organization GST/HST account** card is visible above the editable organization profile. **Add GST/HST account** opens the existing organization identifier form with **GST/HST registration** selected.
+Open **Organization** (`/app/society`) and its **Tax accounts** tab (`/app/society?tab=tax`). The **Organization GST/HST account** card sits below the program accounts. **Add GST/HST account** opens the existing organization identifier form with **GST/HST registration** selected.
 
 Enter the full account from the organization's registration (nine digits, `RT`, four digits). Spaces and letter case are normalized. A nine-digit business number alone is not a GST/HST account. New entries start as **Needs review**; change the status to **Active** only after confirming the registration, and supply its effective date when known. Saving an active GST entry with an invalid account format is rejected by the existing backend validation.
 
-**Manage tax identifiers** opens the **Tax and registry identifiers** section under **More organization details**. The same section can be linked directly with `/app/society#tax-identifiers`. GST/HST, BC PST and other identifiers remain distinct records; no account is duplicated onto each draft invoice.
+The **Tax accounts** tab shows the business number, one row per program account (income tax, GST/HST, BC PST where BC applies, payroll) and a table of other identifiers. Older links to `/app/society#tax-identifiers` open the same tab. GST/HST, BC PST and other identifiers remain distinct records; no account is duplicated onto each draft invoice.
 
 ## Invoices
 

@@ -123,15 +123,16 @@ test("a CBCA corporation sees corporate profile, communications, workflow, resea
   const visit = visitor(page, CBCA_NAME);
 
   // Item 2: organization profile hides society-only status flags.
-  await visit("/app/society", "Organization profile");
+  await visit("/app/society?tab=legal", "Organization profile");
   await expect(page.getByText("Business activities / article restrictions").first()).toBeVisible();
   await expect(page.getByText("Registered CRA charity", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Member-funded society", { exact: true })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Documents", exact: true }).click();
   const docs = page.locator("table.society-doc-table");
   await expect(docs.getByText("Articles", { exact: true })).toBeVisible();
   await expect(docs.getByText("By-laws", { exact: true })).toBeVisible();
   await expect(docs.getByText("Constitution", { exact: true })).toHaveCount(0);
-  await page.locator("#more-organization-details > summary").click();
+  await page.getByRole("tab", { name: "Tax accounts", exact: true }).click();
   await expect(page.getByText("Tax evidence reference", { exact: true })).toBeVisible();
   await expect(page.getByText("Charitable registration", { exact: true })).toHaveCount(0);
 
@@ -238,7 +239,7 @@ test("a BC company keeps BC privacy wording without society-only fields", async 
   await expect(assessment).not.toContainText("Assessed as applicable");
   await expect(assessment).toContainText("federal work, undertaking or business");
 
-  await visit("/app/society", "Organization profile");
+  await visit("/app/society?tab=documents", "Organization profile");
   await expect(page.getByText("Registered CRA charity", { exact: true })).toHaveCount(0);
   const docs = page.locator("table.society-doc-table");
   await expect(docs.getByText("Articles", { exact: true })).toBeVisible();

@@ -8,7 +8,7 @@ test("choose, save, reload and clear a primary sector while preserving the detai
   await page.getByRole("button", { name: /Start a new organization/i }).click();
   await page.waitForURL(/\/app\/society\/new/);
   await completeGuidedOrganizationSetup(page, `NAICS fixture ${info.project.name}`);
-  await page.goto("/app/society");
+  await page.goto("/app/society?tab=legal");
   const card = page.getByRole("region", { name: "Industry sector", exact: true });
   await expect(card.getByText("No sector selected", { exact: true })).toBeVisible();
   await card.getByText("Already have a NAICS code?", { exact: true }).click();
