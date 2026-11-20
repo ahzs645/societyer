@@ -406,7 +406,7 @@ test("registered views keep old deep links and persist user-scoped visibility, f
   page,
 }) => {
   const data = await seed(page),
-    nav = page.getByRole("navigation", {
+    nav = page.getByRole("tablist", {
       name: "Payroll calculator sections",
       exact: true,
     });
@@ -424,10 +424,10 @@ test("registered views keep old deep links and persist user-scoped visibility, f
     .getByRole("button", { name: "Move Employee profiles down", exact: true })
     .click();
   await expect(
-    nav.getByRole("button", { name: "Tools", exact: true }),
+    nav.getByRole("tab", { name: "Tools", exact: true }),
   ).toHaveCount(0);
-  await expect(nav.getByRole("button").nth(0)).toHaveText("Calculate");
-  await expect(nav.getByRole("button").nth(1)).toContainText("TD1 import");
+  await expect(nav.getByRole("tab").nth(0)).toHaveText("Calculate");
+  await expect(nav.getByRole("tab").nth(1)).toContainText("TD1 import");
   await page.getByText("TD1 import section", { exact: true }).click();
   await page.reload();
   await expect(
@@ -444,7 +444,7 @@ test("registered views keep old deep links and persist user-scoped visibility, f
     page.getByRole("button", { name: "Show Tools in navigation", exact: true }),
   ).toBeVisible();
   await expect(
-    nav.getByRole("button", { name: "Tools", exact: true }),
+    nav.getByRole("tab", { name: "Tools", exact: true }),
   ).toHaveCount(0);
   await page.evaluate(async (id) => {
     const { setStoredUserId } = await import("/src/hooks/useCurrentUser.ts");
@@ -452,7 +452,7 @@ test("registered views keep old deep links and persist user-scoped visibility, f
   }, data.readerId);
   await page.reload();
   await expect(
-    nav.getByRole("button", { name: "Tools", exact: true }),
+    nav.getByRole("tab", { name: "Tools", exact: true }),
   ).toBeVisible();
   await page.evaluate(async (id) => {
     const { setStoredUserId } = await import("/src/hooks/useCurrentUser.ts");
@@ -460,14 +460,14 @@ test("registered views keep old deep links and persist user-scoped visibility, f
   }, data.ownerId);
   await page.reload();
   await expect(
-    nav.getByRole("button", { name: "Tools", exact: true }),
+    nav.getByRole("tab", { name: "Tools", exact: true }),
   ).toHaveCount(0);
   await page.getByText("Customize payroll views", { exact: true }).click();
   await page
     .getByRole("button", { name: "Reset payroll views", exact: true })
     .click();
   await expect(
-    nav.getByRole("button", { name: "Tools", exact: true }),
+    nav.getByRole("tab", { name: "Tools", exact: true }),
   ).toBeVisible();
   await page.goto("/app/payroll/calculator?tab=profiles");
   await page

@@ -15,8 +15,8 @@ test('qualified physical EHT locations persist, reconcile exact annual cents and
     return workspace.societyId;
   });
   await page.reload();
-  const tabs = page.getByRole('navigation', { name: 'Payroll calculator sections', exact: true });
-  await tabs.getByRole('button', { name: 'Employer setup', exact: true }).click();
+  const tabs = page.getByRole('tablist', { name: 'Payroll calculator sections', exact: true });
+  await tabs.getByRole('tab', { name: 'Employer setup', exact: true }).click();
   await page.getByRole('button', { name: 'Configure employer year', exact: true }).click();
   let form = page.getByRole('form', { name: 'Employer setup', exact: true });
   await form.getByLabel('Pay frequency', { exact: true }).click();
@@ -64,7 +64,7 @@ test('qualified physical EHT locations persist, reconcile exact annual cents and
     await client.mutation('payrollCalculation:saveWorkDay', { societyId, employeeId, fields: { date: '2026-05-15', minutes: 480 } });
     return { employeeId };
   }, societyId);
-  await tabs.getByRole('button', { name: 'Calculate', exact: true }).click();
+  await tabs.getByRole('tab', { name: 'Calculate', exact: true }).click();
   const runForm = page.getByRole('form', { name: 'Payroll run inputs', exact: true });
   await runForm.getByLabel('Pay period start', { exact: true }).fill('2026-05-01');
   await runForm.getByLabel('Pay period end', { exact: true }).fill('2026-05-15');

@@ -1,10 +1,24 @@
 @use "../../../styles/tokens" as *;
 
 .cost-planner {
-  &__intro {
-    max-width: 85ch;
-    color: token(text-secondary);
-    margin-block: 16px;
+  // Card heads: the title (and its dates) first, controls pushed to the end,
+  // wrapping under the title on narrow screens.
+  .card__head {
+    flex-wrap: wrap;
+  }
+  &__head-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    p {
+      margin: 2px 0 0;
+    }
+  }
+  &__head-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: auto;
   }
   &__content {
     display: grid;
@@ -36,7 +50,6 @@
   }
   &__toolbar {
     justify-content: space-between;
-    padding: 12px 0;
   }
   &__toolbar > label,
   &__section-heading > label:not(.check-row) {
@@ -150,8 +163,11 @@
     padding-top: 16px;
   }
   &__exports {
-    border-block: 1px solid token(border);
-    padding-block: 12px;
+    display: grid;
+    gap: 12px;
+    p {
+      margin: 0;
+    }
   }
   @media (max-width: 1000px) {
     &__stats {

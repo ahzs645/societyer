@@ -29,13 +29,13 @@ test("all payroll sections and connected finance pages fit the viewport and rema
     setStoredUserId(users.find((row: any) => row.role === "Owner")._id);
   });
   await page.reload();
-  const navigation = page.getByRole("navigation", { name: "Payroll calculator sections", exact: true });
-  await expect(navigation.getByRole("button")).toHaveCount(PAYROLL_VIEWS.length);
+  const navigation = page.getByRole("tablist", { name: "Payroll calculator sections", exact: true });
+  await expect(navigation.getByRole("tab")).toHaveCount(PAYROLL_VIEWS.length);
   for (const view of PAYROLL_VIEWS) {
     console.info(`Checking payroll view ${view.id}`);
-    const button = navigation.getByRole("button", { name: view.label, exact: true });
+    const button = navigation.getByRole("tab", { name: view.label, exact: true });
     if (isMobile) await button.tap(); else await button.click();
-    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(button).toHaveAttribute("aria-selected", "true");
     const content = page.locator(".payroll-calculator__view-section > div");
     await expect(content.locator(":scope > *").first()).toBeVisible();
     await expect(content).not.toContainText("Loading payroll view");

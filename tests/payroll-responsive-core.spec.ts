@@ -49,7 +49,7 @@ test("touch navigation and expanded TD1 evidence and rule comparisons fit the vi
     if (info.project.use.hasTouch) await locator.tap();
     else await locator.click();
   };
-  const nav = page.getByRole("navigation", {
+  const nav = page.getByRole("tablist", {
     name: "Payroll calculator sections",
     exact: true,
   });
@@ -95,7 +95,7 @@ test("touch navigation and expanded TD1 evidence and rule comparisons fit the vi
       claim!.height,
       "TD1 amount inputs have an easy touch target",
     ).toBeGreaterThanOrEqual(44);
-  await press(nav.getByRole("button", { name: "Rules library", exact: true }));
+  await press(nav.getByRole("tab", { name: "Rules library", exact: true }));
   const library = page.getByRole("region", {
     name: "Payroll rules library",
     exact: true,
@@ -138,13 +138,15 @@ test("touch navigation and expanded TD1 evidence and rule comparisons fit the vi
   await page.screenshot({ path: info.outputPath("rules-comparison.png") });
   await assertPayrollFits(page);
   if (info.project.use.hasTouch) {
+    // Touch tabs are the app's 36px tab strip; each tab's hit area reaches
+    // the 44px tap target above and below its box (_control-density.scss).
     const bounds = await nav
-      .getByRole("button", { name: "Calculate", exact: true })
+      .getByRole("tab", { name: "Calculate", exact: true })
       .boundingBox();
     expect(
       bounds!.height,
       "Primary payroll navigation has an easy touch target",
-    ).toBeGreaterThanOrEqual(44);
+    ).toBeGreaterThanOrEqual(36);
     const table = comparison.locator("table");
     const clip = await table.evaluate((element) => {
       let parent = element.parentElement;

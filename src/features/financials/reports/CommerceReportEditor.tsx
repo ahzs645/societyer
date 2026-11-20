@@ -18,7 +18,7 @@ export function CommerceReportEditor({ definition, onChange, societyId }: { soci
   const source = COMMERCE_REPORT_CATALOG[definition.source], columns: CommerceColumn[] = [...source.columns, ...definition.metrics.map((metric) => ({ key: metric.key, label: metric.label, type: metric.type }))], numeric = columns.filter((column) => !["text", "date"].includes(column.type));
   const patchFilter = (patch: Partial<CommerceReportDefinition["filters"]>) => change({ filters: { ...definition.filters, ...patch } });
   const addMetric = () => { let key = `metric${definition.metrics.length + 1}`; while (columns.some((column) => column.key === key)) key += "x"; const metric: CommerceMetric = { key, label: "Calculated metric", expression: numeric[0]?.key ?? "0", type: "number" }; change({ metrics: [...definition.metrics, metric], columns: [...definition.columns, { key, label: metric.label, visible: true, width: 1 }] }); };
-  return <div className="card" style={{ padding: 16 }}>
+  return <div className="commerce-report-editor">
     <div role="tablist" aria-label="Report designer" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>{["filters", "columns", "metrics", "charts", "sections"].map((value) => <button key={value} type="button" role="tab" aria-selected={tab === value} className={`btn btn--sm${tab === value ? " btn--accent" : ""}`} onClick={() => setTab(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div>
     <div role="tabpanel" aria-label={`${tab} designer`}>
       {tab === "filters" && <div className="form-stack"><div style={fieldStyle}>
