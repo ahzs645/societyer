@@ -6,6 +6,7 @@ import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { EmptyState } from "../components/ui";
 import { Tabs } from "../components/primitives";
@@ -19,7 +20,8 @@ import { ReceiptInboxItem } from "../features/financials/receipts/ReceiptInboxIt
 import { errorMessage } from "../features/financials/banking/types";
 import type { InboxItem, ReceiptInboxData } from "../features/financials/receipts/types";
 
-type InboxTab = "unmatched" | "matched" | "discarded";
+const INBOX_TABS = ["unmatched", "matched", "discarded"] as const;
+type InboxTab = (typeof INBOX_TABS)[number];
 
 const EMPTY: Record<InboxTab, { title: string; description: string }> = {
   unmatched: { title: "No receipts waiting", description: "Drop a receipt above, then link it to a reimbursement claim or a company payment." },
@@ -40,7 +42,7 @@ export function ReceiptInboxPage() {
   const matchAll = useMutation(api.receiptInbox.matchAllHighConfidence);
   const confirm = useConfirm();
   const toast = useToast();
-  const [tab, setTab] = useState<InboxTab>("unmatched");
+  const [tab, setTab] = useUrlTab<InboxTab>(INBOX_TABS, "unmatched");
   const [busy, setBusy] = useState(false);
   const [claim, setClaim] = useState<ClaimEditorDraft | null>(null);
   const [cardReceipt, setCardReceipt] = useState<InboxItem | null>(null);

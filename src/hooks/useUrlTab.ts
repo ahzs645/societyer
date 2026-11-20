@@ -1,15 +1,21 @@
 import { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 
+/** Narrows an untyped tab id (e.g. from `SettingsShell`) to one of `allowed`. */
+export function isUrlTab<T extends string>(allowed: readonly T[], value: string): value is T {
+  return (allowed as readonly string[]).includes(value);
+}
+
 /**
  * Page tabs synced to a URL search param (default `tab`), like RecordShowPage:
  * deep links open the right tab and switching replaces history instead of
- * stacking entries. Unknown values fall back to `fallback`.
+ * stacking entries. Other params (a drawer's id, say) are kept. Unknown values
+ * fall back to `fallback`.
  */
 export function useUrlTab<T extends string>(allowed: readonly T[], fallback: T, param = "tab") {
   const [params, setParams] = useSearchParams();
   const raw = params.get(param);
-  const value = (allowed as readonly string[]).includes(raw ?? "") ? (raw as T) : fallback;
+  const value = raw !== null && isUrlTab(allowed, raw) ? raw : fallback;
   const setValue = useCallback(
     (next: T) => {
       setParams(

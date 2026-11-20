@@ -12,6 +12,7 @@ import { useConfirm } from "../components/Modal";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { useToast } from "../components/Toast";
 import { useUndoableAction } from "../hooks/useUndoableAction";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { pluralize } from "../lib/format";
 import {
   bulkAcceptCandidates, groupQueue, latestDecisions, promotionReadiness, reviewFieldsForRecord,
@@ -27,7 +28,8 @@ import { canStoreOriginals, useStoreOriginals } from "../features/intake/useStor
 import { CLASS_PROMOTION } from "../../shared/intake/promotionClasses";
 import "../features/intake/intake.css";
 
-type Tab = "fields" | "people" | "gaps" | "log";
+const TABS = ["fields", "people", "gaps", "log"] as const;
+type Tab = (typeof TABS)[number];
 const TIER_LABEL: Record<RiskTier, string> = { high: "High risk", medium: "Medium risk", low: "Low risk" };
 const STATUS_LABEL: Record<string, string> = { pending_review: "to review", in_review: "in review", accepted: "accepted", promoted: "promoted", rejected: "rejected", covered: "covered by a copy" };
 const STATUS_TONE: Record<string, "success" | "warn" | "danger" | "info" | "neutral"> = { pending_review: "neutral", in_review: "info", accepted: "info", promoted: "success", rejected: "danger", covered: "success" };
@@ -92,10 +94,12 @@ export function IntakeReviewPage() {
   const files = useQuery(api.intake.listFiles, runArgs) as any[] | undefined;
   const [statusFilter, setStatusFilter] = useState<"open" | "all">("open");
   const selectedId = params.get("e") ?? undefined;
-  const select = useCallback((id: string | undefined, fieldPath?: string) => {
+  // `showFields` also opens the Fields panel (`?tab=`) in the same URL write.
+  const select = useCallback((id: string | undefined, fieldPath?: string, showFields = false) => {
     const next = new URLSearchParams(params);
     if (id) next.set("e", id); else next.delete("e");
     if (fieldPath) next.set("f", fieldPath); else next.delete("f");
+    if (showFields) next.delete("tab");
     setParams(next, { replace: true });
   }, [params, setParams]);
 
@@ -127,7 +131,7 @@ export function IntakeReviewPage() {
   const selectedPath = params.get("f") ?? undefined;
   const selectedField = fields.find((field) => field.path === selectedPath);
   const readOnly = !canWrite || CLOSED.has(String(extraction?.status));
-  const [tab, setTab] = useState<Tab>("fields");
+  const [tab, setTab] = useUrlTab<Tab>(TABS, "fields");
   const [bulkScope, setBulkScope] = useState<{ group?: ReviewGroup; itemIndex?: number } | null>(null);
   const [gapField, setGapField] = useState<ReviewField | null>(null);
   const [promoteOpen, setPromoteOpen] = useState(false);
@@ -420,7 +424,7 @@ export function IntakeReviewPage() {
                   {detail.file.sensitivity === "restricted" && <Badge tone="danger"><Lock size={10} /> restricted</Badge>}
                 </div>
                 <div className="intake-tabs" role="tablist" aria-label="Review panels">
-                  {(["fields", "people", "gaps", "log"] as Tab[]).map((id) => (
+                  {TABS.map((id) => (
                     <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
                       {id === "fields" ? `Fields (${readiness.reviewed}/${readiness.total})` : id === "people" ? "People" : id === "gaps" ? "Gaps" : `Log (${fileLog.length})`}
                     </button>
@@ -430,7 +434,7 @@ export function IntakeReviewPage() {
                   {extraction.verification?.mismatched > 0 && tab === "fields" && <Banner tone="danger">{pluralize(extraction.verification.mismatched, "quote")} could not be re-found in the source. Those fields need a person.</Banner>}
                   {tab === "fields" && <FieldList docClass={extraction.docClass} fields={fields} decisions={decisions} selectedPath={selectedPath} onSelect={(field) => select(selectedId, field.path)} onDecide={onDecide} onBulkItem={(group, itemIndex) => setBulkScope({ group, itemIndex })} readOnly={readOnly} />}
                   {tab === "people" && <EntityPanel societyId={society._id} extractionId={extraction._id} readOnly={readOnly}
-                    onShow={(path) => { setTab("fields"); select(selectedId, path); }}
+                    onShow={(path) => select(selectedId, path, true)}
                     onLink={(group: EntityGroup, personId: string, fullName: string) => void linkNameAcrossRun({ societyId: society._id, runId, name: group.name, personId }).then((result: any) => {
                       toast.success(`Linked "${group.name}" to ${fullName}`, { description: `${pluralize(result.occurrences, "occurrence")} in ${pluralize(result.extractions, "document")}.`, duration: UNDO_MS, action: { label: "Undo", onClick: () => void undo(result.reviewIds) } });
                     }).catch((error: unknown) => toast.error("Could not link", error instanceof Error ? error.message : undefined))}

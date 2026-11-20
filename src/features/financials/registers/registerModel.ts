@@ -18,6 +18,8 @@ export const SECTION_TABS: ReadonlyArray<{ id: SectionTab; label: string }> = [
   { id: "expenses", label: "Expenses" },
 ];
 
+export const SECTION_TAB_IDS: readonly SectionTab[] = SECTION_TABS.map((tab) => tab.id);
+
 export function isBooksSection(value: string): value is BooksSection {
   return value === "assets" || value === "liabilities" || value === "equity" || value === "income" || value === "expenses";
 }

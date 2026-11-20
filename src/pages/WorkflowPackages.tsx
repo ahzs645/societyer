@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { isUrlTab, useUrlTab } from "../hooks/useUrlTab";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
 import { InfoPopover } from "../components/InfoPopover";
@@ -84,6 +85,8 @@ const PACKAGES_TABLE = staticRecordTable({
   ],
 });
 
+const PACKAGE_TABS = ["packages", "lifecycle"] as const;
+
 export function WorkflowPackagesPage() {
   const society = useSociety();
   const canManage = usePermissions().can("tasks:write");
@@ -96,7 +99,7 @@ export function WorkflowPackagesPage() {
   const markFiled = useMutation(api.workflowPackages.markFiled);
   const confirm = useConfirm();
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState("packages");
+  const [activeTab, setActiveTab] = useUrlTab(PACKAGE_TABS, "packages");
   const [nameError, setNameError] = useState("");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(null);
@@ -229,7 +232,7 @@ export function WorkflowPackagesPage() {
           { id: "lifecycle", label: "Lifecycle" },
         ]}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={(id) => { if (isUrlTab(PACKAGE_TABS, id)) setActiveTab(id); }}
         actions={
           <Button variant="accent" disabled={!canManage} onClick={openNew} aria-label="New package">
             <Plus size={12} /> <span className="settings-shell__action-label">New package</span>

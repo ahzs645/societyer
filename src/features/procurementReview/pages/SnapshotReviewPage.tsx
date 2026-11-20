@@ -160,7 +160,7 @@ export function SnapshotReviewPage() {
     <>
       {canConfigure && !editingFolder && (
         <Tooltip content="Snapshot folder">
-          <button type="button" className="btn btn--ghost btn--icon" aria-label="Snapshot folder settings" onClick={() => setEditingFolder(true)}>
+          <button type="button" className="btn-action btn-action--icon" aria-label="Snapshot folder settings" onClick={() => setEditingFolder(true)}>
             <Settings2 size={14} aria-hidden="true" />
           </button>
         </Tooltip>
@@ -168,13 +168,13 @@ export function SnapshotReviewPage() {
       {artifact.status !== "not-installed" && (
         phone ? (
           <Tooltip content={refreshLabel}>
-            <button type="button" className="btn btn--icon" aria-label={refreshing ? "Checking for a newer snapshot" : "Refresh snapshot"} disabled={refreshing || snapshot.status === "loading"} onClick={() => void refresh()}>
+            <button type="button" className="btn-action btn-action--icon" aria-label={refreshing ? "Checking for a newer snapshot" : "Refresh snapshot"} disabled={refreshing || snapshot.status === "loading"} onClick={() => void refresh()}>
               <RefreshCw size={14} aria-hidden="true" />
             </button>
           </Tooltip>
         ) : (
-          <button type="button" className="btn" disabled={refreshing || snapshot.status === "loading"} onClick={() => void refresh()}>
-            <RefreshCw size={14} aria-hidden="true" /> {refreshLabel}
+          <button type="button" className="btn-action" disabled={refreshing || snapshot.status === "loading"} onClick={() => void refresh()}>
+            <RefreshCw size={12} aria-hidden="true" /> {refreshLabel}
           </button>
         )
       )}

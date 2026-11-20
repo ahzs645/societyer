@@ -57,7 +57,7 @@ export function PaperlessDocumentAction({
     <>
       {paperlessUrl && (
         <a
-          className="btn btn--ghost btn--sm"
+          className="btn-action"
           href={paperlessUrl}
           target="_blank"
           rel="noreferrer"
@@ -74,7 +74,7 @@ export function PaperlessDocumentAction({
         </span>
       )}
       <button
-        className="btn btn--ghost btn--sm"
+        className="btn-action"
         disabled={busy || disabled || !resolvedSocietyId || !canEdit}
         onClick={run}
         title={localOnly ? "Paperless synchronization requires a connected workspace" : "Send the current document file to Paperless-ngx with Societyer tags"}

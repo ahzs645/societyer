@@ -77,7 +77,7 @@ function ServiceReaderHost({ societyId, baseUrl, preview }: { societyId: string;
       status={source && <CatalogStatus catalog={source.catalog} publication={publication} readOnly={loaded && !can("documents:write")} operator={canConfigure}
         onSettings={canConfigure && !preview && !settings ? () => setSettings(true) : undefined} settingsLabel="Catalog source settings" />}
       info={!source && publication ? <PublicationDetails status={publication} operator={canConfigure} /> : undefined}
-      actions={!source && canConfigure && !preview && !settings ? <button type="button" className="btn btn--ghost btn--icon" aria-label="Catalog source settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button> : undefined} />
+      actions={!source && canConfigure && !preview && !settings ? <button type="button" className="btn-action btn-action--icon" aria-label="Catalog source settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button> : undefined} />
     {canConfigure && (preview || settings) && <CatalogSourceControls societyId={societyId} previewReady={Boolean(source) && !error} onClose={preview ? undefined : () => setSettings(false)} />}
     {source && <PublicationState status={publication} whileReading operator={canConfigure} />}
     {error && <div className="card"><div className="card__body" role="alert">{error} <button type="button" className="btn" onClick={() => void refresh()}>Retry</button></div></div>}
@@ -111,7 +111,7 @@ function HostedProcurementReview() {
       info={!catalog && publication ? <PublicationDetails status={publication} operator={canConfigure} /> : undefined}
       actions={!catalog && canConfigure && !settings && folder && (
         <Tooltip content="Snapshot folder">
-          <button type="button" className="btn btn--ghost btn--icon" aria-label="Snapshot folder settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button>
+          <button type="button" className="btn-action btn-action--icon" aria-label="Snapshot folder settings" onClick={() => setSettings(true)}><Settings2 size={14} aria-hidden="true" /></button>
         </Tooltip>
       )}
     />

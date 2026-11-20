@@ -372,7 +372,7 @@ export function MeetingsPage() {
         actions={
           <>
           {!isLocalDataRuntime() && canManage && can("settings:write") && can("minutes:write") && <TeamsMeetingImport societyId={society._id} />}
-          {meetingPreparationEnabled() && getAuthMode() !== "none" && !isLocalDataRuntime() && <Link className="btn" to="/app/meetings/offline">Offline preparation</Link>}
+          {meetingPreparationEnabled() && getAuthMode() !== "none" && !isLocalDataRuntime() && <Link className="btn-action" to="/app/meetings/offline">Offline preparation</Link>}
           <Segmented<MeetingsLayout>
             aria-label="Meetings layout"
             className="meetings-layout-toggle"

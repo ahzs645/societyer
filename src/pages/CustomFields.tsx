@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { usePermissions } from "../hooks/usePermissions";
+import { isUrlTab, useUrlTab } from "../hooks/useUrlTab";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { PageLoading, SeedPrompt } from "./_helpers";
@@ -47,6 +48,8 @@ const ENTITY_LABELS: Record<string, string> = {
  * read-only in the seed so they can't be changed after creation
  * (matching the drawer's own `disabled` attribute on those inputs).
  */
+const CUSTOM_FIELD_TABS = ["definitions", "mapping"] as const;
+
 export function CustomFieldsPage() {
   const society = useSociety();
   const { can } = usePermissions();
@@ -65,7 +68,7 @@ export function CustomFieldsPage() {
   const [draft, setDraft] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("definitions");
+  const [activeTab, setActiveTab] = useUrlTab(CUSTOM_FIELD_TABS, "definitions");
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -184,7 +187,7 @@ export function CustomFieldsPage() {
           { id: "mapping", label: "Link map", icon: <Link2 size={14} /> },
         ]}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={(id) => { if (isUrlTab(CUSTOM_FIELD_TABS, id)) setActiveTab(id); }}
         actions={activeTab === "definitions" ? (
           <Button variant="accent" disabled={!canWrite} onClick={openNew} aria-label="New field">
             <Plus size={12} /> <span className="settings-shell__action-label">New field</span>

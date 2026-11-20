@@ -5,6 +5,7 @@ import { Archive, Landmark, Plus, Scale, Unplug } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useCreateIntent } from "../hooks/useCreateIntent";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { EmptyState } from "../components/ui";
@@ -27,6 +28,8 @@ const EMPTY_TAB: Record<BankAccountTab, string> = {
   manual: "Accounts you add by hand appear here.",
 };
 
+const BANK_ACCOUNT_TAB_IDS = BANK_ACCOUNT_TABS.map((item) => item.id);
+
 /**
  * Money accounts: where each account's transactions come from, whether its
  * feed is healthy, its balance and ledger account, with rename, ledger link,
@@ -37,7 +40,7 @@ export function BankAccountsPage() {
   const society = useSociety();
   const { canWrite } = useFinancePermissions();
   const data = useQuery(api.bankAccounts.overview, society ? { societyId: society._id } : "skip") as BankAccountsOverview | undefined;
-  const [tab, setTab] = useState<BankAccountTab>("all");
+  const [tab, setTab] = useUrlTab<BankAccountTab>(BANK_ACCOUNT_TAB_IDS, "all");
   const [showArchived, setShowArchived] = useState(false);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState<BankAccountRow | null>(null);

@@ -9,6 +9,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
+import { isUrlTab, useUrlTab } from "../hooks/useUrlTab";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
 import { AiConnectorsCard } from "../features/aiConnectors/AiConnectorsCard";
@@ -86,8 +87,7 @@ function useFocusedDraft(drafts: readonly { _id: string }[] | undefined) {
     scrolled.current = true;
     document.getElementById(`ai-tool-draft-${focused}`)?.scrollIntoView({ block: "center" });
   }, [drafts, focused]);
-  const section = searchParams.get("section");
-  return { focused, section: AI_AGENT_SECTIONS.find((value) => value === section) };
+  return { focused };
 }
 
 export function AiAgentsPage() {
@@ -140,7 +140,8 @@ export function AiAgentsPage() {
   const [setupBusy, setSetupBusy] = useState(false);
   const [modelBusy, setModelBusy] = useState(false);
   const focusedDraft = useFocusedDraft(toolDrafts);
-  const [activeSection, setActiveSection] = useState<AiAgentSection>(() => (focusedDraft.focused ? "chat" : focusedDraft.section ?? "chat"));
+  // The section lives in `?section=` (Chat when absent), so it survives a reload and can be linked to.
+  const [activeSection, setActiveSection] = useUrlTab<AiAgentSection>(AI_AGENT_SECTIONS, "chat", "section");
   const [lastResult, setLastResult] = useState<any | null>(null);
   const [aiSetup, setAiSetup] = useState({
     scope: "personal",
@@ -421,7 +422,7 @@ export function AiAgentsPage() {
           ...(isLocalDataRuntime() ? [] : [{ id: "connectors", label: "Connectors", icon: <Plug size={14} /> }]),
         ]}
         activeTab={activeSection}
-        onTabChange={(section) => setActiveSection(section as AiAgentSection)}
+        onTabChange={(section) => { if (isUrlTab(AI_AGENT_SECTIONS, section)) setActiveSection(section); }}
       >
         {localOnly && <p className="muted" role="status">Live AI chat, agents and provider keys require a connected workspace. You can review saved conversations, tool drafts and runs, and prepare skills locally.</p>}
         {isStaticDemoRuntime() && <p className="muted" role="status">AI actions in this demo use simulated responses; no AI provider is contacted.</p>}

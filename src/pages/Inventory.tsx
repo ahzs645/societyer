@@ -40,6 +40,7 @@ import {
   LOCATION_TYPES,
   LOT_STATUSES,
   MOVEMENT_TYPES,
+  INVENTORY_TABS,
   type TabKey,
   centsToDollars,
   daysUntil,
@@ -61,6 +62,7 @@ import { CountsTab, LocationsTab, LotsTab, StockTab } from "./inventory/tabs";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { StatStrip, StatTile } from "../components/StatTile";
 import { useScrollOverflow } from "../hooks/useScrollOverflow";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 
 export function InventoryPage() {
@@ -103,7 +105,7 @@ export function InventoryPage() {
   const upsertConnection = useMutation(api.inventoryHub.upsertConnection);
   const deleteConnection = useMutation(api.inventoryHub.deleteConnection);
 
-  const [tab, setTab] = useState<TabKey>("stock");
+  const [tab, setTab] = useUrlTab<TabKey>(INVENTORY_TABS, "stock");
   const sectionsRef = useRef<HTMLDivElement>(null);
   const sectionsOverflow = useScrollOverflow(sectionsRef, [society]);
   const [drawer, setDrawer] = useState<

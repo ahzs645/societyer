@@ -172,10 +172,10 @@ export function PayrollPage() {
         }
         actions={
           <>
-            <Link className="btn btn--sm" to="/app/payroll/calculator" aria-label="Payroll calculator">{isMobile ? "Calculator" : "Payroll calculator"}</Link>
+            <Link className="btn-action" to="/app/payroll/calculator" aria-label="Payroll calculator">{isMobile ? "Calculator" : "Payroll calculator"}</Link>
             {/* Phones: these two move into the menu so the header keeps to the title's row. */}
-            {!isMobile && <Link className="btn btn--sm" to="/app/payroll/calculator?tab=tools">Payroll tools</Link>}
-            {!isMobile && <Link className="btn btn--sm" to="/app/financials/planning"><CalendarClock size={14} aria-hidden="true" />Semester cost planner</Link>}
+            {!isMobile && <Link className="btn-action" to="/app/payroll/calculator?tab=tools">Payroll tools</Link>}
+            {!isMobile && <Link className="btn-action" to="/app/financials/planning"><CalendarClock size={12} aria-hidden="true" /> Semester cost planner</Link>}
             <MoreActionsMenu
               items={[
                 ...(isMobile

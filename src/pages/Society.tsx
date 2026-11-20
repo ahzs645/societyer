@@ -247,9 +247,9 @@ export function SocietyPage() {
         actions={
           <>
             <span className="muted society-header__updated" style={{ fontSize: "var(--fs-sm)" }}>{updated}</span>
-            <Link className="btn btn--sm" to="/app/business-records">Business records</Link>
-            {canEdit && corporation && <button className="btn btn--sm" type="button" onClick={registry.openImport}><FileUp size={14} /> Import from registry documents</button>}
-            <button className="btn btn--accent" type="button" onClick={save} disabled={saving || !canEdit} title={updated}>
+            <Link className="btn-action" to="/app/business-records">Business records</Link>
+            {canEdit && corporation && <button className="btn-action" type="button" onClick={registry.openImport}><FileUp size={12} /> Import from registry documents</button>}
+            <button className="btn-action btn-action--primary" type="button" onClick={save} disabled={saving || !canEdit} title={updated}>
               {saving ? "Saving…" : "Save changes"}
             </button>
           </>

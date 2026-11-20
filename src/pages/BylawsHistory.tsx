@@ -7,6 +7,7 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
@@ -84,7 +85,8 @@ function DiffView({ oldText, newText }: { oldText: string; newText: string }) {
 
 // ============================================================================
 
-type View = "timeline" | "current";
+const VIEWS = ["timeline", "current"] as const;
+type View = (typeof VIEWS)[number];
 
 export function BylawsHistoryPage() {
   const society = useSociety();
@@ -104,7 +106,7 @@ export function BylawsHistoryPage() {
   );
   const scanPaperlessBylaws = useAction(api.paperless.createBylawsHistoryImportSession);
 
-  const [view, setView] = useState<View>("timeline");
+  const [view, setView] = useUrlTab<View>(VIEWS, "timeline");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [paperlessQuery, setPaperlessQuery] = useState("bylaws by-laws constitution special resolution");
   const [paperlessLimit, setPaperlessLimit] = useState(500);
