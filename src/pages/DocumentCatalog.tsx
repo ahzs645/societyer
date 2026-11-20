@@ -2,7 +2,7 @@ import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPa
 import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
 import { entityPreparationDecision } from "../../shared/entitySetup";
-import { Badge, Banner } from "../components/ui";
+import { Badge, Banner, Field, Pill, SkeletonRows } from "../components/ui";
 import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
@@ -77,6 +77,12 @@ type CatalogData = {
   packetEventDates?: Record<string, string[]>;
 };
 
+const ALL_PACKETS = [...CORPORATION_DOCUMENT_PACKETS, ...SOCIETY_DOCUMENT_PACKETS];
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** Turn a snake/kebab/lower tag like "board_resolution" into "Board resolution". */
 function humanizeTag(tag: string): string {
   const cleaned = String(tag || "other").replace(/[_-]+/g, " ").trim();
@@ -116,18 +122,24 @@ export function DocumentCatalogPage() {
   if (society === null) return <SeedPrompt />;
 
   const preparation = entityPreparationDecision(society);
-  const allowedPacketKeys = new Set([...CORPORATION_DOCUMENT_PACKETS, ...SOCIETY_DOCUMENT_PACKETS].filter(packet => {
-    try { pathwayForPacket(society, packet); return true; } catch { return false; }
-  }).map(packet => packet.key));
+  const canWrite = permissions.loaded && permissions.can("documents:write");
+  const allowedPacketKeys = new Set(ALL_PACKETS.filter((packet) => {
+    try {
+      pathwayForPacket(society, packet);
+      return true;
+    } catch {
+      return false;
+    }
+  }).map((packet) => packet.key));
 
   const onSeedCatalog = async () => {
-    if (seeding || !allowedPacketKeys.size || !permissions.can("documents:write")) return;
+    if (seeding || !allowedPacketKeys.size || !canWrite) return;
     setSeeding(true);
     try {
       await seedCatalog({ societyId: society._id });
       toast.success("Document catalog initialized");
-    } catch (error: any) {
-      toast.error("Could not initialize document catalog", error?.message ?? String(error));
+    } catch (error) {
+      toast.error("Could not initialize document catalog", errorMessage(error));
     } finally {
       setSeeding(false);
     }
@@ -168,8 +180,8 @@ export function DocumentCatalogPage() {
       await generate({ societyId: society._id, packetKey: key, effectiveDate: selectedEventDate(key) });
       setDoneKey(t._id);
       setTimeout(() => setDoneKey(null), 4000);
-    } catch (error: any) {
-      toast.error("Could not prepare draft", error?.message ?? String(error));
+    } catch (error) {
+      toast.error("Could not prepare draft", errorMessage(error));
       setGenerationError(error instanceof Error ? error.message : "The draft could not be generated.");
     } finally {
       setBusyKey(null);
@@ -200,6 +212,38 @@ export function DocumentCatalogPage() {
     humanizeTag(a[0]).localeCompare(humanizeTag(b[0])),
   );
 
+  const prepareTitle = (t: CatalogTemplate, canPrepare: boolean) => {
+    if (!permissions.can("documents:write")) return "Document editing permission is required";
+    if (!canPrepare) return preparation.message;
+    return packetKeyOf(t) ? "Prepare an editable draft" : "No packet key on this template";
+  };
+
+  const renderTemplate = (t: CatalogTemplate) => {
+    const key = packetKeyOf(t);
+    const packet = ALL_PACKETS.find((candidate) => candidate.key === key);
+    const home = canonicalizeJurisdictionCode(homeJurisdictionCode(society));
+    const allowed = Boolean(key && allowedPacketKeys.has(key));
+    return (
+      <CatalogTemplateItem
+        key={t._id}
+        template={t}
+        packet={packet}
+        compatibleJurisdiction={!packet || packet.jurisdictions.some((code) => canonicalizeJurisdictionCode(code) === home)}
+        compatibleEntity={!packet || (key?.startsWith("society-") ? isSociety(society) : !isSociety(society))}
+        preparable={canWrite && Boolean(key) && allowed && packetApplies(t)}
+        prepareTitle={prepareTitle(t, allowed)}
+        busy={busyKey === t._id}
+        done={doneKey === t._id}
+        eventDates={eventDatesFor(key)}
+        selectedDate={selectedEventDate(key)}
+        onSelectDate={(date) => {
+          if (key) setEventDateByKey((current) => ({ ...current, [key]: date }));
+        }}
+        onGenerate={() => onGenerate(t)}
+      />
+    );
+  };
+
   return (
     <div className="page">
       <PageHeader
@@ -228,27 +272,38 @@ export function DocumentCatalogPage() {
         }
       />
 
-      {!preparation.allowed && <Banner tone="warn">Incorporation route review required. {preparation.message}{allowedPacketKeys.size > 0 ? " Individually reviewed preparation drafts are available below." : ""}</Banner>}
-      {generationError && <p role="alert">{generationError}</p>}
+      {!preparation.allowed && (
+        <Banner tone="warn">
+          Incorporation route review required. {preparation.message}
+          {allowedPacketKeys.size > 0 ? " Individually reviewed preparation drafts are available below." : ""}
+        </Banner>
+      )}
+      {generationError && (
+        <Banner tone="danger" title="Could not prepare the draft" onDismiss={() => setGenerationError(null)}>
+          {generationError}
+        </Banner>
+      )}
 
       {isCorporation(society) && (
         <MinuteBookReportsCard
           society={society}
           allowedPacketKeys={allowedPacketKeys}
-          canWrite={permissions.loaded && permissions.can("documents:write")}
+          canWrite={canWrite}
           role={permissions.role}
         />
       )}
 
       {templates === undefined ? (
         <div className="card">
-          <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
+          <div className="card__body">
+            <SkeletonRows rows={4} columns={3} />
+          </div>
         </div>
       ) : templates.length === 0 ? (
         <div className="card">
           <div className="card__body doc-catalog-empty">
             <span className="muted">No templates yet. Your existing files are in <Link className="doc-catalog-link" to="/app/documents">Documents</Link>.</span>
-            {allowedPacketKeys.size > 0 && permissions.loaded && permissions.can("documents:write") && (
+            {allowedPacketKeys.size > 0 && canWrite && (
               <button className="btn-action btn-action--primary" disabled={seeding} onClick={onSeedCatalog}>
                 {seeding ? "Initializing…" : "Initialize document catalog"}
               </button>
@@ -256,170 +311,32 @@ export function DocumentCatalogPage() {
           </div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {groupEntries.map(([tag, items]) => (
-            <div className="card" key={tag}>
-              <div className="card__head">
-                <h2 className="card__title">{humanizeTag(tag)}</h2>
-                <Badge>{items.length}</Badge>
-              </div>
-              <div className="card__body" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {items.map((t) => {
-                  const desc = firstLine(t.notes);
-                  const key = packetKeyOf(t);
-                  const packet = [...CORPORATION_DOCUMENT_PACKETS, ...SOCIETY_DOCUMENT_PACKETS].find((candidate) => candidate.key === key);
-                  const compatibleJurisdiction = !packet || packet.jurisdictions.some((code) => canonicalizeJurisdictionCode(code) === canonicalizeJurisdictionCode(homeJurisdictionCode(society)));
-                  const compatibleEntity = !packet || (key?.startsWith("society-") ? isSociety(society) : !isSociety(society));
-                  const canPrepare = Boolean(key && allowedPacketKeys.has(key));
-                  const signatureRequired = packet?.signatureRequired ?? t.signatureRequired;
-                  return (
-                    <div
-                      key={t._id}
-                      style={{
-                        borderTop: "1px solid var(--border)",
-                        paddingTop: 12,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <strong>{packet?.preparationOnly ? packet.templateName : t.name}</strong>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: signatureRequired
-                              ? "var(--orange-11)"
-                              : "var(--text-tertiary)",
-                          }}
-                        >
-                          {signatureRequired
-                            ? "Signature required"
-                            : "No signature required"}
-                        </span>
-                        <span style={{ marginLeft: "auto" }}>
-                          {doneKey === t._id ? (
-                            <span style={{ color: "var(--green-11)", fontSize: 13 }}>
-                              Draft staged ✓ — <Link to="/app/template-engine">Open Template Engine</Link>
-                            </span>
-                          ) : (
-                            <button
-                              className="btn btn--accent"
-                              disabled={busyKey === t._id || !permissions.loaded || !permissions.can("documents:write") || !packetKeyOf(t) || !canPrepare || !packetApplies(t)}
-                              onClick={() => onGenerate(t)}
-                              title={!permissions.can("documents:write") ? "Document editing permission is required" : !canPrepare ? preparation.message : packetKeyOf(t) ? "Prepare an editable draft" : "No packet key on this template"}
-                            >
-                              {busyKey === t._id ? "Preparing…" : "Prepare draft"}
-                            </button>
-                          )}
-                        </span>
-                      </div>
-                      {packet && "transactionScoped" in packet && packet.transactionScoped && (
-                        eventDatesFor(key).length > 0 ? (
-                          <label className="row" style={{ gap: 8, marginTop: 6, fontSize: 13, alignItems: "center" }}>
-                            <span className="muted">Transaction date</span>
-                            <Select
-                              aria-label="Transaction date"
-                              style={{ width: "auto" }}
-                              value={selectedEventDate(key)}
-                              onChange={(date) => key && setEventDateByKey((current) => ({ ...current, [key]: date }))}
-                              options={eventDatesFor(key).map((date) => ({ value: date, label: date }))}
-                            />
-                          </label>
-                        ) : (
-                          <p className="muted" style={{ margin: "6px 0", fontSize: 13 }}>No transaction of this kind is recorded yet. The draft uses today's date and contains prompts to complete.</p>
-                        )
-                      )}
-                      {packet?.preparationOnly && <p className="muted" style={{ margin: "6px 0", fontSize: 13 }}>Original preparation worksheet — unresolved drafting prompts require tailored legal review before execution or registry submission.</p>}
-                      {!compatibleJurisdiction && <Badge tone="warn">Different home jurisdiction</Badge>}
-                      {!compatibleEntity && <Badge tone="warn">Different entity type</Badge>}
-                      {packet?.sourceUrls && <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 6, fontSize: 13 }}>{packet.sourceUrls.map((url, index) => <a key={url} className="doc-catalog-link" href={url} target="_blank" rel="noreferrer">Official source {index + 1}</a>)}</div>}
-                      {desc && (
-                        <p
-                          style={{
-                            margin: "6px 0 0",
-                            color: "var(--text-secondary)",
-                            fontSize: 13,
-                          }}
-                        >
-                          {desc}
-                        </p>
-                      )}
-                      {t.terms && <p style={{ marginTop: 8, fontSize: 12, color: "var(--text-tertiary)" }}>Before use: {t.terms}</p>}
-                      {t.requiredDataFields.length > 0 && (
-                        <div style={{ marginTop: 8 }}>
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "var(--text-tertiary)",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Required data fields
-                          </div>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                            {t.requiredDataFields.map((field) => (
-                              <span
-                                key={field}
-                                style={{
-                                  fontSize: 12,
-                                  padding: "2px 8px",
-                                  borderRadius: 999,
-                                  background: "var(--bg-subtle)",
-                                  border: "1px solid var(--border)",
-                                  color: "var(--text-secondary)",
-                                }}
-                              >
-                                {humanizeKey(field)}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {t.requiredSigners.length > 0 && (
-                        <p
-                          style={{
-                            margin: "8px 0 0",
-                            fontSize: 12,
-                            color: "var(--text-tertiary)",
-                          }}
-                        >
-                          Required signers: {t.requiredSigners.map(humanizeTag).join(", ")}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+        groupEntries.map(([tag, items]) => (
+          <section className="card" key={tag} aria-labelledby={`doc-catalog-${tag}`}>
+            <div className="card__head">
+              <h2 className="card__title" id={`doc-catalog-${tag}`}>{humanizeTag(tag)}</h2>
+              <Badge>{items.length}</Badge>
             </div>
-          ))}
-        </div>
+            <ul className="doc-catalog-items">{items.map(renderTemplate)}</ul>
+          </section>
+        ))
       )}
 
       {precedents.length > 0 && (
-        <div className="card" style={{ marginTop: 16 }}>
+        <section className="card" aria-labelledby="doc-catalog-precedents">
           <div className="card__head">
-            <h2 className="card__title">Packages &amp; precedents</h2>
+            <h2 className="card__title" id="doc-catalog-precedents">Packages &amp; precedents</h2>
             <Badge>{precedents.length}</Badge>
           </div>
-          <ul className="card__body" style={{ margin: 0, paddingLeft: 34 }}>
+          <ul className="card__body doc-catalog-precedents">
             {precedents.map((p) => (
-              <li key={p._id} style={{ marginBottom: 6 }}>
+              <li key={p._id}>
                 <strong>{p.packageName}</strong>
-                {p.shortDescription && (
-                  <span style={{ color: "var(--text-secondary)" }}>
-                    {" "}
-                    — {p.shortDescription}
-                  </span>
-                )}
+                {p.shortDescription && <span className="doc-catalog-precedents__desc"> — {p.shortDescription}</span>}
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
 
       {["preparing", "submitted"].includes(society.formationStatus ?? "") && (
@@ -428,6 +345,114 @@ export function DocumentCatalogPage() {
         </Banner>
       )}
     </div>
+  );
+}
+
+type CatalogPacket = (typeof ALL_PACKETS)[number];
+
+/** One template in its document-type card: how to prepare it, and what it needs before use. */
+function CatalogTemplateItem({
+  template: t,
+  packet,
+  compatibleJurisdiction,
+  compatibleEntity,
+  preparable,
+  prepareTitle,
+  busy,
+  done,
+  eventDates,
+  selectedDate,
+  onSelectDate,
+  onGenerate,
+}: {
+  template: CatalogTemplate;
+  packet: CatalogPacket | undefined;
+  compatibleJurisdiction: boolean;
+  compatibleEntity: boolean;
+  /** The person can prepare this template for this entity (permission, packet key and pathway). */
+  preparable: boolean;
+  prepareTitle: string;
+  busy: boolean;
+  done: boolean;
+  /** Dates of the recorded transactions a transaction-scoped packet can draft. */
+  eventDates: string[];
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+  onGenerate: () => void;
+}) {
+  const desc = firstLine(t.notes);
+  const signatureRequired = packet?.signatureRequired ?? t.signatureRequired;
+  const transactionScoped = Boolean(packet && "transactionScoped" in packet && packet.transactionScoped);
+  return (
+    <li className="doc-catalog-item">
+      <div className="doc-catalog-item__head">
+        <strong className="doc-catalog-item__name">{packet?.preparationOnly ? packet.templateName : t.name}</strong>
+        {signatureRequired
+          ? <Badge tone="warn">Signature required</Badge>
+          : <Badge tone="neutral">No signature required</Badge>}
+        <span className="doc-catalog-item__action">
+          {done ? (
+            <>
+              <Badge tone="success">Draft staged</Badge>
+              <Link to="/app/template-engine">Open Template Engine</Link>
+            </>
+          ) : (
+            <button className="btn btn--accent" disabled={busy || !preparable} onClick={onGenerate} title={prepareTitle}>
+              {busy ? "Preparing…" : "Prepare draft"}
+            </button>
+          )}
+        </span>
+      </div>
+      {transactionScoped && (
+        eventDates.length > 0 ? (
+          <div className="doc-catalog-item__date">
+            <Field label="Transaction date">
+              <Select
+                aria-label="Transaction date"
+                value={selectedDate}
+                onChange={onSelectDate}
+                options={eventDates.map((date) => ({ value: date, label: date }))}
+              />
+            </Field>
+          </div>
+        ) : (
+          <p className="muted doc-catalog-item__note">
+            No transaction of this kind is recorded yet. The draft uses today's date and contains prompts to complete.
+          </p>
+        )
+      )}
+      {packet?.preparationOnly && (
+        <p className="muted doc-catalog-item__note">
+          Original preparation worksheet — unresolved drafting prompts require tailored legal review before execution or registry submission.
+        </p>
+      )}
+      {(!compatibleJurisdiction || !compatibleEntity) && (
+        <div className="doc-catalog-item__flags">
+          {!compatibleJurisdiction && <Badge tone="warn">Different home jurisdiction</Badge>}
+          {!compatibleEntity && <Badge tone="warn">Different entity type</Badge>}
+        </div>
+      )}
+      {packet?.sourceUrls && (
+        <div className="doc-catalog-item__sources">
+          {packet.sourceUrls.map((url, index) => (
+            <a key={url} className="doc-catalog-link" href={url} target="_blank" rel="noreferrer">Official source {index + 1}</a>
+          ))}
+        </div>
+      )}
+      {desc && <p className="doc-catalog-item__desc">{desc}</p>}
+      {t.terms && <p className="muted doc-catalog-item__note">Before use: {t.terms}</p>}
+      {t.requiredDataFields.length > 0 && (
+        <div className="doc-catalog-item__fields">
+          <span className="muted doc-catalog-item__label">Required data fields</span>
+          <div className="doc-catalog-item__chips">
+            {t.requiredDataFields.map((field) => <Pill key={field} size="sm">{humanizeKey(field)}</Pill>)}
+          </div>
+        </div>
+      )}
+      {t.requiredSigners.length > 0 && (
+        <p className="muted doc-catalog-item__note">Required signers: {t.requiredSigners.map(humanizeTag).join(", ")}</p>
+      )}
+    </li>
   );
 }
 

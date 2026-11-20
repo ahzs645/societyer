@@ -1,10 +1,22 @@
 .offline-meeting-preparation { min-width: 0; }
 .offline-meeting-preparation p, .offline-meeting-preparation h3 { overflow-wrap: anywhere; }
-.offline-meeting-form { display: grid; gap: 12px; max-width: 680px; margin-top: 24px; }
-.offline-meeting-form fieldset { display: grid; gap: 12px; min-width: 0; border: 0; margin: 0; padding: 0; }
-.offline-meeting-preparation label { display: grid; gap: 6px; min-width: 0; }
-.offline-meeting-preparation input, .offline-meeting-preparation textarea { max-width: 100%; min-width: 0; width: 100%; box-sizing: border-box; }
-.offline-meeting-list { display: grid; gap: 16px; list-style: none; padding: 0; }
-.offline-meeting-list .card { padding: 16px; min-width: 0; }
-.offline-meeting-list form { display: grid; gap: 10px; margin-bottom: 12px; }
-.offline-meeting-error { color: var(--danger); }
+/* The review notice wraps its banner in a named region; space it like the page's other banners. */
+.offline-meeting-preparation > section:not(.card) { margin-bottom: var(--s-4); }
+
+.offline-meeting-form fieldset { display: grid; gap: var(--s-1); max-width: 680px; min-width: 0; border: 0; margin: 0; padding: 0; }
+.offline-meeting-form input:not([type="file"]), .offline-meeting-form textarea { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+
+.offline-meeting-list { list-style: none; margin: 0; padding: 0; }
+.offline-meeting-list > li { padding: var(--s-3) var(--s-4); min-width: 0; }
+.offline-meeting-list > li + li { border-top: 1px solid var(--border); }
+
+.offline-meeting-item { display: grid; gap: var(--s-2); }
+.offline-meeting-item p { margin: 0; }
+.offline-meeting-item__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.offline-meeting-item__title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.offline-meeting-item__form { display: grid; gap: var(--s-2); max-width: 680px; }
+.offline-meeting-item__form textarea { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+.offline-meeting-item__attachment { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+
+.offline-meeting-file { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); }
+.offline-meeting-file__name { display: grid; gap: var(--s-1); min-width: 0; }
