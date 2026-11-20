@@ -11,6 +11,7 @@ import { Menu } from "../components/Menu";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Select } from "../components/Select";
 import { entityPreparationDecision } from "../../shared/entitySetup";
+import { isSociety } from "../../shared/organizationDomain";
 import { Badge, Banner, Drawer, EmptyState, Field, SkeletonRows } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { setupViewStepLink } from "../lib/organizationSetupLinks";
@@ -202,7 +203,7 @@ export function PostIncorporationChecklistPage() {
             <EmptyState
               icon={<ListChecks size={20} />}
               title="No post-incorporation steps for this kind of entity yet"
-              description="BC ordinary/member-funded societies, ordinary private BC companies and federal CBCA corporations have preparation flows. Confirm the entity route or arrange specialist review."
+              description={`${isSociety(society) ? "BC ordinary/member-funded societies, ordinary" : "Ordinary"} private BC companies and federal CBCA corporations have preparation flows. Confirm the entity route or arrange specialist review.`}
             />
           </div>
         </div>
