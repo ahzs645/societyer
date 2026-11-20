@@ -10,6 +10,7 @@ import { RecordTableFilterPopover } from "./RecordTableFilterPopover";
 import { RecordTableFilterChips } from "./RecordTableFilterChips";
 import { RecordTableBulkBar, type BulkAction } from "./RecordTableBulkBar";
 import { RecordListTableViews } from "./RecordListTableViews";
+import type { RecordTableContextValue } from "../contexts/RecordTableContext";
 import { useRecordTableStoreHandle, type RecordTableState, type RecordTableStore } from "../state/recordTableStore";
 import {
   LIST_TABLE_MEMORY_WRITE_DELAY_MS,
@@ -48,6 +49,11 @@ type RecordListTableProps<T extends { _id: string }> = {
    */
   onOpen?: (record: T) => void;
   renderCell?: (cell: { record: T; field: FieldMetadata }) => ReactNode | undefined;
+  /**
+   * Saves a cell edited in place, or a card moved between board columns.
+   * Only fields the table marks editable (`isReadOnly: false`) take edits.
+   */
+  onUpdate?: RecordTableContextValue["onUpdate"];
   /** Buttons beside each row (Approve, Resend…). */
   renderRowActions?: (record: T) => ReactNode;
   /** The row's "…" menu and right-click menu. No items: no menu. */
@@ -117,6 +123,7 @@ export function RecordListTable<T extends { _id: string }>({
   variant = "page",
   onOpen,
   renderCell,
+  onUpdate,
   renderRowActions,
   rowMenuSections,
   renderPhoneCard,
@@ -165,6 +172,7 @@ export function RecordListTable<T extends { _id: string }>({
         cellPreviews={false}
         highlightedRecordId={highlightedRecordId}
         onRecordClick={onOpen ? (_recordId, record) => onOpen(record as T) : undefined}
+        onUpdate={onUpdate}
         initialize={initialize}
       >
         {memoryKey && <RecordListTableMemory storageKey={memoryKey} fieldsHash={fieldsHash} base={table.hydratedView} />}

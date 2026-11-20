@@ -1,17 +1,26 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { History } from "lucide-react";
+import { History, Users } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { DatePicker } from "../components/DatePicker";
-import { Badge } from "../components/ui";
+import { Badge, Banner } from "../components/ui";
 import { formatDate } from "../lib/format";
 import { organizationTodayISO } from "../lib/dateRanges";
 import { activeAsOf } from "../../shared/registerHistory";
 import { normalizeOptionValue, SOURCE_OPTION_VALUES } from "../../shared/orgHubOptions";
+import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  RecordTablePhoneCard,
+  staticRecordTable,
+  type FieldMetadata,
+  type RecordTableCardHelpers,
+} from "@/platform/record-engine";
 
 /**
  * Point-in-Time Register — reconstructs who held each role on a chosen date,
@@ -35,9 +44,39 @@ const CORPORATION_ROLES: Array<{ roleType: string; label: string }> = [
 ];
 
 type HolderRow = { _id?: string; fullName?: string; startDate?: string; title?: string };
+type HolderRecord = { _id: string; fullName: string; title: string | null; startDate: string | null };
+
+/** A director row as directors:list returns it (the fields this page reads). */
+type DirectorRow = {
+  _id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  position?: string;
+  officerTitle?: string;
+  termStart?: string;
+  termEnd?: string;
+};
+
+const directorName = (director: DirectorRow) => director.name ?? `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim();
+
+const HOLDERS_TABLE = staticRecordTable({
+  id: "point-in-time-holders",
+  nameSingular: "holder",
+  namePlural: "holders",
+  labelSingular: "Holder",
+  labelPlural: "Holders",
+  labelIdentifierFieldName: "fullName",
+  sorts: [{ field: "fullName", direction: "asc" }],
+  fields: [
+    { name: "fullName", label: "Name", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, size: 180 },
+    { name: "startDate", label: "Since", fieldType: FIELD_TYPES.DATE, size: 140 },
+  ],
+});
 
 /** A director whose position is an officer title (President, Treasurer, …) holds that office too. */
-function officerTitleOf(director: any): string | undefined {
+function officerTitleOf(director: DirectorRow): string | undefined {
   for (const raw of [director.officerTitle, director.position]) {
     const code = normalizeOptionValue("officerTitles", raw);
     if (code && code !== "other" && SOURCE_OPTION_VALUES.officerTitles.includes(code)) return String(raw);
@@ -45,7 +84,7 @@ function officerTitleOf(director: any): string | undefined {
   return undefined;
 }
 
-function RoleColumn({
+function RoleCard({
   societyId,
   asOf,
   roleType,
@@ -64,38 +103,49 @@ function RoleColumn({
     asOf,
     roleType,
   }) as HolderRow[] | undefined;
-  const rows = useMemo(() => {
+  const records = useMemo<HolderRecord[] | undefined>(() => {
     if (fetched === undefined) return undefined;
+    // Registers merge several sources (role holders, directors, members) into one list.
     const seen = new Set(fetched.map((r) => (r.fullName ?? "").toLowerCase()));
     const merged = [...fetched, ...(extraRows ?? []).filter((r) => !seen.has((r.fullName ?? "").toLowerCase()))];
-    // Registers merge several sources (role holders, directors, members);
-    // one alphabetical list is easier to scan than concatenated batches.
-    return merged.sort((a, b) => (a.fullName ?? "").localeCompare(b.fullName ?? ""));
+    return merged.map((row, index) => ({
+      _id: row._id ?? `${row.fullName ?? ""}-${index}`,
+      fullName: row.fullName ?? "",
+      title: row.title ?? null,
+      startDate: row.startDate ?? null,
+    }));
   }, [fetched, extraRows]);
+  const headingId = `pit-register-${roleType}`;
+
+  const renderCell = ({ record, field }: { record: HolderRecord; field: FieldMetadata }) =>
+    field.name === "fullName" ? <strong>{record.fullName}</strong> : undefined;
+  const renderPhoneCard = (record: HolderRecord, { selecting }: RecordTableCardHelpers) => (
+    <RecordTablePhoneCard
+      title={record.fullName}
+      meta={[record.title ?? "", record.startDate ? `Since ${formatDate(record.startDate)}` : ""]}
+      selecting={selecting}
+    />
+  );
 
   return (
-    <div className="card" style={{ flex: 1, minWidth: 220, padding: 16 }}>
-      <h3 style={{ margin: "0 0 8px" }}>
-        {label} <span style={{ color: "var(--text-tertiary)" }}>({rows?.length ?? 0})</span>
-      </h3>
-      {rows === undefined ? (
-        <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
-      ) : rows.length === 0 ? (
-        <p style={{ color: "var(--text-tertiary)" }}>None in office on this date.</p>
-      ) : (
-        <ul style={{ margin: 0, padding: 0, listStyle: "none", fontSize: "var(--fs-sm)" }}>
-          {rows.map((r) => (
-            <li key={r._id ?? r.fullName} style={{ padding: "3px 0" }}>
-              {r.fullName}
-              {r.title ? <span style={{ color: "var(--text-secondary)" }}> · {r.title}</span> : null}
-              {r.startDate ? (
-                <span style={{ color: "var(--text-tertiary)" }}> · since {formatDate(r.startDate)}</span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <section className="card" aria-labelledby={headingId}>
+      <div className="card__head">
+        <h2 className="card__title" id={headingId}>{label}</h2>
+        {records && <Badge>{records.length}</Badge>}
+      </div>
+      <RecordListTable<HolderRecord>
+        variant="card"
+        table={HOLDERS_TABLE}
+        tableId={`point-in-time-${roleType}`}
+        label={label}
+        icon={<Users size={14} />}
+        records={records ?? []}
+        loading={records === undefined}
+        renderCell={renderCell}
+        renderPhoneCard={renderPhoneCard}
+        emptyState={<RecordTableEmpty title="None in office on this date" />}
+      />
+    </section>
   );
 }
 
@@ -109,14 +159,14 @@ export function PointInTimeRegisterPage() {
   // cleared) rather than the browser's calendar day.
   const [pickedAsOf, setAsOf] = useState<string>("");
   const asOf = pickedAsOf || organizationTodayISO(society);
-  const directors = useQuery(api.directors.list, society && can("directors:read") ? { societyId: society._id } : "skip");
+  const directors = useQuery(api.directors.list, society && can("directors:read") ? { societyId: society._id } : "skip") as DirectorRow[] | undefined;
 
   // Board term starts/ends as a timeline of transitions, so the snapshot above
   // gains context: who joined or left the board around the selected date.
   const changes = useMemo(() => {
     const events: { date: string; kind: "joined" | "left"; name: string; role?: string }[] = [];
-    for (const d of (directors ?? []) as any[]) {
-      const name = d.name ?? `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim();
+    for (const d of directors ?? []) {
+      const name = directorName(d);
       if (d.termStart) events.push({ date: d.termStart, kind: "joined", name, role: d.position });
       if (d.termEnd) events.push({ date: d.termEnd, kind: "left", name, role: d.position });
     }
@@ -127,12 +177,12 @@ export function PointInTimeRegisterPage() {
   // register rarely carries separate "officer" rows, so derive them here.
   const directorOfficers = useMemo<HolderRow[]>(
     () =>
-      activeAsOf((directors ?? []) as any[], asOf, { start: "termStart", end: "termEnd" })
-        .map((d: any) => ({ d, title: officerTitleOf(d) }))
+      activeAsOf(directors ?? [], asOf, { start: "termStart", end: "termEnd" })
+        .map((d) => ({ d, title: officerTitleOf(d) }))
         .filter((entry) => entry.title)
         .map(({ d, title }) => ({
           _id: String(d._id),
-          fullName: d.name ?? `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim(),
+          fullName: directorName(d),
           startDate: d.termStart,
           title,
         })),
@@ -158,47 +208,52 @@ export function PointInTimeRegisterPage() {
 
       {/* The date is the page's one filter: it sits under the header rather than
           in the header actions, where it squeezed the title on phones. */}
-      <label className="pit-register__asof">
-        <span className="pit-register__asof-label">As of</span>
-        <DatePicker
-          value={asOf}
-          onChange={(value) => setAsOf(value)}
-        />
-      </label>
-
-      {visibleRoles.length < ROLES.length && <p className="muted">This snapshot excludes role registers outside your current read permissions. Historical role-holder snapshots require workspace settings read access.</p>}
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-        {visibleRoles.map((role) => (
-          <RoleColumn
-            key={role.roleType}
-            societyId={society._id}
-            asOf={asOf}
-            roleType={role.roleType}
-            label={role.label}
-            extraRows={role.roleType === "officer" ? directorOfficers : undefined}
-          />
-        ))}
+      <div className="register-asof">
+        <label className="register-asof__date">
+          <span>As of</span>
+          <DatePicker value={asOf} onChange={(value) => setAsOf(value)} />
+        </label>
       </div>
 
+      {visibleRoles.length < ROLES.length && (
+        <Banner tone="info" title="Some registers are hidden">
+          This snapshot excludes role registers outside your current read permissions. Historical role-holder snapshots require workspace settings read access.
+        </Banner>
+      )}
+      {visibleRoles.map((role) => (
+        <RoleCard
+          key={role.roleType}
+          societyId={society._id}
+          asOf={asOf}
+          roleType={role.roleType}
+          label={role.label}
+          extraRows={role.roleType === "officer" ? directorOfficers : undefined}
+        />
+      ))}
+
       {changes.length > 0 && (
-        <div className="card" style={{ marginTop: 16, padding: 16 }}>
-          <h3 style={{ margin: "0 0 12px" }}>Board changes around this date</h3>
-          <div className="timeline-vertical">
-            {before.map((e, i) => (
-              <TransitionItem key={`before-${i}-${e.date}`} event={e} tense="is-past" />
-            ))}
-            <div className="timeline-vertical__now">
-              <span className="timeline-vertical__now-dot" />
-              <span className="timeline-vertical__now-label">As of · {formatDate(asOf)}</span>
-            </div>
-            {after.map((e, i) => (
-              <TransitionItem key={`after-${i}-${e.date}`} event={e} tense="is-future" />
-            ))}
-            {before.length === 0 && after.length === 0 && (
-              <div className="muted">No board changes on record.</div>
-            )}
+        <section className="card" aria-labelledby="pit-register-changes">
+          <div className="card__head">
+            <h2 className="card__title" id="pit-register-changes">Board changes around this date</h2>
           </div>
-        </div>
+          <div className="card__body">
+            <div className="timeline-vertical">
+              {before.map((e, i) => (
+                <TransitionItem key={`before-${i}-${e.date}`} event={e} tense="is-past" />
+              ))}
+              <div className="timeline-vertical__now">
+                <span className="timeline-vertical__now-dot" />
+                <span className="timeline-vertical__now-label">As of · {formatDate(asOf)}</span>
+              </div>
+              {after.map((e, i) => (
+                <TransitionItem key={`after-${i}-${e.date}`} event={e} tense="is-future" />
+              ))}
+              {before.length === 0 && after.length === 0 && (
+                <div className="muted">No board changes on record.</div>
+              )}
+            </div>
+          </div>
+        </section>
       )}
     </div>
   );
@@ -215,7 +270,7 @@ function TransitionItem({
     <div className={`timeline-vertical__item ${tense}`}>
       <span className="timeline-vertical__dot" />
       <div className="row">
-        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(event.date)}</span>
+        <span className="pit-register__date">{formatDate(event.date)}</span>
         <Badge tone={event.kind === "joined" ? "success" : "warn"}>
           {event.kind === "joined" ? "Joined" : "Left"}
         </Badge>

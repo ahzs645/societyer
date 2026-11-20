@@ -3,14 +3,42 @@
 // Governance, meetings and records: release QA fixes that don't belong to one
 // view partial.
 
-// Section headings between cards (significant individuals register). Without
-// a rule they fell back to the browser's 1.5em h2 and outweighed the page title.
-.page__section-title {
-  margin: 0 0 token('s-2');
-  font-size: token('fs-md');
-  font-weight: 600;
-  line-height: 1.4;
-  color: token('text-primary');
+// Significant individuals: deadline and candidate rows inside their cards.
+.significant-individuals__list {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-3');
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.significant-individuals__item {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-1');
+  min-width: 0;
+}
+.significant-individuals__item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: token('s-2');
+}
+.significant-individuals__reminders {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-1');
+  margin: token('s-4') 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: token('fs-sm');
+}
+.significant-individuals__head-action { margin-left: auto; }
+
+// Corporate history: the server-built narrative above each card's table.
+.corporate-history__narrative {
+  color: token('text-secondary');
+  border-bottom: 1px solid token('border-color-light');
 }
 
 // AGM workflow "Compliance posture": label column + value with a status dot.
@@ -338,3 +366,56 @@
     padding-inline: token('s-4');
   }
 }
+
+// The "All …" link above a detail page's header.
+.page__back-link {
+  margin-bottom: token('s-3');
+  font-size: token('fs-sm');
+}
+
+// Election detail: one section per tab (Ballot, Nominations, Results…).
+.election-detail__stack {
+  display: grid;
+  gap: token('s-3');
+}
+.election-detail__stack--loose { gap: token('s-4'); }
+.election-detail__stack--tight { gap: token('s-2'); }
+.election-detail__item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token('s-2');
+  min-width: 0;
+}
+.election-detail__item-note { margin-top: token('s-1'); }
+.election-detail__item-actions { margin-top: token('s-2'); }
+.election-detail__options {
+  display: grid;
+  gap: 6px;
+  margin-top: token('s-2');
+}
+// A ballot the reader cannot cast reads as read-only, not as live choices.
+.election-detail__option--readonly {
+  opacity: token('opacity-disabled');
+  cursor: not-allowed;
+}
+.election-detail__fieldset {
+  display: grid;
+  gap: token('s-2');
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.election-detail__panel-item { padding: token('s-3'); }
+.election-detail__class-note { margin: token('s-1') 0; }
+.election-detail__holder {
+  display: grid;
+  gap: token('s-2');
+  min-width: 0;
+  margin: 0;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+}
+.election-detail__restricted { gap: token('s-1'); }

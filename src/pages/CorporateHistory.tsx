@@ -1,13 +1,12 @@
-import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
-import { calendarDateKey } from "../lib/calendarDates";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { FileText, History, Pencil, Trash2, Type } from "lucide-react";
@@ -15,6 +14,16 @@ import { CreateMenu } from "../components/CreateMenu";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { formatDate } from "../lib/format";
+import { todayDateOnly } from "../../shared/dateOnly";
+import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  RecordTablePhoneCard,
+  staticRecordTable,
+  type FieldMetadata,
+  type RecordTableCardHelpers,
+} from "@/platform/record-engine";
 
 const CONSTATING_ACTION_LABELS: Record<string, string> = {
   incorporated: "Incorporated",
@@ -25,13 +34,123 @@ const CONSTATING_ACTION_LABELS: Record<string, string> = {
   other: "Other",
 };
 const constatingActionLabel = (action: string) => CONSTATING_ACTION_LABELS[action] ?? action;
-import { todayDateOnly } from "../../shared/dateOnly";
+
+type NameRow = {
+  _id?: string;
+  name: string;
+  shortName?: string;
+  startISO: string;
+  endISO?: string;
+  sourceDocumentIds?: string[];
+  regPosn?: number;
+};
+type ConstatingRow = {
+  _id?: string;
+  action: string;
+  jurisdiction: string;
+  legislation: string;
+  regNumber?: string;
+  startISO: string;
+  endISO?: string;
+  sourceDocumentIds?: string[];
+};
+type NameForm = {
+  id?: string;
+  name: string;
+  shortName: string;
+  startISO: string;
+  endISO: string;
+  regPosn: string;
+  sourceDocumentId: string;
+  previousDocumentIds?: string[];
+};
+type EventForm = {
+  id?: string;
+  action: string;
+  jurisdiction: string;
+  legislation: string;
+  regNumber: string;
+  startISO: string;
+  endISO: string;
+  sourceDocumentId: string;
+  previousDocumentIds?: string[];
+};
+
+/** Rows keyed for the table; a row saved before ids existed keys on its name and date. */
+type NameRecord = {
+  _id: string;
+  name: string;
+  shortName: string | null;
+  startISO: string;
+  endISO: string | null;
+  linkedDocuments: number;
+  regPosn: number | null;
+  row: NameRow;
+};
+type ConstatingRecord = {
+  _id: string;
+  action: string;
+  legislation: string;
+  jurisdiction: string;
+  regNumber: string | null;
+  startISO: string;
+  endISO: string | null;
+  linkedDocuments: number;
+  row: ConstatingRow;
+};
+
+const NAME_TABLE = staticRecordTable({
+  id: "corporate-history-names",
+  nameSingular: "corporateName",
+  namePlural: "corporateNames",
+  labelSingular: "Name",
+  labelPlural: "Names",
+  labelIdentifierFieldName: "name",
+  sorts: [{ field: "startISO", direction: "asc" }],
+  fields: [
+    { name: "name", label: "Name", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    { name: "shortName", label: "Short name", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    { name: "startISO", label: "Effective from", fieldType: FIELD_TYPES.DATE, size: 140 },
+    { name: "endISO", label: "Ended", fieldType: FIELD_TYPES.DATE, size: 140 },
+    { name: "linkedDocuments", label: "Documents", fieldType: FIELD_TYPES.NUMBER, size: 110, config: { groupable: false, hideZero: true } },
+    { name: "regPosn", label: "Register position", fieldType: FIELD_TYPES.NUMBER, size: 140, isVisible: false, config: { groupable: false } },
+  ],
+});
+
+const CONSTATING_TABLE = staticRecordTable({
+  id: "corporate-history-constating",
+  nameSingular: "constatingEvent",
+  namePlural: "constatingEvents",
+  labelSingular: "Constating event",
+  labelPlural: "Constating events",
+  labelIdentifierFieldName: "action",
+  sorts: [{ field: "startISO", direction: "asc" }],
+  fields: [
+    {
+      name: "action",
+      label: "Event",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 150,
+      config: { options: Object.entries(CONSTATING_ACTION_LABELS).map(([value, label]) => ({ value, label, color: "blue" })) },
+    },
+    { name: "legislation", label: "Legislation", fieldType: FIELD_TYPES.TEXT, size: 220 },
+    { name: "jurisdiction", label: "Jurisdiction", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    { name: "startISO", label: "Effective from", fieldType: FIELD_TYPES.DATE, size: 140 },
+    { name: "endISO", label: "Ended", fieldType: FIELD_TYPES.DATE, size: 140 },
+    { name: "regNumber", label: "Registration no.", fieldType: FIELD_TYPES.TEXT, size: 150, config: { groupable: false } },
+    { name: "linkedDocuments", label: "Documents", fieldType: FIELD_TYPES.NUMBER, size: 110, config: { groupable: false, hideZero: true } },
+  ],
+});
+
+const linkedDocumentsText = (count: number) => (count ? `${count} linked ${count === 1 ? "document" : "documents"}` : "");
+const nameSpanText = (row: { startISO: string; endISO?: string }) =>
+  row.endISO ? `${formatDate(row.startISO)} to ${formatDate(row.endISO)}` : `since ${formatDate(row.startISO)}`;
 
 /**
  * Corporate history — effective-dated corporate NAME history plus the
  * CONSTATING-document timeline (incorporation, transitions, continuances,
  * amalgamations, restatements). Each section renders a server-built
- * narrative string followed by an editable, date-ordered list. The two
+ * narrative string above an editable, date-ordered table. The two
  * "add" drawers (name vs constating event) keep separate open state.
  */
 export function CorporateHistoryPage() {
@@ -45,17 +164,7 @@ export function CorporateHistoryPage() {
   const names = useQuery(
     api.nameHistory.list,
     society && canReadNames ? { societyId: society._id } : "skip",
-  ) as
-    | Array<{
-        _id?: string;
-        name: string;
-        shortName?: string;
-        startISO: string;
-        endISO?: string;
-        sourceDocumentIds?: string[];
-        regPosn?: number;
-      }>
-    | undefined;
+  ) as NameRow[] | undefined;
   const nameNarrative = useQuery(
     api.nameHistory.narrative,
     society && canReadNames ? { societyId: society._id } : "skip",
@@ -64,18 +173,7 @@ export function CorporateHistoryPage() {
   const constating = useQuery(
     api.constating.list,
     society && canReadEvents ? { societyId: society._id } : "skip",
-  ) as
-    | Array<{
-        _id?: string;
-        action: string;
-        jurisdiction: string;
-        legislation: string;
-        regNumber?: string;
-        startISO: string;
-        endISO?: string;
-        sourceDocumentIds?: string[];
-      }>
-    | undefined;
+  ) as ConstatingRow[] | undefined;
   const constatingNarrative = useQuery(
     api.constating.narrative,
     society && canReadEvents ? { societyId: society._id } : "skip",
@@ -97,9 +195,37 @@ export function CorporateHistoryPage() {
   const confirm = useConfirm();
 
   const [nameOpen, setNameOpen] = useState(false);
-  const [nameForm, setNameForm] = useState<any>(null);
+  const [nameForm, setNameForm] = useState<NameForm | null>(null);
   const [eventOpen, setEventOpen] = useState(false);
-  const [eventForm, setEventForm] = useState<any>(null);
+  const [eventForm, setEventForm] = useState<EventForm | null>(null);
+
+  const nameRecords = useMemo<NameRecord[]>(
+    () => (names ?? []).map((row) => ({
+      _id: row._id ?? `${row.name}-${row.startISO}`,
+      name: row.name,
+      shortName: row.shortName ?? null,
+      startISO: row.startISO,
+      endISO: row.endISO ?? null,
+      linkedDocuments: row.sourceDocumentIds?.length ?? 0,
+      regPosn: row.regPosn ?? null,
+      row,
+    })),
+    [names],
+  );
+  const constatingRecords = useMemo<ConstatingRecord[]>(
+    () => (constating ?? []).map((row) => ({
+      _id: row._id ?? `${row.action}-${row.startISO}`,
+      action: row.action,
+      legislation: row.legislation,
+      jurisdiction: row.jurisdiction,
+      regNumber: row.regNumber ?? null,
+      startISO: row.startISO,
+      endISO: row.endISO ?? null,
+      linkedDocuments: row.sourceDocumentIds?.length ?? 0,
+      row,
+    })),
+    [constating],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -120,12 +246,12 @@ export function CorporateHistoryPage() {
       ]
     : [];
 
-  const editName = (row: any) => {
+  const editName = (row: NameRow) => {
     if (!canWriteNames || !row._id) return;
-    setNameForm({ id: row._id, name: row.name, shortName: row.shortName ?? "", startISO: row.startISO, endISO: row.endISO ?? "", regPosn: row.regPosn ?? "", sourceDocumentId: row.sourceDocumentIds?.[0] ?? "", previousDocumentIds: row.sourceDocumentIds });
+    setNameForm({ id: row._id, name: row.name, shortName: row.shortName ?? "", startISO: row.startISO, endISO: row.endISO ?? "", regPosn: row.regPosn === undefined ? "" : String(row.regPosn), sourceDocumentId: row.sourceDocumentIds?.[0] ?? "", previousDocumentIds: row.sourceDocumentIds });
     setNameOpen(true);
   };
-  const removeName = async (row: any) => {
+  const removeName = async (row: NameRow) => {
     if (!canWriteNames || !row._id) return;
     const ok = await confirm({
       title: `Remove "${row.name}"?`,
@@ -141,12 +267,12 @@ export function CorporateHistoryPage() {
       toast.error("Could not remove the name", error instanceof Error ? error.message : String(error));
     }
   };
-  const editEvent = (row: any) => {
+  const editEvent = (row: ConstatingRow) => {
     if (!canWriteEvents || !row._id) return;
     setEventForm({ id: row._id, action: row.action, jurisdiction: row.jurisdiction, legislation: row.legislation, regNumber: row.regNumber ?? "", startISO: row.startISO, endISO: row.endISO ?? "", sourceDocumentId: row.sourceDocumentIds?.[0] ?? "", previousDocumentIds: row.sourceDocumentIds });
     setEventOpen(true);
   };
-  const removeEvent = async (row: any) => {
+  const removeEvent = async (row: ConstatingRow) => {
     if (!canWriteEvents || !row._id) return;
     const ok = await confirm({
       title: `Remove the ${constatingActionLabel(row.action).toLowerCase()} event?`,
@@ -177,7 +303,7 @@ export function CorporateHistoryPage() {
   };
 
   const saveName = async () => {
-    if (!canWriteNames) return;
+    if (!canWriteNames || !nameForm) return;
     if (nameProblems.length) {
       toast.error("Name not saved", nameProblems[0]);
       return;
@@ -216,7 +342,7 @@ export function CorporateHistoryPage() {
   };
 
   const saveEvent = async () => {
-    if (!canWriteEvents) return;
+    if (!canWriteEvents || !eventForm) return;
     if (eventProblems.length) {
       toast.error("Event not saved", eventProblems[0]);
       return;
@@ -239,6 +365,76 @@ export function CorporateHistoryPage() {
       toast.error("Event not saved", error instanceof Error ? error.message : String(error));
     }
   };
+
+  const renderNameCell = ({ record, field }: { record: NameRecord; field: FieldMetadata }) => {
+    if (field.name === "name") return <strong>{record.name}</strong>;
+    return undefined;
+  };
+  const renderNameActions = (record: NameRecord) => (
+    <>
+      <button
+        className="btn btn--ghost btn--sm btn--icon"
+        aria-label={`Edit name ${record.name}`}
+        disabled={!canWriteNames || !record.row._id}
+        onClick={() => editName(record.row)}
+      >
+        <Pencil size={12} />
+      </button>
+      <button
+        className="btn btn--ghost btn--sm btn--icon"
+        aria-label={`Remove name ${record.name}`}
+        disabled={!canWriteNames || !record.row._id}
+        onClick={() => removeName(record.row)}
+      >
+        <Trash2 size={12} />
+      </button>
+    </>
+  );
+  const renderNameCard = (record: NameRecord, { selecting }: RecordTableCardHelpers) => (
+    <RecordTablePhoneCard
+      title={record.name}
+      meta={[record.shortName ?? "", nameSpanText(record.row)]}
+      detail={[linkedDocumentsText(record.linkedDocuments)]}
+      selecting={selecting}
+    />
+  );
+
+  const renderEventCell = ({ record, field }: { record: ConstatingRecord; field: FieldMetadata }) => {
+    if (field.name === "action") return <strong>{constatingActionLabel(record.action)}</strong>;
+    return undefined;
+  };
+  const renderEventActions = (record: ConstatingRecord) => (
+    <>
+      <button
+        className="btn btn--ghost btn--sm btn--icon"
+        aria-label={`Edit ${record.action} event`}
+        disabled={!canWriteEvents || !record.row._id}
+        onClick={() => editEvent(record.row)}
+      >
+        <Pencil size={12} />
+      </button>
+      <button
+        className="btn btn--ghost btn--sm btn--icon"
+        aria-label={`Remove ${record.action} event`}
+        disabled={!canWriteEvents || !record.row._id}
+        onClick={() => removeEvent(record.row)}
+      >
+        <Trash2 size={12} />
+      </button>
+    </>
+  );
+  const renderEventCard = (record: ConstatingRecord, { selecting }: RecordTableCardHelpers) => (
+    <RecordTablePhoneCard
+      title={constatingActionLabel(record.action)}
+      meta={[`${record.legislation} (${record.jurisdiction})`, formatDate(record.startISO)]}
+      detail={[
+        record.regNumber ? `No. ${record.regNumber}` : "",
+        record.endISO ? `Ended ${formatDate(record.endISO)}` : "",
+        linkedDocumentsText(record.linkedDocuments),
+      ]}
+      selecting={selecting}
+    />
+  );
 
   return (
     <div className="page">
@@ -264,96 +460,55 @@ export function CorporateHistoryPage() {
         }
       />
 
-      <div className="card">
-        <h3 style={{ margin: "0 0 8px" }}>Name history</h3>
-        {nameNarrative && (
-          <p style={{ color: "var(--text-secondary)" }}>{nameNarrative}</p>
-        )}
-        {loaded && !canReadNames ? (
-          <p className="muted">Name history requires settings access.</p>
-        ) : names === undefined ? (
-          <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
-        ) : names.length === 0 ? (
-          <p style={{ color: "var(--text-tertiary)" }}>No name history yet.</p>
-        ) : (
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {names.map((n) => (
-              <li
-                key={n._id ?? `${n.name}-${n.startISO}`}
-                style={{ display: "flex", alignItems: "center", gap: 8 }}
-              >
-                <span>
-                  {n.name}
-                  {n.shortName ? ` — ${n.shortName}` : ""}
-                  <span style={{ color: "var(--text-tertiary)" }}> — {n.endISO ? `${formatDate(n.startISO)} to ${formatDate(n.endISO)}` : `since ${formatDate(n.startISO)}`}{n.sourceDocumentIds?.length ? ` · ${n.sourceDocumentIds.length} linked ${n.sourceDocumentIds.length === 1 ? "document" : "documents"}` : ""}</span>
-                </span>
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Edit name ${n.name}`}
-                  disabled={!canWriteNames || !n._id}
-                  onClick={() => editName(n)}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Remove name ${n.name}`}
-                  disabled={!canWriteNames || !n._id}
-                  onClick={() => removeName(n)}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <section className="card" aria-labelledby="corporate-history-names">
+        <div className="card__head">
+          <h2 className="card__title" id="corporate-history-names">Name history</h2>
+          {names && <Badge>{names.length}</Badge>}
+        </div>
+        {nameNarrative && <div className="card__body corporate-history__narrative">{nameNarrative}</div>}
+        <RecordListTable<NameRecord>
+          variant="card"
+          table={NAME_TABLE}
+          tableId="corporate-history-names"
+          label="Names"
+          icon={<Type size={14} />}
+          records={nameRecords}
+          loading={canReadNames && names === undefined}
+          renderCell={renderNameCell}
+          renderRowActions={renderNameActions}
+          renderPhoneCard={renderNameCard}
+          emptyState={
+            loaded && !canReadNames
+              ? <RecordTableEmpty title="Name history requires settings access" />
+              : <RecordTableEmpty title="No name history yet" />
+          }
+        />
+      </section>
 
-      <div className="card">
-        <h3 style={{ margin: "0 0 8px" }}>Constating documents</h3>
-        {constatingNarrative && (
-          <p style={{ color: "var(--text-secondary)" }}>{constatingNarrative}</p>
-        )}
-        {loaded && !canReadEvents ? (
-          <p className="muted">Constating documents require document access.</p>
-        ) : constating === undefined ? (
-          <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
-        ) : constating.length === 0 ? (
-          <p style={{ color: "var(--text-tertiary)" }}>No constating events yet.</p>
-        ) : (
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {constating.map((c) => (
-              <li
-                key={c._id ?? `${c.action}-${c.startISO}`}
-                style={{ display: "flex", alignItems: "center", gap: 8 }}
-              >
-                <span>
-                  <strong>{constatingActionLabel(c.action)}</strong> — {c.legislation} ({c.jurisdiction}) — {formatDate(c.startISO)}
-                  {c.regNumber ? ` — No. ${c.regNumber}` : ""}
-                  {c.endISO ? ` — ended ${formatDate(c.endISO)}` : ""}
-                  {c.sourceDocumentIds?.length ? ` · ${c.sourceDocumentIds.length} linked ${c.sourceDocumentIds.length === 1 ? "document" : "documents"}` : ""}
-                </span>
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Edit ${c.action} event`}
-                  disabled={!canWriteEvents || !c._id}
-                  onClick={() => editEvent(c)}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Remove ${c.action} event`}
-                  disabled={!canWriteEvents || !c._id}
-                  onClick={() => removeEvent(c)}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <section className="card" aria-labelledby="corporate-history-constating">
+        <div className="card__head">
+          <h2 className="card__title" id="corporate-history-constating">Constating documents</h2>
+          {constating && <Badge>{constating.length}</Badge>}
+        </div>
+        {constatingNarrative && <div className="card__body corporate-history__narrative">{constatingNarrative}</div>}
+        <RecordListTable<ConstatingRecord>
+          variant="card"
+          table={CONSTATING_TABLE}
+          tableId="corporate-history-constating"
+          label="Constating events"
+          icon={<FileText size={14} />}
+          records={constatingRecords}
+          loading={canReadEvents && constating === undefined}
+          renderCell={renderEventCell}
+          renderRowActions={renderEventActions}
+          renderPhoneCard={renderEventCard}
+          emptyState={
+            loaded && !canReadEvents
+              ? <RecordTableEmpty title="Constating documents require document access" />
+              : <RecordTableEmpty title="No constating events yet" />
+          }
+        />
+      </section>
 
       <Drawer
         open={nameOpen && canWriteNames}

@@ -168,7 +168,9 @@ for (const role of ["Owner", "Admin", "Director", "Member", "Viewer"]) {
       const newGoal = page.getByRole("button", { name: "New goal", exact: true });
       if (["Owner", "Admin"].includes(role)) await expect(newGoal).toBeEnabled();
       else await expect(newGoal).toBeDisabled();
-      await page.locator('a[href^="/app/goals/"]').first().click();
+      // Goals are a record list: the name cell (or the phone card) opens the goal.
+      await page.locator(".record-table__identifier-button, .record-cards__item .record-phone-card").filter({ visible: true }).first().click();
+      await page.waitForURL(/\/app\/goals\/[^/?]+/);
       await page.getByRole("button", { name: "More actions", exact: true }).click();
       const deleteGoal = page.getByRole("menuitem", { name: "Delete goal", exact: true });
       if (["Owner", "Admin"].includes(role)) {

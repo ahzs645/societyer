@@ -208,8 +208,9 @@ test("a CBCA corporation sees corporate profile, communications, workflow, resea
   await expect(page.getByText("Shareholder elections with verified representation and share-weighted ballots.", { exact: true })).toBeVisible();
 
   await visit("/app/point-in-time-register", "Point-in-time register");
-  await expect(page.getByRole("heading", { name: /^Shareholders \(\d+\)$/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /^Members \(/ })).toHaveCount(0);
+  // Each register is a card titled by its role, with its count beside the title.
+  await expect(page.getByRole("heading", { name: "Shareholders", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Members", exact: true })).toHaveCount(0);
   await visit("/app/minute-book", "Minute book");
   await expect(page.getByText("Your corporation's legal records and the evidence behind them.", { exact: true })).toBeVisible();
 
