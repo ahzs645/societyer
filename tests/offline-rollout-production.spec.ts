@@ -33,10 +33,10 @@ async function create(page: Page, title: string, attachment = false) {
   await page.getByLabel("Preparation notes", { exact: true }).fill("Actual Better Auth and full native Convex preparation");
   if (attachment) await page.getByLabel("Attachment (up to 1 MB)", { exact: true }).setInputFiles({ name: "production-live.txt", mimeType: "text/plain", buffer: Buffer.from("Production native attachment bytes\n") });
   await page.getByRole("button", { name: "Save on this device", exact: true }).click();
-  await expect(page.locator(".offline-meeting-list .card").filter({ has: page.getByRole("heading", { name: title, exact: true }) })).toBeVisible();
+  await expect(page.locator(".offline-meeting-item").filter({ has: page.getByRole("heading", { name: title, exact: true }) })).toBeVisible();
 }
-const card = (page: Page, title: string) => page.locator(".offline-meeting-list .card").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
-const pending = (page: Page) => page.locator(".offline-meeting-preparation > [role=status]");
+const card = (page: Page, title: string) => page.locator(".offline-meeting-item").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+const pending = (page: Page) => page.locator(".offline-meeting-status");
 async function cleanup(prefix: string) {
   await operator.function(makeFunctionReference("offlineRolloutFixture:cleanPreparedMeetings"), undefined, { societyId: liveFixture().societyId, prefix });
 }

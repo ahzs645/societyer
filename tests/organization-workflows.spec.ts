@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
+import { recordRows, runRowAction } from "./helpers/rowActions";
 
 async function pick(page: Page, scope: Locator, label: string, option: string) {
   await scope.getByLabel(label, { exact: true }).click();
@@ -270,7 +271,7 @@ test("business records preserve linked notices and director consent history afte
   await page.getByLabel("Issuance or transfer", { exact: true }).click();
   await page.getByRole("option").first().click();
   await page.getByLabel("Notice number").fill("N-001");
-  await page.getByLabel("Notice date").fill("2026-02-01");
+  await date(page, page, "Notice date", "2026-02-01");
   await page.getByLabel("Supporting document").click();
   await page.getByRole("option", { name: "Organizing records", exact: true }).click();
   await page.getByLabel("Source page").fill("1");
@@ -278,8 +279,7 @@ test("business records preserve linked notices and director consent history afte
   await expect(page.getByText("N-001", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("link", { name: /Organizing records/ })).toHaveAttribute("href", "/app/documents/" + documentId);
-  await page.getByLabel("Register", { exact: true }).click();
-  await page.getByRole("option", { name: "Director consent history", exact: true }).click();
+  await page.getByRole("tab", { name: "Director consent history", exact: true }).click();
   await page.getByRole("button", { name: "Add record" }).click();
   await page.getByLabel("Director", { exact: true }).click();
   await page.getByRole("option", { name: "Example Director", exact: true }).click();
@@ -287,14 +287,16 @@ test("business records preserve linked notices and director consent history afte
   await page.getByRole("option", { name: "Consent to act", exact: true }).click();
   await page.getByLabel("Event", { exact: true }).click();
   await page.getByRole("option", { name: "Given", exact: true }).click();
-  await page.getByLabel("Effective date").fill("2026-02-01");
+  await date(page, page, "Effective date", "2026-02-01");
   await page.getByRole("button", { name: "Save record" }).click();
   await expect(page.getByText("Given", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Revise record" }).click();
-  await page.getByLabel("Received on").fill("2026-02-03");
+  await runRowAction(recordRows(page).filter({ hasText: "Given" }), "Revise record");
+  await date(page, page, "Received on", "2026-02-03");
   await page.getByRole("button", { name: "Save record" }).click();
   await expect(page.getByText("2026-02-03", { exact: true })).toBeVisible();
   await page.reload();
-  await page.getByLabel("Show previous versions").check();
+  // The Checkbox draws its own box over the native input: click the label.
+  await page.getByText("Show previous versions", { exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Show previous versions", exact: true })).toBeChecked();
   await expect(page.getByText("Previous version", { exact: true })).toBeVisible();
 });

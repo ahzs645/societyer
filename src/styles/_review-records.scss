@@ -134,6 +134,177 @@
   text-underline-offset: 2px;
 }
 
+// One template per row inside its document-type card.
+.doc-catalog-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.doc-catalog-item {
+  display: grid;
+  gap: token('s-2');
+  padding: token('s-3') token('s-4');
+  min-width: 0;
+
+  & + & { border-top: 1px solid token('border'); }
+
+  p { margin: 0; }
+}
+
+.doc-catalog-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+}
+
+.doc-catalog-item__action {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-2');
+  margin-left: auto;
+  font-size: token('fs-sm');
+}
+
+.doc-catalog-item__date { max-width: 260px; }
+
+.doc-catalog-item__note,
+.doc-catalog-item__label { font-size: token('fs-sm'); }
+
+.doc-catalog-item__desc {
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+}
+
+.doc-catalog-item__flags,
+.doc-catalog-item__sources,
+.doc-catalog-item__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+
+.doc-catalog-item__sources { font-size: token('fs-sm'); }
+
+.doc-catalog-item__fields {
+  display: grid;
+  gap: token('s-1');
+}
+
+.doc-catalog-precedents {
+  margin: 0;
+  padding-left: token('s-8');
+
+  > li + li { margin-top: token('s-1'); }
+}
+
+.doc-catalog-precedents__desc { color: token('text-secondary'); }
+
+// Post-incorporation checklist: one card per category, a row per step.
+.post-incorporation-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.post-incorporation-step {
+  display: grid;
+  gap: token('s-2');
+  padding: token('s-3') token('s-4');
+  min-width: 0;
+
+  & + & { border-top: 1px solid token('border'); }
+
+  p { margin: 0; }
+}
+
+.post-incorporation-step__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token('s-3');
+}
+
+.post-incorporation-step__heading {
+  display: grid;
+  gap: token('s-1');
+  min-width: 0;
+}
+
+.post-incorporation-step__title {
+  margin: 0;
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+}
+
+.post-incorporation-step__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-1');
+}
+
+.post-incorporation-step__actions {
+  display: flex;
+  flex: none;
+  gap: token('s-1');
+}
+
+.post-incorporation-step__facts {
+  display: grid;
+  gap: token('s-1');
+  margin: 0;
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 token('s-1');
+  }
+
+  dt {
+    font-weight: token('fw-semibold');
+
+    &::after { content: ":"; }
+  }
+
+  dd { margin: 0; }
+}
+
+.post-incorporation-step__source {
+  white-space: nowrap;
+
+  svg { vertical-align: middle; }
+}
+
+.post-incorporation-step__caveat {
+  font-size: token('fs-sm');
+  font-style: italic;
+  color: token('text-secondary');
+}
+
+// Business records: register tabs over the register's card.
+.business-records-page > .tabs { margin-bottom: token('s-3'); }
+
+.business-records__head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-3');
+  margin-left: auto;
+}
+
+.business-records__notes {
+  display: grid;
+  gap: token('s-2');
+  border-bottom: 1px solid token('border');
+
+  p { margin: 0; }
+}
+
+.business-records__source { font-size: token('fs-sm'); }
+
 // Exports: per-table downloads tucked into a collapsed card.
 details.exports-tables {
   > summary {
