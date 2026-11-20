@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Link } from "react-router-dom";
-import { Field } from "../../components/ui";
+import { Badge, Field, type ToneVariant } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { Money } from "../../components/Money";
 import { usePermissions } from "../../hooks/usePermissions";
@@ -21,11 +21,18 @@ import {
   payrollRuleCompatibility,
   type PayrollRuleDraft,
   type PayrollRuleEdition,
+  type PayrollRuleStatus,
 } from "../../../shared/payrollRules";
 import { amountInput, payrollFailure, payrollMoney } from "./payrollUi";
 import { usePayrollRuleEditions } from "./PayrollRuleEditionPicker";
 export { PayrollRuleEditionPicker } from "./PayrollRuleEditionPicker";
 
+const RULE_STATUS_TONES: Record<PayrollRuleStatus, ToneVariant> = {
+  draft: "neutral",
+  reviewed: "info",
+  published: "success",
+  retired: "warn",
+};
 const freshKey = () => crypto.randomUUID();
 function download(name: string, value: unknown) {
   const url = URL.createObjectURL(
@@ -133,31 +140,37 @@ export function PayrollRulesPanel({ societyId }: { societyId: string }) {
               className="card payroll-calculator__panel"
               key={edition.id}
             >
-              <h3>{edition.id}</h3>
-              <p>
-                {edition.effectiveFrom}–{edition.effectiveTo} ·{" "}
-                {edition.province} · {edition.method}
-              </p>
-              <p>
-                Employee CPP {payrollPercentDisplay(edition.cpp.rate)}% · CPP2{" "}
-                {payrollPercentDisplay(edition.cpp.secondRate)}% · EI{" "}
-                {payrollPercentDisplay(edition.ei.rate)}%.
-              </p>
-              <button
-                className="btn"
-                type="button"
-                disabled={!canWrite || busy}
-                onClick={() => {
-                  setEditing({
-                    key: freshKey(),
-                    draft: cloneOfficialPayrollRule(edition.id),
-                    baseOfficialId: edition.id,
-                  });
-                  setError("");
-                }}
-              >
-                Clone {edition.id}
-              </button>
+              <div className="card__head">
+                <div className="payroll-calculator__head-text">
+                  <h3 className="card__title">{edition.id}</h3>
+                  <p className="card__subtitle">
+                    {edition.effectiveFrom}–{edition.effectiveTo} ·{" "}
+                    {edition.province} · {edition.method}
+                  </p>
+                </div>
+              </div>
+              <div className="card__body">
+                <p>
+                  Employee CPP {payrollPercentDisplay(edition.cpp.rate)}% · CPP2{" "}
+                  {payrollPercentDisplay(edition.cpp.secondRate)}% · EI{" "}
+                  {payrollPercentDisplay(edition.ei.rate)}%.
+                </p>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={!canWrite || busy}
+                  onClick={() => {
+                    setEditing({
+                      key: freshKey(),
+                      draft: cloneOfficialPayrollRule(edition.id),
+                      baseOfficialId: edition.id,
+                    });
+                    setError("");
+                  }}
+                >
+                  Clone {edition.id}
+                </button>
+              </div>
             </article>
           ))}
         </div>
@@ -296,147 +309,154 @@ function RuleCard({
       className="card payroll-calculator__panel"
       aria-label={`Rule edition ${edition.name}`}
     >
-      <h4>
-        {edition.name} · revision {edition.revision} · {edition.status}
-      </h4>
-      <p>
-        {edition.rateSet.year} · {edition.rateSet.province} ·{" "}
-        {edition.rateSet.method} · {edition.rateSet.effectiveFrom}–
-        {edition.rateSet.effectiveTo}
-      </p>
-      <p>{compatibility.reason}</p>
-      <p className="muted">SHA-256 {edition.contentHash}</p>
-      <div className="payroll-calculator__actions">
-        {edition.status === "draft" && (
+      <div className="card__head">
+        <div className="payroll-calculator__head-text">
+          <h4 className="card__title">
+            {edition.name} · revision {edition.revision}
+          </h4>
+          <p className="card__subtitle">
+            {edition.rateSet.year} · {edition.rateSet.province} ·{" "}
+            {edition.rateSet.method} · {edition.rateSet.effectiveFrom}–
+            {edition.rateSet.effectiveTo}
+          </p>
+        </div>
+        <Badge tone={RULE_STATUS_TONES[edition.status]}>{edition.status}</Badge>
+      </div>
+      <div className="card__body">
+        <p>{compatibility.reason}</p>
+        <p className="muted">SHA-256 {edition.contentHash}</p>
+        <div className="payroll-calculator__actions">
+          {edition.status === "draft" && (
+            <button
+              className="btn"
+              type="button"
+              disabled={!canWrite || busy}
+              onClick={onEdit}
+            >
+              Edit working draft
+            </button>
+          )}
           <button
             className="btn"
             type="button"
             disabled={!canWrite || busy}
-            onClick={onEdit}
+            onClick={onRevision}
           >
-            Edit working draft
+            Create new revision
           </button>
-        )}
-        <button
-          className="btn"
-          type="button"
-          disabled={!canWrite || busy}
-          onClick={onRevision}
-        >
-          Create new revision
-        </button>
-        <button
-          className="btn"
-          type="button"
-          onClick={() =>
-            download(
-              `payroll-rules-${edition.libraryId}-r${edition.revision}.json`,
-              {
-                format: "societyer-payroll-rules",
-                version: 1,
-                draft: draftOf(edition),
-                provenance: {
-                  id: edition._id,
-                  revision: edition.revision,
-                  contentHash: edition.contentHash,
-                  status: edition.status,
-                  reviewedByUserId: edition.reviewedByUserId,
-                  reviewedAtISO: edition.reviewedAtISO,
-                  publishedAtISO: edition.publishedAtISO,
-                },
-              },
-            )
-          }
-        >
-          Export edition JSON
-        </button>
-      </div>
-      <details>
-        <summary>Parameters, source evidence and baseline comparison</summary>
-        <ParameterSummary draft={draftOf(edition)} />
-        <RuleDifferences differences={differences} />
-        <p>
-          Review: {edition.reviewEvidence ?? "Not yet reviewed"} · reviewer{" "}
-          {edition.reviewedByUserId ?? "—"} · {edition.reviewedAtISO ?? "—"}.
-        </p>
-        {edition.retirementReason && (
-          <p>
-            Retired: {edition.retirementReason} · {edition.retiredAtISO}.
-          </p>
-        )}
-        <details>
-          <summary>Full frozen rate JSON and archived baseline hashes</summary>
-          <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-            {JSON.stringify(edition.rateSet, null, 2)}
-          </pre>
-        </details>
-      </details>
-      {canReview && edition.status === "draft" && (
-        <form
-          aria-label={`Review ${edition.name}`}
-          onSubmit={(event) => {
-            event.preventDefault();
-            onReview(evidence, confirmed);
-          }}
-        >
-          <Field label="Rule review evidence">
-            <textarea
-              className="input"
-              required
-              maxLength={8000}
-              value={evidence}
-              onChange={(event) => {
-                setEvidence(event.target.value);
-                setConfirmed(false);
-              }}
-            />
-          </Field>
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              required
-              checked={confirmed}
-              onChange={(event) => setConfirmed(event.target.checked)}
-            />
-            I reviewed the exact rates, caps, brackets, effective dates and
-            official source evidence
-          </label>
-          <button className="btn" disabled={busy || !confirmed}>
-            Review exact edition
-          </button>
-        </form>
-      )}
-      {canReview && edition.status === "reviewed" && (
-        <button
-          className="btn btn--accent"
-          type="button"
-          disabled={busy}
-          onClick={onPublish}
-        >
-          Publish reviewed edition
-        </button>
-      )}
-      {canReview && ["reviewed", "published"].includes(edition.status) && (
-        <details>
-          <summary>Retire this edition</summary>
-          <Field label="Rule retirement reason">
-            <textarea
-              className="input"
-              maxLength={4000}
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-            />
-          </Field>
           <button
             className="btn"
             type="button"
-            disabled={busy || !reason.trim()}
-            onClick={() => onRetire(reason)}
+            onClick={() =>
+              download(
+                `payroll-rules-${edition.libraryId}-r${edition.revision}.json`,
+                {
+                  format: "societyer-payroll-rules",
+                  version: 1,
+                  draft: draftOf(edition),
+                  provenance: {
+                    id: edition._id,
+                    revision: edition.revision,
+                    contentHash: edition.contentHash,
+                    status: edition.status,
+                    reviewedByUserId: edition.reviewedByUserId,
+                    reviewedAtISO: edition.reviewedAtISO,
+                    publishedAtISO: edition.publishedAtISO,
+                  },
+                },
+              )
+            }
           >
-            Retire edition
+            Export edition JSON
           </button>
+        </div>
+        <details>
+          <summary>Parameters, source evidence and baseline comparison</summary>
+          <ParameterSummary draft={draftOf(edition)} />
+          <RuleDifferences differences={differences} />
+          <p>
+            Review: {edition.reviewEvidence ?? "Not yet reviewed"} · reviewer{" "}
+            {edition.reviewedByUserId ?? "—"} · {edition.reviewedAtISO ?? "—"}.
+          </p>
+          {edition.retirementReason && (
+            <p>
+              Retired: {edition.retirementReason} · {edition.retiredAtISO}.
+            </p>
+          )}
+          <details>
+            <summary>Full frozen rate JSON and archived baseline hashes</summary>
+            <pre className="payroll-calculator__pre">
+              {JSON.stringify(edition.rateSet, null, 2)}
+            </pre>
+          </details>
         </details>
-      )}
+        {canReview && edition.status === "draft" && (
+          <form
+            aria-label={`Review ${edition.name}`}
+            onSubmit={(event) => {
+              event.preventDefault();
+              onReview(evidence, confirmed);
+            }}
+          >
+            <Field label="Rule review evidence">
+              <textarea
+                className="input"
+                required
+                maxLength={8000}
+                value={evidence}
+                onChange={(event) => {
+                  setEvidence(event.target.value);
+                  setConfirmed(false);
+                }}
+              />
+            </Field>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                required
+                checked={confirmed}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />
+              I reviewed the exact rates, caps, brackets, effective dates and
+              official source evidence
+            </label>
+            <button className="btn" disabled={busy || !confirmed}>
+              Review exact edition
+            </button>
+          </form>
+        )}
+        {canReview && edition.status === "reviewed" && (
+          <button
+            className="btn btn--accent"
+            type="button"
+            disabled={busy}
+            onClick={onPublish}
+          >
+            Publish reviewed edition
+          </button>
+        )}
+        {canReview && ["reviewed", "published"].includes(edition.status) && (
+          <details>
+            <summary>Retire this edition</summary>
+            <Field label="Rule retirement reason">
+              <textarea
+                className="input"
+                maxLength={4000}
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </Field>
+            <button
+              className="btn"
+              type="button"
+              disabled={busy || !reason.trim()}
+              onClick={() => onRetire(reason)}
+            >
+              Retire edition
+            </button>
+          </details>
+        )}
+      </div>
     </article>
   );
 }
@@ -654,306 +674,312 @@ function PayrollRuleEditor({
       className="card payroll-calculator__panel"
       aria-label="Payroll rule editor"
     >
-      <h3>{initial.edition ? "Edit working draft" : "New working edition"}</h3>
-      <form
-        aria-label="Payroll rule parameters"
-        onChange={() => setValidated(undefined)}
-        onSubmit={submit}
-      >
-        <div className="payroll-calculator__form-grid">
-          <Field label="Rule edition name">
-            <input
-              className="input"
-              required
-              maxLength={200}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </Field>
-          <Field label="Rule description">
-            <textarea
-              className="input"
-              maxLength={4000}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </Field>
-          <Field label="Rule year">
-            <input
-              className="input"
-              type="number"
-              min={2026}
-              max={2100}
-              value={year}
-              onChange={(event) => setYear(event.target.value)}
-            />
-          </Field>
-          <Field label="Rule method">
-            <Select
-              value={method}
-              onChange={(value) => {
-                setMethod(value);
-                setValidated(undefined);
-              }}
-              options={[
-                { value: "option1", label: "Option 1" },
-                { value: "option2", label: "Option 2" },
-              ]}
-            />
-          </Field>
-          <Field label="Rule effective from">
-            <input
-              className="input"
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-            />
-          </Field>
-          <Field label="Rule effective to">
-            <input
-              className="input"
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-            />
-          </Field>
-        </div>
-        <p>
-          Province BC · formula engine {initial.draft.rateSet.engineVersion}.
-          Future-year data can be stored and reviewed; it cannot activate until
-          an engine with that coverage is reviewed. January and July formula
-          policies keep separate ranges.
-        </p>
-        {(["cpp", "ei", "federal", "provincial"] as const).map((group) => (
-          <details key={group}>
-            <summary>
-              {
+      <div className="card__head">
+        <h3 className="card__title">
+          {initial.edition ? "Edit working draft" : "New working edition"}
+        </h3>
+      </div>
+      <div className="card__body">
+        <form
+          aria-label="Payroll rule parameters"
+          onChange={() => setValidated(undefined)}
+          onSubmit={submit}
+        >
+          <div className="payroll-calculator__form-grid">
+            <Field label="Rule edition name">
+              <input
+                className="input"
+                required
+                maxLength={200}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </Field>
+            <Field label="Rule description">
+              <textarea
+                className="input"
+                maxLength={4000}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </Field>
+            <Field label="Rule year">
+              <input
+                className="input"
+                type="number"
+                min={2026}
+                max={2100}
+                value={year}
+                onChange={(event) => setYear(event.target.value)}
+              />
+            </Field>
+            <Field label="Rule method">
+              <Select
+                value={method}
+                onChange={(value) => {
+                  setMethod(value);
+                  setValidated(undefined);
+                }}
+                options={[
+                  { value: "option1", label: "Option 1" },
+                  { value: "option2", label: "Option 2" },
+                ]}
+              />
+            </Field>
+            <Field label="Rule effective from">
+              <input
+                className="input"
+                type="date"
+                value={from}
+                onChange={(event) => setFrom(event.target.value)}
+              />
+            </Field>
+            <Field label="Rule effective to">
+              <input
+                className="input"
+                type="date"
+                value={to}
+                onChange={(event) => setTo(event.target.value)}
+              />
+            </Field>
+          </div>
+          <p>
+            Province BC · formula engine {initial.draft.rateSet.engineVersion}.
+            Future-year data can be stored and reviewed; it cannot activate until
+            an engine with that coverage is reviewed. January and July formula
+            policies keep separate ranges.
+          </p>
+          {(["cpp", "ei", "federal", "provincial"] as const).map((group) => (
+            <details key={group}>
+              <summary>
                 {
-                  cpp: "CPP and CPP2 rates, exemptions and caps",
-                  ei: "EI employee rate and annual caps",
-                  federal: "Federal claims and tax brackets",
-                  provincial: "BC claims, tax reduction and brackets",
-                }[group]
-              }
-            </summary>
-            <div className="payroll-calculator__form-grid">
-              {fields(group).map(([key, value]) => (
-                <Field
-                  key={key}
-                  label={`${group === "cpp" ? "CPP" : group === "ei" ? "EI" : group === "federal" ? "Federal" : "BC"} ${words(key)} ${key.endsWith("Cents") ? "(CAD)" : "(%)"}`}
-                >
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    value={valueOf(group, key, value)}
-                    onChange={(event) =>
-                      setValues((previous) => ({
-                        ...previous,
-                        [`${group}.${key}`]: event.target.value,
-                      }))
-                    }
-                  />
-                </Field>
-              ))}
-            </div>
-            {group === "federal" && (
-              <BracketEditor
-                label="Federal"
-                rows={federal}
-                onChange={(rows) => {
-                  setFederal(rows);
-                  setValidated(undefined);
-                }}
-              />
-            )}
-            {group === "provincial" && (
-              <BracketEditor
-                label="BC"
-                rows={provincial}
-                onChange={(rows) => {
-                  setProvincial(rows);
-                  setValidated(undefined);
-                }}
-              />
-            )}
-            {group === "ei" && (
-              <p>
-                Standard employer multiplier 1.4. Record approved reduced
-                employer coverage in Employer setup or the employee override,
-                with its actual approval evidence.
-              </p>
-            )}
-          </details>
-        ))}
-        <details open>
-          <summary>Official evidence for this working edition</summary>
-          {sources.map((source, index) => (
-            <fieldset key={source.key}>
-              <legend>Rule source {index + 1}</legend>
+                  {
+                    cpp: "CPP and CPP2 rates, exemptions and caps",
+                    ei: "EI employee rate and annual caps",
+                    federal: "Federal claims and tax brackets",
+                    provincial: "BC claims, tax reduction and brackets",
+                  }[group]
+                }
+              </summary>
               <div className="payroll-calculator__form-grid">
-                {(
-                  ["authority", "title", "url", "reviewedOn", "notes"] as const
-                ).map((key) => (
+                {fields(group).map(([key, value]) => (
                   <Field
                     key={key}
-                    label={`Rule source ${index + 1} ${key === "reviewedOn" ? "review date" : key}`}
+                    label={`${group === "cpp" ? "CPP" : group === "ei" ? "EI" : group === "federal" ? "Federal" : "BC"} ${words(key)} ${key.endsWith("Cents") ? "(CAD)" : "(%)"}`}
                   >
                     <input
                       className="input"
-                      type={
-                        key === "reviewedOn"
-                          ? "date"
-                          : key === "url"
-                            ? "url"
-                            : "text"
-                      }
-                      required
-                      value={source[key]}
+                      inputMode="decimal"
+                      value={valueOf(group, key, value)}
                       onChange={(event) =>
-                        setSources((previous) =>
-                          previous.map((value) =>
-                            value.key === source.key
-                              ? { ...value, [key]: event.target.value }
-                              : value,
-                          ),
-                        )
+                        setValues((previous) => ({
+                          ...previous,
+                          [`${group}.${key}`]: event.target.value,
+                        }))
                       }
                     />
                   </Field>
                 ))}
               </div>
-              <button
-                className="btn"
-                type="button"
-                disabled={sources.length === 1}
-                onClick={() => {
-                  setSources((previous) =>
-                    previous.filter((value) => value.key !== source.key),
-                  );
-                  setValidated(undefined);
-                }}
-              >
-                Remove rule source {index + 1}
-              </button>
-            </fieldset>
+              {group === "federal" && (
+                <BracketEditor
+                  label="Federal"
+                  rows={federal}
+                  onChange={(rows) => {
+                    setFederal(rows);
+                    setValidated(undefined);
+                  }}
+                />
+              )}
+              {group === "provincial" && (
+                <BracketEditor
+                  label="BC"
+                  rows={provincial}
+                  onChange={(rows) => {
+                    setProvincial(rows);
+                    setValidated(undefined);
+                  }}
+                />
+              )}
+              {group === "ei" && (
+                <p>
+                  Standard employer multiplier 1.4. Record approved reduced
+                  employer coverage in Employer setup or the employee override,
+                  with its actual approval evidence.
+                </p>
+              )}
+            </details>
           ))}
-          <button
-            className="btn"
-            type="button"
-            disabled={sources.length >= 30}
-            onClick={() => {
-              setSources((previous) => [
-                ...previous,
-                {
-                  key: freshKey(),
-                  authority: "",
-                  title: "",
-                  url: "",
-                  reviewedOn: new Date().toISOString().slice(0, 10),
-                  notes: "",
-                },
-              ]);
-              setValidated(undefined);
-            }}
-          >
-            Add official source evidence
-          </button>
-          <p className="muted">
-            Archived baseline SHA-256 values identify the original downloaded
-            files. They do not certify manually changed numbers. Retain the
-            source and actual review evidence for every change.
-          </p>
-        </details>
-        {error && <p role="alert">{error}</p>}
-        <div className="payroll-calculator__actions">
-          <button type="button" className="btn" onClick={validate}>
-            Validate and compare rules
-          </button>
-          <button type="submit" className="btn btn--accent" disabled={busy}>
-            Save working draft
-          </button>
-          <button
-            type="button"
-            className="btn"
-            disabled={busy}
-            onClick={onCancel}
-          >
-            Cancel rule editing
-          </button>
-        </div>
-        {validated && (
-          <div aria-live="polite">
-            <p>
-              Parameter validation passed.{" "}
-              {payrollRuleCompatibility(validated.rateSet).reason}
+          <details open>
+            <summary>Official evidence for this working edition</summary>
+            {sources.map((source, index) => (
+              <fieldset key={source.key}>
+                <legend>Rule source {index + 1}</legend>
+                <div className="payroll-calculator__form-grid">
+                  {(
+                    ["authority", "title", "url", "reviewedOn", "notes"] as const
+                  ).map((key) => (
+                    <Field
+                      key={key}
+                      label={`Rule source ${index + 1} ${key === "reviewedOn" ? "review date" : key}`}
+                    >
+                      <input
+                        className="input"
+                        type={
+                          key === "reviewedOn"
+                            ? "date"
+                            : key === "url"
+                              ? "url"
+                              : "text"
+                        }
+                        required
+                        value={source[key]}
+                        onChange={(event) =>
+                          setSources((previous) =>
+                            previous.map((value) =>
+                              value.key === source.key
+                                ? { ...value, [key]: event.target.value }
+                                : value,
+                            ),
+                          )
+                        }
+                      />
+                    </Field>
+                  ))}
+                </div>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={sources.length === 1}
+                  onClick={() => {
+                    setSources((previous) =>
+                      previous.filter((value) => value.key !== source.key),
+                    );
+                    setValidated(undefined);
+                  }}
+                >
+                  Remove rule source {index + 1}
+                </button>
+              </fieldset>
+            ))}
+            <button
+              className="btn"
+              type="button"
+              disabled={sources.length >= 30}
+              onClick={() => {
+                setSources((previous) => [
+                  ...previous,
+                  {
+                    key: freshKey(),
+                    authority: "",
+                    title: "",
+                    url: "",
+                    reviewedOn: new Date().toISOString().slice(0, 10),
+                    notes: "",
+                  },
+                ]);
+                setValidated(undefined);
+              }}
+            >
+              Add official source evidence
+            </button>
+            <p className="muted">
+              Archived baseline SHA-256 values identify the original downloaded
+              files. They do not certify manually changed numbers. Retain the
+              source and actual review evidence for every change.
             </p>
-            <ParameterSummary draft={validated} />
-            <RuleDifferences
-              differences={comparePayrollRules(baseline, validated.rateSet)}
-            />
-            <RulePreview draft={validated} />
+          </details>
+          {error && <p role="alert">{error}</p>}
+          <div className="payroll-calculator__actions">
+            <button type="button" className="btn" onClick={validate}>
+              Validate and compare rules
+            </button>
+            <button type="submit" className="btn btn--accent" disabled={busy}>
+              Save working draft
+            </button>
             <button
               type="button"
               className="btn"
-              onClick={() =>
-                download("payroll-rule-working-copy.json", {
-                  format: "societyer-payroll-rules",
-                  version: 1,
-                  draft: validated,
-                })
-              }
+              disabled={busy}
+              onClick={onCancel}
             >
-              Export validated working JSON
+              Cancel rule editing
             </button>
           </div>
-        )}
-      </form>
-      <details>
-        <summary>Import structured rate JSON</summary>
-        <Field label="Payroll rule JSON">
-          <textarea
-            className="input"
-            rows={10}
-            value={json}
-            onChange={(event) => {
-              setJson(event.target.value);
-              setValidated(undefined);
-            }}
-          />
-        </Field>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            try {
-              if (new TextEncoder().encode(json).length > 150000)
-                throw new Error(
-                  "Import at most150 KB of structured rate data.",
+          {validated && (
+            <div aria-live="polite">
+              <p>
+                Parameter validation passed.{" "}
+                {payrollRuleCompatibility(validated.rateSet).reason}
+              </p>
+              <ParameterSummary draft={validated} />
+              <RuleDifferences
+                differences={comparePayrollRules(baseline, validated.rateSet)}
+              />
+              <RulePreview draft={validated} />
+              <button
+                type="button"
+                className="btn"
+                onClick={() =>
+                  download("payroll-rule-working-copy.json", {
+                    format: "societyer-payroll-rules",
+                    version: 1,
+                    draft: validated,
+                  })
+                }
+              >
+                Export validated working JSON
+              </button>
+            </div>
+          )}
+        </form>
+        <details>
+          <summary>Import structured rate JSON</summary>
+          <Field label="Payroll rule JSON">
+            <textarea
+              className="input"
+              rows={10}
+              value={json}
+              onChange={(event) => {
+                setJson(event.target.value);
+                setValidated(undefined);
+              }}
+            />
+          </Field>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => {
+              try {
+                if (new TextEncoder().encode(json).length > 150000)
+                  throw new Error(
+                    "Import at most150 KB of structured rate data.",
+                  );
+                const value = JSON.parse(json);
+                if (
+                  value?.format === "societyer-payroll-rules" &&
+                  value.version !== 1
+                )
+                  throw new Error("Unsupported rule import version.");
+                const draft = cleanPayrollRuleDraft(
+                  value?.format === "societyer-payroll-rules"
+                    ? value.draft
+                    : value,
                 );
-              const value = JSON.parse(json);
-              if (
-                value?.format === "societyer-payroll-rules" &&
-                value.version !== 1
-              )
-                throw new Error("Unsupported rule import version.");
-              const draft = cleanPayrollRuleDraft(
-                value?.format === "societyer-payroll-rules"
-                  ? value.draft
-                  : value,
-              );
-              onLoad(draft);
-            } catch (cause) {
-              setError(payrollFailure(cause));
-            }
-          }}
-        >
-          Load JSON into editor
-        </button>
-        <p>
-          Loading JSON creates editable data only. It does not publish rules or
-          execute imported formulas.
-        </p>
-      </details>
+                onLoad(draft);
+              } catch (cause) {
+                setError(payrollFailure(cause));
+              }
+            }}
+          >
+            Load JSON into editor
+          </button>
+          <p>
+            Loading JSON creates editable data only. It does not publish rules or
+            execute imported formulas.
+          </p>
+        </details>
+      </div>
     </section>
   );
 }
@@ -1007,12 +1033,12 @@ function RuleDifferences({
                 <tr key={value.path}>
                   <th>{value.path}</th>
                   <td>
-                    <pre style={{ whiteSpace: "pre-wrap" }}>
+                    <pre className="payroll-calculator__pre">
                       {JSON.stringify(value.before)}
                     </pre>
                   </td>
                   <td>
-                    <pre style={{ whiteSpace: "pre-wrap" }}>
+                    <pre className="payroll-calculator__pre">
                       {JSON.stringify(value.after)}
                     </pre>
                   </td>

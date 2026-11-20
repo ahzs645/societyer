@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { Field } from "../../components/ui";
+import { Banner, Field, SkeletonRows } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { usePermissions } from "../../hooks/usePermissions";
 import {
@@ -67,44 +67,48 @@ export function LegacyRemittanceAccountForm({
       className="card payroll-calculator__panel"
       onSubmit={submit}
     >
-      <h3>Confirm historical CRA payment account</h3>
-      <p>
-        The legacy obligation for {obligation.periodStart}–
-        {obligation.periodEnd} records {money(obligation.paidCents)} paid
-        without retaining its CRA RP account. Check the actual CRA statement or
-        payment receipt. This confirmation preserves the existing amount and
-        date, and cannot transfer payment to another account.
-      </p>
-      <Field label="Actual historical CRA RP account">
-        <input
-          className="input"
-          required
-          value={account}
-          placeholder="123456789RP0001"
-          onChange={(e) => setAccount(e.target.value)}
-        />
-      </Field>
-      <Field label="Historical CRA account evidence">
-        <textarea
-          className="input"
-          required
-          value={evidence}
-          onChange={(e) => setEvidence(e.target.value)}
-        />
-      </Field>
-      {error && <p role="alert">{error}</p>}
-      <div className="payroll-calculator__actions">
-        <button
-          type="button"
-          className="btn"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          Cancel historical confirmation
-        </button>
-        <button className="btn btn--accent" disabled={busy}>
-          {busy ? "Recording…" : "Confirm historical RP attribution"}
-        </button>
+      <div className="card__head">
+        <h3 className="card__title">Confirm historical CRA payment account</h3>
+      </div>
+      <div className="card__body">
+        <p className="muted">
+          The legacy obligation for {obligation.periodStart}–
+          {obligation.periodEnd} records {money(obligation.paidCents)} paid
+          without retaining its CRA RP account. Check the actual CRA statement or
+          payment receipt. This confirmation preserves the existing amount and
+          date, and cannot transfer payment to another account.
+        </p>
+        <Field label="Actual historical CRA RP account">
+          <input
+            className="input"
+            required
+            value={account}
+            placeholder="123456789RP0001"
+            onChange={(e) => setAccount(e.target.value)}
+          />
+        </Field>
+        <Field label="Historical CRA account evidence">
+          <textarea
+            className="input"
+            required
+            value={evidence}
+            onChange={(e) => setEvidence(e.target.value)}
+          />
+        </Field>
+        {error && <Banner tone="danger">{error}</Banner>}
+        <div className="payroll-calculator__actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Cancel historical confirmation
+          </button>
+          <button className="btn btn--accent" disabled={busy}>
+            {busy ? "Recording…" : "Confirm historical RP attribution"}
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -189,182 +193,188 @@ export function RemittancePlanForm({
       className="card payroll-calculator__panel"
       onSubmit={submit}
     >
-      <h3>{initial ? "Revise draft" : "Prepare remittance"}</h3>
-      {!preview ? (
-        <p>Loading actual payroll sources…</p>
-      ) : (
-        <>
-          <p>
-            Period {preview.periodStart}–{preview.periodEnd} · CRA account{" "}
-            <strong>{preview.payrollAccountNumber}</strong>
-          </p>
-          <p>
-            Actual CRA obligation {money(preview.amountDueCents)} · Already
-            recorded {money(preview.paidCents)} · Outstanding{" "}
-            {money(preview.outstandingCents)}
-          </p>
-          <p>
-            Due {preview.dueDate} · Suggested preparation lead time:{" "}
-            {preview.readiness.fields.leadBusinessDays} business days, earliest{" "}
-            {preview.earliestSuggestedDate}. Review the chosen provider’s cutoff
-            and actual CRA receipt date.
-          </p>
-          <div className="payroll-calculator__table-wrap">
-            <table className="table table--report">
-              <caption>
-                CRA source amounts from {preview.payRunIds.length} retained
-                payroll runs
-              </caption>
-              <tbody>
-                {Object.entries(
-                  preview.components as Record<string, number>,
-                ).map(([label, value]) => (
-                  <tr key={label}>
-                    <th scope="row">
-                      {label.replace(/Cents$/, " ").replace(/([A-Z])/g, " $1")}
-                    </th>
-                    <td>{money(value)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {preview.warnings.map((warning: string) => (
-            <p key={warning} role="status">
-              {warning}
-            </p>
-          ))}
-        </>
-      )}
-      <div className="payroll-calculator__form-grid">
-        <Field label="Remittance source bank" required>
-          <Select
-            value={bankAccountId}
-            onChange={setBank}
-            placeholder="Choose a CAD bank"
-            options={banks.rows
-              .filter((r) => r.currency === "CAD")
-              .map((r) => ({ value: r._id, label: `${r.name} · ${r.currency}` }))}
-          />
-        </Field>
-        {banks.hasMore && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={banks.loadMore}
-          >
-            Load more source banks
-          </button>
-        )}
-        <PayrollMoneyField
-          label="Planned remittance amount (CAD)"
-          value={
-            amount ||
-            (!initial && preview ? amountInput(preview.outstandingCents) : "")
-          }
-          onChange={setAmount}
-        />
-        <Field label="Intended remittance date">
-          <input
-            className="input"
-            type="date"
-            required
-            value={date || preview?.dueDate || ""}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </Field>
-        <Field label="Manual payment channel">
-          <Select
-            value={channel}
-            onChange={setChannel}
-            options={REMITTANCE_CHANNELS.map((c) => ({
-              value: c,
-              label: REMITTANCE_CHANNEL_LABELS[c],
-            }))}
-          />
-        </Field>
-        <Field
-          label="Exact CRA payee / destination reference"
-          hint="Confirm the bank’s payroll payee for the assigned remitter category and the full 15-character RP account. Do not include bank credentials."
-        >
-          <input
-            className="input"
-            required
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-          />
-        </Field>
-        <Field label="Source-deductions liability for posting">
-          <Select
-            value={liability}
-            onChange={setLiability}
-            placeholder="No ledger posting configured"
-            clearable
-            clearLabel="No ledger posting configured"
-            options={liabilities.rows
-              .filter((r) => r.currency === "CAD")
-              .map((r) => ({ value: r._id, label: r.name }))}
-          />
-        </Field>
-        {liabilities.hasMore && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={liabilities.loadMore}
-          >
-            Load more liability accounts
-          </button>
-        )}
-        <Field label="Employer CPP / EI expense for cash basis">
-          <Select
-            value={expense}
-            onChange={setExpense}
-            placeholder="No cash recognition configured"
-            clearable
-            clearLabel="No cash recognition configured"
-            options={expenses.rows
-              .filter((r) => r.currency === "CAD")
-              .map((r) => ({ value: r._id, label: r.name }))}
-          />
-        </Field>
-        {expenses.hasMore && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={expenses.loadMore}
-          >
-            Load more expense accounts
-          </button>
-        )}
-        <Field label="Remittance notes">
-          <textarea
-            className="input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </Field>
+      <div className="card__head">
+        <h3 className="card__title">
+          {initial ? "Revise draft" : "Prepare remittance"}
+        </h3>
       </div>
-      {channel === "cra_myba_pad" && (
-        <p>
-          Set up PAD yourself in CRA My Business Account. CRA requires at least
-          five business days for first payment setup and changes;
-          representatives cannot schedule PAD for a represented business. This
-          plan does not create a PAD agreement.
-        </p>
-      )}
-      {error && <p role="alert">{error}</p>}
-      <div className="payroll-calculator__actions">
-        <button
-          type="button"
-          className="btn"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          Cancel preparation
-        </button>
-        <button className="btn btn--accent" disabled={busy || !preview}>
-          {busy ? "Saving…" : "Save remittance draft"}
-        </button>
+      <div className="card__body">
+        {!preview ? (
+          <SkeletonRows rows={4} columns={2} />
+        ) : (
+          <>
+            <p>
+              Period {preview.periodStart}–{preview.periodEnd} · CRA account{" "}
+              <strong>{preview.payrollAccountNumber}</strong>
+            </p>
+            <p>
+              Actual CRA obligation {money(preview.amountDueCents)} · Already
+              recorded {money(preview.paidCents)} · Outstanding{" "}
+              {money(preview.outstandingCents)}
+            </p>
+            <p>
+              Due {preview.dueDate} · Suggested preparation lead time:{" "}
+              {preview.readiness.fields.leadBusinessDays} business days, earliest{" "}
+              {preview.earliestSuggestedDate}. Review the chosen provider’s cutoff
+              and actual CRA receipt date.
+            </p>
+            <div className="payroll-calculator__table-wrap">
+              <table className="table table--report">
+                <caption>
+                  CRA source amounts from {preview.payRunIds.length} retained
+                  payroll runs
+                </caption>
+                <tbody>
+                  {Object.entries(
+                    preview.components as Record<string, number>,
+                  ).map(([label, value]) => (
+                    <tr key={label}>
+                      <th scope="row">
+                        {label.replace(/Cents$/, " ").replace(/([A-Z])/g, " $1")}
+                      </th>
+                      <td>{money(value)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {preview.warnings.map((warning: string) => (
+              <Banner key={warning} tone="warn">
+                {warning}
+              </Banner>
+            ))}
+          </>
+        )}
+        <div className="payroll-calculator__form-grid">
+          <Field label="Remittance source bank" required>
+            <Select
+              value={bankAccountId}
+              onChange={setBank}
+              placeholder="Choose a CAD bank"
+              options={banks.rows
+                .filter((r) => r.currency === "CAD")
+                .map((r) => ({ value: r._id, label: `${r.name} · ${r.currency}` }))}
+            />
+          </Field>
+          {banks.hasMore && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={banks.loadMore}
+            >
+              Load more source banks
+            </button>
+          )}
+          <PayrollMoneyField
+            label="Planned remittance amount (CAD)"
+            value={
+              amount ||
+              (!initial && preview ? amountInput(preview.outstandingCents) : "")
+            }
+            onChange={setAmount}
+          />
+          <Field label="Intended remittance date">
+            <input
+              className="input"
+              type="date"
+              required
+              value={date || preview?.dueDate || ""}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </Field>
+          <Field label="Manual payment channel">
+            <Select
+              value={channel}
+              onChange={setChannel}
+              options={REMITTANCE_CHANNELS.map((c) => ({
+                value: c,
+                label: REMITTANCE_CHANNEL_LABELS[c],
+              }))}
+            />
+          </Field>
+          <Field
+            label="Exact CRA payee / destination reference"
+            hint="Confirm the bank’s payroll payee for the assigned remitter category and the full 15-character RP account. Do not include bank credentials."
+          >
+            <input
+              className="input"
+              required
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+            />
+          </Field>
+          <Field label="Source-deductions liability for posting">
+            <Select
+              value={liability}
+              onChange={setLiability}
+              placeholder="No ledger posting configured"
+              clearable
+              clearLabel="No ledger posting configured"
+              options={liabilities.rows
+                .filter((r) => r.currency === "CAD")
+                .map((r) => ({ value: r._id, label: r.name }))}
+            />
+          </Field>
+          {liabilities.hasMore && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={liabilities.loadMore}
+            >
+              Load more liability accounts
+            </button>
+          )}
+          <Field label="Employer CPP / EI expense for cash basis">
+            <Select
+              value={expense}
+              onChange={setExpense}
+              placeholder="No cash recognition configured"
+              clearable
+              clearLabel="No cash recognition configured"
+              options={expenses.rows
+                .filter((r) => r.currency === "CAD")
+                .map((r) => ({ value: r._id, label: r.name }))}
+            />
+          </Field>
+          {expenses.hasMore && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={expenses.loadMore}
+            >
+              Load more expense accounts
+            </button>
+          )}
+          <Field label="Remittance notes">
+            <textarea
+              className="input"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </Field>
+        </div>
+        {channel === "cra_myba_pad" && (
+          <p>
+            Set up PAD yourself in CRA My Business Account. CRA requires at least
+            five business days for first payment setup and changes;
+            representatives cannot schedule PAD for a represented business. This
+            plan does not create a PAD agreement.
+          </p>
+        )}
+        {error && <Banner tone="danger">{error}</Banner>}
+        <div className="payroll-calculator__actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Cancel preparation
+          </button>
+          <button className="btn btn--accent" disabled={busy || !preview}>
+            {busy ? "Saving…" : "Save remittance draft"}
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -413,132 +423,136 @@ export function RemittanceReadinessForm({
       className="card payroll-calculator__panel"
       onSubmit={submit}
     >
-      <h3>Automation preparation</h3>
-      <p>
-        Retain reviewed setup and service requirements. A production payment
-        connector is not installed; saving these checks cannot debit a bank
-        account.
-      </p>
-      {(
-        [
-          ["rpRegistrationConfirmed", "Registered CRA RP account verified"],
-          [
-            "remitterCategoryConfirmed",
-            "CRA remitter category and effective schedule verified",
-          ],
-          ["mandateConfirmed", "Actual bank / service mandate retained"],
-          [
-            "statusWebhookConfirmed",
-            "Authenticated status callbacks or polling reviewed",
-          ],
-        ] as const
-      ).map(([key, label]) => (
-        <label key={key}>
-          <input
-            type="checkbox"
-            checked={fields[key]}
-            onChange={(e) => update(key, e.target.checked)}
-          />
-          {label}
-        </label>
-      ))}
-      <div className="payroll-calculator__form-grid">
+      <div className="card__head">
+        <h3 className="card__title">Automation preparation</h3>
+      </div>
+      <div className="card__body">
+        <p className="muted">
+          Retain reviewed setup and service requirements. A production payment
+          connector is not installed; saving these checks cannot debit a bank
+          account.
+        </p>
         {(
           [
-            ["mandateReference", "Mandate reference"],
-            ["providerName", "Bank or approved service"],
+            ["rpRegistrationConfirmed", "Registered CRA RP account verified"],
             [
-              "providerContractReference",
-              "Supported service contract / CRA EDI onboarding reference",
+              "remitterCategoryConfirmed",
+              "CRA remitter category and effective schedule verified",
             ],
-            ["approvalPolicyReference", "Approval and release policy"],
-            ["retryPolicyReference", "Idempotent retry / rejection policy"],
-            ["timezone", "Payment timezone"],
+            ["mandateConfirmed", "Actual bank / service mandate retained"],
+            [
+              "statusWebhookConfirmed",
+              "Authenticated status callbacks or polling reviewed",
+            ],
           ] as const
         ).map(([key, label]) => (
-          <Field key={key} label={label}>
+          <label key={key}>
             <input
-              className="input"
-              value={fields[key] ?? ""}
-              onChange={(e) => update(key, e.target.value)}
+              type="checkbox"
+              checked={fields[key]}
+              onChange={(e) => update(key, e.target.checked)}
+            />
+            {label}
+          </label>
+        ))}
+        <div className="payroll-calculator__form-grid">
+          {(
+            [
+              ["mandateReference", "Mandate reference"],
+              ["providerName", "Bank or approved service"],
+              [
+                "providerContractReference",
+                "Supported service contract / CRA EDI onboarding reference",
+              ],
+              ["approvalPolicyReference", "Approval and release policy"],
+              ["retryPolicyReference", "Idempotent retry / rejection policy"],
+              ["timezone", "Payment timezone"],
+            ] as const
+          ).map(([key, label]) => (
+            <Field key={key} label={label}>
+              <input
+                className="input"
+                value={fields[key] ?? ""}
+                onChange={(e) => update(key, e.target.value)}
+              />
+            </Field>
+          ))}
+          <Field
+            label="Secure credential reference"
+            hint="Store credentials in the access vault. Only this owned reference is retained here."
+          >
+            <Select
+              disabled={!canReadSettings}
+              value={fields.credentialVaultItemId ?? ""}
+              onChange={(value) =>
+                update("credentialVaultItemId", value || undefined)
+              }
+              placeholder="Not provisioned"
+              clearable
+              clearLabel="Not provisioned"
+              options={[
+                ...(!canReadSettings && fields.credentialVaultItemId
+                  ? [
+                      {
+                        value: fields.credentialVaultItemId,
+                        label: "Existing secure reference retained",
+                      },
+                    ]
+                  : []),
+                ...credentials.rows
+                  .filter(
+                    (r) =>
+                      r.status === "Active" && r.storageMode !== "not_stored",
+                  )
+                  .map((r) => ({ value: r._id, label: `${r.name} · ${r.service}` })),
+              ]}
             />
           </Field>
-        ))}
-        <Field
-          label="Secure credential reference"
-          hint="Store credentials in the access vault. Only this owned reference is retained here."
-        >
-          <Select
-            disabled={!canReadSettings}
-            value={fields.credentialVaultItemId ?? ""}
-            onChange={(value) =>
-              update("credentialVaultItemId", value || undefined)
-            }
-            placeholder="Not provisioned"
-            clearable
-            clearLabel="Not provisioned"
-            options={[
-              ...(!canReadSettings && fields.credentialVaultItemId
-                ? [
-                    {
-                      value: fields.credentialVaultItemId,
-                      label: "Existing secure reference retained",
-                    },
-                  ]
-                : []),
-              ...credentials.rows
-                .filter(
-                  (r) =>
-                    r.status === "Active" && r.storageMode !== "not_stored",
-                )
-                .map((r) => ({ value: r._id, label: `${r.name} · ${r.service}` })),
-            ]}
-          />
-        </Field>
-        {!canReadSettings && (
-          <p>
-            Settings read permission is required to view or change secure
-            credential references. The existing reference is retained.
-          </p>
-        )}
-        {credentials.hasMore && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={credentials.loadMore}
-          >
-            Load more secure references
+          {!canReadSettings && (
+            <p>
+              Settings read permission is required to view or change secure
+              credential references. The existing reference is retained.
+            </p>
+          )}
+          {credentials.hasMore && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={credentials.loadMore}
+            >
+              Load more secure references
+            </button>
+          )}
+          <Field label="Processing lead business days">
+            <input
+              className="input"
+              type="number"
+              min="0"
+              max="30"
+              value={fields.leadBusinessDays}
+              onChange={(e) => update("leadBusinessDays", Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Provider cutoff (local time)">
+            <input
+              className="input"
+              type="time"
+              value={fields.cutoffLocalTime ?? ""}
+              onChange={(e) =>
+                update("cutoffLocalTime", e.target.value || undefined)
+              }
+            />
+          </Field>
+        </div>
+        {error && <Banner tone="danger">{error}</Banner>}
+        <div className="payroll-calculator__actions">
+          <button className="btn" type="button" disabled={busy} onClick={onClose}>
+            Cancel readiness
           </button>
-        )}
-        <Field label="Processing lead business days">
-          <input
-            className="input"
-            type="number"
-            min="0"
-            max="30"
-            value={fields.leadBusinessDays}
-            onChange={(e) => update("leadBusinessDays", Number(e.target.value))}
-          />
-        </Field>
-        <Field label="Provider cutoff (local time)">
-          <input
-            className="input"
-            type="time"
-            value={fields.cutoffLocalTime ?? ""}
-            onChange={(e) =>
-              update("cutoffLocalTime", e.target.value || undefined)
-            }
-          />
-        </Field>
-      </div>
-      {error && <p role="alert">{error}</p>}
-      <div className="payroll-calculator__actions">
-        <button className="btn" type="button" disabled={busy} onClick={onClose}>
-          Cancel readiness
-        </button>
-        <button className="btn btn--accent" disabled={busy}>
-          {busy ? "Saving…" : "Save readiness review"}
-        </button>
+          <button className="btn btn--accent" disabled={busy}>
+            {busy ? "Saving…" : "Save readiness review"}
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -599,11 +613,11 @@ export function RemittanceSettlementForm({
   return (
     <form
       aria-label="Reconcile actual CRA payment"
-      className="card payroll-calculator__panel"
+      className="payroll-calculator__subsection"
       onSubmit={submit}
     >
-      <h3>Reconcile actual payment</h3>
-      <p>
+      <h3 className="payroll-calculator__subheading">Reconcile actual payment</h3>
+      <p className="muted">
         Record a settled outflow to CRA account{" "}
         <strong>{plan.source.payrollAccountNumber}</strong>, or an actual CRA
         payment receipt. A submission or scheduled PAD is not settlement. Bank
@@ -703,7 +717,7 @@ export function RemittanceSettlementForm({
         supported bank backfill with a dated mirror; it does not create a second
         cash outflow.
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <Banner tone="danger">{error}</Banner>}
       <div className="payroll-calculator__actions">
         <button
           type="button"

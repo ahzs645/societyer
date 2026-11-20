@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { Field } from "../../components/ui";
+import { Banner, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { type PayrollDeductionYtd } from "../../../shared/payrollDeductions";
 import type {
@@ -220,20 +220,21 @@ export function SourceForm({
       aria-label={title}
       onSubmit={submit}
     >
-      <h2>{title}</h2>
-      {error && (
-        <p role="alert" className="payroll-calculator__blockers">
-          {error}
-        </p>
-      )}
-      <fieldset disabled={busy} className="payroll-calculator__fieldset">
-        {children}
-      </fieldset>
-      <PayrollFormActions
-        busy={busy}
-        onCancel={onCancel}
-        label={`Save ${title.toLowerCase()}`}
-      />
+      <div className="card__head">
+        <h2 className="card__title">{title}</h2>
+      </div>
+      <div className="card__body">
+        {error && <Banner tone="danger">{error}</Banner>}
+        {/* Disables every field while saving; the card body is the frame. */}
+        <fieldset disabled={busy} className="payroll-calculator__form-fieldset">
+          {children}
+        </fieldset>
+        <PayrollFormActions
+          busy={busy}
+          onCancel={onCancel}
+          label={`Save ${title.toLowerCase()}`}
+        />
+      </div>
     </form>
   );
 }

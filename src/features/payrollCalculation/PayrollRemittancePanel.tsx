@@ -4,7 +4,13 @@ import { FileText, Landmark } from "lucide-react";
 import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { Field } from "../../components/ui";
+import {
+  Badge,
+  Banner,
+  Field,
+  SkeletonRows,
+  type ToneVariant,
+} from "../../components/ui";
 import { usePermissions } from "../../hooks/usePermissions";
 import { triggerBlobDownload } from "../../lib/zip";
 import {
@@ -81,6 +87,14 @@ const OBLIGATIONS_TABLE = staticRecordTable({
   ],
 });
 
+const REMITTANCE_STATUS_TONES: Record<RemittancePlanStatus, ToneVariant> = {
+  draft: "neutral",
+  approved: "info",
+  exported: "info",
+  manual_submitted: "warn",
+  settled: "success",
+  rejected: "danger",
+};
 const PLAN_STATUS_LABELS: Record<RemittancePlanStatus, string> = {
   draft: "Draft",
   approved: "Approved",
@@ -192,49 +206,53 @@ function RemittanceList({
   const label = collection === "obligations" ? "CRA obligations" : "Remittance plans";
   return (
     <section className="card payroll-calculator__panel" aria-label={label}>
-      <h3>
-        {collection === "obligations"
-          ? "CRA obligations"
-          : "Saved remittance plans"}
-      </h3>
-      {!data ? (
-        <p>Loading {collection}…</p>
-      ) : (
-        <>
-          {collection === "obligations" ? (
-            <ObligationsTable
-              rows={data.rows as ObligationRow[]}
-              today={data.today}
-              canWrite={canWrite}
-              onPrepare={onPrepare}
-              onConfirmLegacy={onConfirmLegacy}
-            />
-          ) : (
-            <PlansTable rows={data.rows as PlanRow[]} onSelect={onSelect} />
-          )}
-          <div className="payroll-calculator__actions">
-            <button
-              type="button"
-              className="btn btn--sm"
-              disabled={cursors.length === 1}
-              onClick={() => setCursors((old) => old.slice(0, -1))}
-            >
-              Previous {collection}
-            </button>
-            <span>
-              Page {cursors.length} · {data.rows.length} visible
-            </span>
-            <button
-              type="button"
-              className="btn btn--sm"
-              disabled={data.isDone}
-              onClick={() => setCursors((old) => [...old, data.continueCursor])}
-            >
-              Next {collection}
-            </button>
-          </div>
-        </>
-      )}
+      <div className="card__head">
+        <h3 className="card__title">
+          {collection === "obligations"
+            ? "CRA obligations"
+            : "Saved remittance plans"}
+        </h3>
+      </div>
+      <div className="card__body">
+        {!data ? (
+          <SkeletonRows rows={4} columns={4} />
+        ) : (
+          <>
+            {collection === "obligations" ? (
+              <ObligationsTable
+                rows={data.rows as ObligationRow[]}
+                today={data.today}
+                canWrite={canWrite}
+                onPrepare={onPrepare}
+                onConfirmLegacy={onConfirmLegacy}
+              />
+            ) : (
+              <PlansTable rows={data.rows as PlanRow[]} onSelect={onSelect} />
+            )}
+            <div className="payroll-calculator__actions">
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={cursors.length === 1}
+                onClick={() => setCursors((old) => old.slice(0, -1))}
+              >
+                Previous {collection}
+              </button>
+              <span>
+                Page {cursors.length} · {data.rows.length} visible
+              </span>
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={data.isDone}
+                onClick={() => setCursors((old) => [...old, data.continueCursor])}
+              >
+                Next {collection}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -409,7 +427,7 @@ function RemittanceReview({
       setBusy(false);
     }
   }
-  if (!data) return <p>Loading retained remittance plan…</p>;
+  if (!data) return <SkeletonRows rows={6} columns={2} />;
   const plan = data.plan as RemittancePlan,
     settled = data.settlements.reduce(
       (sum: number, s: any) => sum + s.amountCents,
@@ -421,196 +439,201 @@ function RemittanceReview({
       className="card payroll-calculator__panel"
       aria-label="Remittance plan review"
     >
-      <div className="payroll-calculator__heading">
-        <div>
-          <h3>Review CRA remittance</h3>
-          <p>
+      <div className="card__head">
+        <div className="payroll-calculator__head-text">
+          <h3 className="card__title">Review CRA remittance</h3>
+          <p className="card__subtitle">
             {plan.source.periodStart}–{plan.source.periodEnd} · Version{" "}
-            {plan.version} · <strong>{plan.status.replaceAll("_", " ")}</strong>
+            {plan.version}
           </p>
         </div>
+        <Badge tone={REMITTANCE_STATUS_TONES[plan.status]}>
+          {plan.status.replaceAll("_", " ")}
+        </Badge>
         <button className="btn btn--sm" onClick={onClose}>
           Close plan
         </button>
       </div>
-      <dl>
-        <dt>CRA payroll account</dt>
-        <dd>{plan.source.payrollAccountNumber}</dd>
-        <dt>Plan amount</dt>
-        <dd>{money(plan.amountCents)}</dd>
-        <dt>Recorded actual settlements</dt>
-        <dd>{money(settled)}</dd>
-        <dt>
-          {plan.status === "rejected"
-            ? "Released remaining commitment"
-            : "Plan remaining"}
-        </dt>
-        <dd>{money(plan.amountCents - settled)}</dd>
-        <dt>Due / intended payment</dt>
-        <dd>
-          {plan.source.dueDate} / {plan.scheduledDate}
-        </dd>
-        <dt>Payment channel</dt>
-        <dd>{REMITTANCE_CHANNEL_LABELS[plan.channel]}</dd>
-        <dt>Exact CRA destination</dt>
-        <dd>{plan.destinationReference}</dd>
-        <dt>Source bank</dt>
-        <dd>
-          {data.bank.name} · {data.bank.currency}
-        </dd>
-        {data.liabilityAccountName && (
-          <>
-            <dt>Reviewed source-deductions liability</dt>
-            <dd>{data.liabilityAccountName}</dd>
-          </>
-        )}
-        {data.employerExpenseAccountName && (
-          <>
-            <dt>Reviewed employer CPP / EI expense</dt>
-            <dd>{data.employerExpenseAccountName}</dd>
-          </>
-        )}
-        <dt>Approval</dt>
-        <dd>{plan.approvedAtISO ?? "Awaiting review"}</dd>
-      </dl>
-      <p>
-        Prepared instructions and external submission records do not establish
-        withdrawal or CRA receipt. Only actual reconciled settlements reduce the
-        obligation.
-      </p>
-      {plan.notes && <p>{plan.notes}</p>}
-      <div className="payroll-calculator__actions">
-        {plan.status === "draft" && (
-          <>
-            <button
-              className="btn"
-              disabled={!canWrite || busy}
-              onClick={() => onEdit(plan)}
-            >
-              Revise remittance draft
-            </button>
-            <button
-              className="btn btn--accent"
-              disabled={!canWrite || busy}
-              onClick={() => void action("approve")}
-            >
-              Approve remittance plan
-            </button>
-          </>
-        )}
+      <div className="card__body">
+        <dl>
+          <dt>CRA payroll account</dt>
+          <dd>{plan.source.payrollAccountNumber}</dd>
+          <dt>Plan amount</dt>
+          <dd>{money(plan.amountCents)}</dd>
+          <dt>Recorded actual settlements</dt>
+          <dd>{money(settled)}</dd>
+          <dt>
+            {plan.status === "rejected"
+              ? "Released remaining commitment"
+              : "Plan remaining"}
+          </dt>
+          <dd>{money(plan.amountCents - settled)}</dd>
+          <dt>Due / intended payment</dt>
+          <dd>
+            {plan.source.dueDate} / {plan.scheduledDate}
+          </dd>
+          <dt>Payment channel</dt>
+          <dd>{REMITTANCE_CHANNEL_LABELS[plan.channel]}</dd>
+          <dt>Exact CRA destination</dt>
+          <dd>{plan.destinationReference}</dd>
+          <dt>Source bank</dt>
+          <dd>
+            {data.bank.name} · {data.bank.currency}
+          </dd>
+          {data.liabilityAccountName && (
+            <>
+              <dt>Reviewed source-deductions liability</dt>
+              <dd>{data.liabilityAccountName}</dd>
+            </>
+          )}
+          {data.employerExpenseAccountName && (
+            <>
+              <dt>Reviewed employer CPP / EI expense</dt>
+              <dd>{data.employerExpenseAccountName}</dd>
+            </>
+          )}
+          <dt>Approval</dt>
+          <dd>{plan.approvedAtISO ?? "Awaiting review"}</dd>
+        </dl>
+        <p className="muted">
+          Prepared instructions and external submission records do not establish
+          withdrawal or CRA receipt. Only actual reconciled settlements reduce the
+          obligation.
+        </p>
+        {plan.notes && <p>{plan.notes}</p>}
+        <div className="payroll-calculator__actions">
+          {plan.status === "draft" && (
+            <>
+              <button
+                className="btn"
+                disabled={!canWrite || busy}
+                onClick={() => onEdit(plan)}
+              >
+                Revise remittance draft
+              </button>
+              <button
+                className="btn btn--accent"
+                disabled={!canWrite || busy}
+                onClick={() => void action("approve")}
+              >
+                Approve remittance plan
+              </button>
+            </>
+          )}
+          {active && (
+            <>
+              <button
+                className="btn"
+                disabled={!canWrite || !canExport || busy}
+                onClick={() => void action("export")}
+              >
+                Download prepared instructions
+              </button>
+              <button
+                className="btn btn--accent"
+                disabled={!canWrite || busy}
+                onClick={() => setSettling(true)}
+              >
+                Reconcile actual payment
+              </button>
+            </>
+          )}
+        </div>
         {active && (
           <>
-            <button
-              className="btn"
-              disabled={!canWrite || !canExport || busy}
-              onClick={() => void action("export")}
-            >
-              Download prepared instructions
-            </button>
-            <button
-              className="btn btn--accent"
-              disabled={!canWrite || busy}
-              onClick={() => setSettling(true)}
-            >
-              Reconcile actual payment
-            </button>
+            <Field label="External submission reference or rejection reason">
+              <input
+                className="input"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </Field>
+            <div className="payroll-calculator__actions">
+              <button
+                className="btn"
+                disabled={!canWrite || busy || !reference.trim()}
+                onClick={() => void action("submit")}
+              >
+                Record manual submission
+              </button>
+              <button
+                className="btn"
+                disabled={!canWrite || busy || !reference.trim()}
+                onClick={() => void action("reject")}
+              >
+                {settled
+                  ? "Cancel remaining plan"
+                  : "Reject / cancel unspent plan"}
+              </button>
+            </div>
           </>
         )}
-      </div>
-      {active && (
-        <>
-          <Field label="External submission reference or rejection reason">
-            <input
-              className="input"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-            />
-          </Field>
-          <div className="payroll-calculator__actions">
-            <button
-              className="btn"
-              disabled={!canWrite || busy || !reference.trim()}
-              onClick={() => void action("submit")}
-            >
-              Record manual submission
-            </button>
+        {plan.status === "draft" && (
+          <>
+            <Field label="Draft rejection reason">
+              <input
+                className="input"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </Field>
             <button
               className="btn"
               disabled={!canWrite || busy || !reference.trim()}
               onClick={() => void action("reject")}
             >
-              {settled
-                ? "Cancel remaining plan"
-                : "Reject / cancel unspent plan"}
+              Reject draft plan
             </button>
-          </div>
-        </>
-      )}
-      {plan.status === "draft" && (
-        <>
-          <Field label="Draft rejection reason">
-            <input
-              className="input"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-            />
-          </Field>
-          <button
-            className="btn"
-            disabled={!canWrite || busy || !reference.trim()}
-            onClick={() => void action("reject")}
-          >
-            Reject draft plan
-          </button>
-        </>
-      )}
-      {error && <p role="alert">{error}</p>}
-      {settling && canWrite && active && (
-        <RemittanceSettlementForm
-          key={`${id}:${plan.version}`}
-          societyId={societyId}
-          plan={plan}
-          onSaved={() => setSettling(false)}
-          onCancel={() => setSettling(false)}
-        />
-      )}
-      <h4>Retained actual payments</h4>
-      {data.settlements.length ? (
-        <ul>
-          {data.settlements.map((s: any) => (
-            <li key={s._id}>
-              {s.date} · {money(s.amountCents)} ·{" "}
-              {s.transactionId ? "Matched bank outflow" : "CRA payment receipt"}
-              {s.craConfirmationNumber
-                ? ` · CRA confirmation ${s.craConfirmationNumber}`
-                : " · CRA receipt date remains unconfirmed"}
-              <p>{s.evidence}</p>
-              <p>
-                {s.journalEntryIds.length
-                  ? "Ledger settlement retained"
-                  : "No ledger posting recorded"}
-              </p>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>No actual payments recorded for this plan.</p>
-      )}
-      <details>
-        <summary>Approval and activity history ({plan.history.length})</summary>
-        <ol>
-          {plan.history.map((event, index) => (
-            <li key={`${event.atISO}:${index}`}>
-              {event.action.replaceAll("_", " ")} · {event.atISO}
-              {event.reference && ` · ${event.reference}`}
-            </li>
-          ))}
-        </ol>
-        <p>
-          {plan.revisions.length} prior draft versions retained. Source
-          fingerprint: {plan.sourceFingerprint}
-        </p>
-      </details>
+          </>
+        )}
+        {error && <Banner tone="danger">{error}</Banner>}
+        {settling && canWrite && active && (
+          <RemittanceSettlementForm
+            key={`${id}:${plan.version}`}
+            societyId={societyId}
+            plan={plan}
+            onSaved={() => setSettling(false)}
+            onCancel={() => setSettling(false)}
+          />
+        )}
+        <h4 className="payroll-calculator__subheading">Retained actual payments</h4>
+        {data.settlements.length ? (
+          <ul>
+            {data.settlements.map((s: any) => (
+              <li key={s._id}>
+                {s.date} · {money(s.amountCents)} ·{" "}
+                {s.transactionId ? "Matched bank outflow" : "CRA payment receipt"}
+                {s.craConfirmationNumber
+                  ? ` · CRA confirmation ${s.craConfirmationNumber}`
+                  : " · CRA receipt date remains unconfirmed"}
+                <p>{s.evidence}</p>
+                <p>
+                  {s.journalEntryIds.length
+                    ? "Ledger settlement retained"
+                    : "No ledger posting recorded"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No actual payments recorded for this plan.</p>
+        )}
+        <details>
+          <summary>Approval and activity history ({plan.history.length})</summary>
+          <ol>
+            {plan.history.map((event, index) => (
+              <li key={`${event.atISO}:${index}`}>
+                {event.action.replaceAll("_", " ")} · {event.atISO}
+                {event.reference && ` · ${event.reference}`}
+              </li>
+            ))}
+          </ol>
+          <p>
+            {plan.revisions.length} prior draft versions retained. Source
+            fingerprint: {plan.sourceFingerprint}
+          </p>
+        </details>
+      </div>
     </section>
   );
 }

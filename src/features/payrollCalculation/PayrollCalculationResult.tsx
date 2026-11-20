@@ -181,132 +181,140 @@ export function PayrollCalculationResult({
           className="card payroll-calculator__panel"
           aria-label="Employee deductions"
         >
-          <h3>Employee deductions</h3>
-          <dl className="payroll-calculator__amounts">
-            {[
-              ["CPP", totals.cppEmployeeCents],
-              ["CPP2", totals.cpp2EmployeeCents],
-              ["EI", totals.eiEmployeeCents],
-              ["Combined income tax", totals.incomeTaxCents],
-              ["Other deductions", totals.otherDeductionsCents],
-            ].map(([label, amount]) => (
-              <div key={String(label)}>
-                <dt>{label}</dt>
+          <div className="card__head">
+            <h3 className="card__title">Employee deductions</h3>
+          </div>
+          <div className="card__body">
+            <dl className="payroll-calculator__amounts">
+              {[
+                ["CPP", totals.cppEmployeeCents],
+                ["CPP2", totals.cpp2EmployeeCents],
+                ["EI", totals.eiEmployeeCents],
+                ["Combined income tax", totals.incomeTaxCents],
+                ["Other deductions", totals.otherDeductionsCents],
+              ].map(([label, amount]) => (
+                <div key={String(label)}>
+                  <dt>{label}</dt>
+                  <dd>
+                    <Money cents={Number(amount)} currency={statement.currency} />
+                  </dd>
+                </div>
+              ))}
+              <div>
+                <dt>Federal tax component</dt>
                 <dd>
-                  <Money cents={Number(amount)} currency={statement.currency} />
+                  {totals.federalTaxCents == null ? (
+                    "Unknown"
+                  ) : (
+                    <Money
+                      cents={totals.federalTaxCents}
+                      currency={statement.currency}
+                    />
+                  )}
                 </dd>
               </div>
-            ))}
-            <div>
-              <dt>Federal tax component</dt>
-              <dd>
-                {totals.federalTaxCents == null ? (
-                  "Unknown"
-                ) : (
-                  <Money
-                    cents={totals.federalTaxCents}
-                    currency={statement.currency}
-                  />
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Provincial tax component</dt>
-              <dd>
-                {totals.provincialTaxCents == null ? (
-                  "Unknown"
-                ) : (
-                  <Money
-                    cents={totals.provincialTaxCents}
-                    currency={statement.currency}
-                  />
-                )}
-              </dd>
-            </div>
-          </dl>
-          {statement.otherDeductions.length > 0 && (
-            <details>
-              <summary>Other deduction details</summary>
-              <dl className="payroll-calculator__amounts">
-                {statement.otherDeductions.map((deduction, index) => (
-                  <div key={index}>
-                    <dt>{deduction.label}</dt>
-                    <dd>
-                      <Money
-                        cents={deduction.amountCents}
-                        currency={statement.currency}
-                      />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </details>
-          )}
-          <p className="muted">
-            Known federal and provincial components are included in combined
-            income tax. Some CRA rules provide combined tax only; an unknown
-            split is retained as unknown.
-          </p>
-          <p>
-            Noncash taxable benefits:{" "}
-            <Money
-              cents={totals.nonCashTaxableCents}
-              currency={statement.currency}
-            />{" "}
-            · Nontaxable cash:{" "}
-            <Money
-              cents={totals.nonTaxableCashCents}
-              currency={statement.currency}
-            />
-            .
-          </p>
+              <div>
+                <dt>Provincial tax component</dt>
+                <dd>
+                  {totals.provincialTaxCents == null ? (
+                    "Unknown"
+                  ) : (
+                    <Money
+                      cents={totals.provincialTaxCents}
+                      currency={statement.currency}
+                    />
+                  )}
+                </dd>
+              </div>
+            </dl>
+            {statement.otherDeductions.length > 0 && (
+              <details>
+                <summary>Other deduction details</summary>
+                <dl className="payroll-calculator__amounts">
+                  {statement.otherDeductions.map((deduction, index) => (
+                    <div key={index}>
+                      <dt>{deduction.label}</dt>
+                      <dd>
+                        <Money
+                          cents={deduction.amountCents}
+                          currency={statement.currency}
+                        />
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            )}
+            <p className="muted">
+              Known federal and provincial components are included in combined
+              income tax. Some CRA rules provide combined tax only; an unknown
+              split is retained as unknown.
+            </p>
+            <p>
+              Noncash taxable benefits:{" "}
+              <Money
+                cents={totals.nonCashTaxableCents}
+                currency={statement.currency}
+              />{" "}
+              · Nontaxable cash:{" "}
+              <Money
+                cents={totals.nonTaxableCashCents}
+                currency={statement.currency}
+              />
+              .
+            </p>
+          </div>
         </section>
         <section
           className="card payroll-calculator__panel"
           aria-label="Employer cost breakdown"
         >
-          <h3>Employer cost breakdown</h3>
-          <dl className="payroll-calculator__amounts">
-            {(
-              [
-                ["Cash remuneration", totals.cashCents],
-                ["Employer CPP", totals.cppEmployerCents],
-                ["Employer CPP2", totals.cpp2EmployerCents],
-                ["Employer EI", totals.eiEmployerCents],
-              ] as const
-            ).map(([label, amount]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>
-                  <Money cents={amount} currency={statement.currency} />
-                </dd>
-              </div>
-            ))}
-            {statement.employerCosts.map((cost, index) => (
-              <div key={`${index}:${cost.label}`}>
-                <dt>{cost.label}</dt>
+          <div className="card__head">
+            <h3 className="card__title">Employer cost breakdown</h3>
+          </div>
+          <div className="card__body">
+            <dl className="payroll-calculator__amounts">
+              {(
+                [
+                  ["Cash remuneration", totals.cashCents],
+                  ["Employer CPP", totals.cppEmployerCents],
+                  ["Employer CPP2", totals.cpp2EmployerCents],
+                  ["Employer EI", totals.eiEmployerCents],
+                ] as const
+              ).map(([label, amount]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>
+                    <Money cents={amount} currency={statement.currency} />
+                  </dd>
+                </div>
+              ))}
+              {statement.employerCosts.map((cost, index) => (
+                <div key={`${index}:${cost.label}`}>
+                  <dt>{cost.label}</dt>
+                  <dd>
+                    <Money
+                      cents={cost.amountCents}
+                      currency={statement.currency}
+                    />
+                  </dd>
+                </div>
+              ))}
+              <div className="payroll-calculator__total">
+                <dt>Full employer cost</dt>
                 <dd>
                   <Money
-                    cents={cost.amountCents}
+                    cents={totals.employerCostCents}
                     currency={statement.currency}
                   />
                 </dd>
               </div>
-            ))}
-            <div className="payroll-calculator__total">
-              <dt>Full employer cost</dt>
-              <dd>
-                <Money
-                  cents={totals.employerCostCents}
-                  currency={statement.currency}
-                />
-              </dd>
-            </div>
-          </dl>
-          <p className="muted">
-            These are the server-calculated cost components. Vacation already
-            paid in earnings is not added again.
-          </p>
+            </dl>
+            <p className="muted">
+              These are the server-calculated cost components. Vacation already
+              paid in earnings is not added again.
+            </p>
+          </div>
         </section>
       </div>
       {statement.yearToDate && (
@@ -314,102 +322,112 @@ export function PayrollCalculationResult({
           className="card payroll-calculator__panel"
           aria-label="Legal employer year-to-date"
         >
-          <h3>Legal employer year-to-date · {statement.yearToDate.year}</h3>
-          <dl className="payroll-calculator__amounts">
-            {[
-              ["Employment income", statement.yearToDate.grossCents],
-              ["Pensionable earnings", statement.yearToDate.pensionableCents],
-              ["Insurable earnings", statement.yearToDate.insurableCents],
-              ["Employee CPP", statement.yearToDate.cppEmployeeCents],
-              ["Employee CPP2", statement.yearToDate.cpp2EmployeeCents],
-              ["Employee EI", statement.yearToDate.eiEmployeeCents],
-              ["Income tax", statement.yearToDate.incomeTaxCents],
-            ].map(([label, amount]) => (
-              <div key={String(label)}>
-                <dt>{label}</dt>
-                <dd>
-                  <Money cents={Number(amount)} currency={statement.currency} />
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <p>
-            Insurable hours:{" "}
-            {statement.yearToDate.insurableHours?.toLocaleString(undefined, {
-              maximumFractionDigits: 4,
-            }) ?? "Unknown"}
-            .
-          </p>
+          <div className="card__head">
+            <h3 className="card__title">
+              Legal employer year-to-date · {statement.yearToDate.year}
+            </h3>
+          </div>
+          <div className="card__body">
+            <dl className="payroll-calculator__amounts">
+              {[
+                ["Employment income", statement.yearToDate.grossCents],
+                ["Pensionable earnings", statement.yearToDate.pensionableCents],
+                ["Insurable earnings", statement.yearToDate.insurableCents],
+                ["Employee CPP", statement.yearToDate.cppEmployeeCents],
+                ["Employee CPP2", statement.yearToDate.cpp2EmployeeCents],
+                ["Employee EI", statement.yearToDate.eiEmployeeCents],
+                ["Income tax", statement.yearToDate.incomeTaxCents],
+              ].map(([label, amount]) => (
+                <div key={String(label)}>
+                  <dt>{label}</dt>
+                  <dd>
+                    <Money cents={Number(amount)} currency={statement.currency} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p>
+              Insurable hours:{" "}
+              {statement.yearToDate.insurableHours?.toLocaleString(undefined, {
+                maximumFractionDigits: 4,
+              }) ?? "Unknown"}
+              .
+            </p>
+          </div>
         </section>
       )}
       <section
         className="card payroll-calculator__panel"
         aria-label="Rules and calculation explanations"
       >
-        <h3>Rules and calculation explanations</h3>
-        <p>
-          {statement.rules.edition} · {statement.rules.method}. Earnings use
-          work dates; deduction rules use the payment date.
-        </p>
-        <ol>
-          {statement.rules.explanations.map((explanation, index) => (
-            <li key={index}>{explanation}</li>
-          ))}
-        </ol>
-        <h4>Source references</h4>
-        <ul>
-          {statement.rules.sources.map((source, index) => (
-            <li key={index}>
-              {/^https:\/\//.test(source) ? (
-                <a href={source} target="_blank" rel="noopener noreferrer">
-                  {source}
-                </a>
-              ) : (
-                source
+        <div className="card__head">
+          <h3 className="card__title">Rules and calculation explanations</h3>
+        </div>
+        <div className="card__body">
+          <p>
+            {statement.rules.edition} · {statement.rules.method}. Earnings use
+            work dates; deduction rules use the payment date.
+          </p>
+          <ol>
+            {statement.rules.explanations.map((explanation, index) => (
+              <li key={index}>{explanation}</li>
+            ))}
+          </ol>
+          <h4 className="payroll-calculator__subheading">Source references</h4>
+          <ul>
+            {statement.rules.sources.map((source, index) => (
+              <li key={index}>
+                {/^https:\/\//.test(source) ? (
+                  <a href={source} target="_blank" rel="noopener noreferrer">
+                    {source}
+                  </a>
+                ) : (
+                  source
+                )}
+              </li>
+            ))}
+          </ul>
+          <details>
+            <summary>Snapshot audit details</summary>
+            <dl>
+              <div>
+                <dt>Statement</dt>
+                <dd>
+                  {statement.statementNumber} · version{" "}
+                  {statement.calculationVersion}
+                </dd>
+              </div>
+              {statement.finalizedAtISO && (
+                <div>
+                  <dt>Finalized</dt>
+                  <dd>{formatDateTime(statement.finalizedAtISO)}</dd>
+                </div>
               )}
-            </li>
-          ))}
-        </ul>
-        <details>
-          <summary>Snapshot audit details</summary>
-          <dl>
-            <div>
-              <dt>Statement</dt>
-              <dd>
-                {statement.statementNumber} · version{" "}
-                {statement.calculationVersion}
-              </dd>
-            </div>
-            {statement.finalizedAtISO && (
-              <div>
-                <dt>Finalized</dt>
-                <dd>{formatDateTime(statement.finalizedAtISO)}</dd>
-              </div>
-            )}
-            {statement.correctionOf && (
-              <div>
-                <dt>Corrects</dt>
-                <dd>{statement.correctionOf}</dd>
-              </div>
-            )}
-            {statement.rules.inputFingerprint && (
-              <div>
-                <dt>Input fingerprint</dt>
-                <dd className="payroll-calculator__fingerprint">
-                  {statement.rules.inputFingerprint}
-                </dd>
-              </div>
-            )}
-            {statement.rules.resultFingerprint && (
-              <div>
-                <dt>Result fingerprint</dt>
-                <dd className="payroll-calculator__fingerprint">
-                  {statement.rules.resultFingerprint}
-                </dd>
-              </div>
-            )}
-          </dl>
-        </details>
+              {statement.correctionOf && (
+                <div>
+                  <dt>Corrects</dt>
+                  <dd>{statement.correctionOf}</dd>
+                </div>
+              )}
+              {statement.rules.inputFingerprint && (
+                <div>
+                  <dt>Input fingerprint</dt>
+                  <dd className="payroll-calculator__fingerprint">
+                    {statement.rules.inputFingerprint}
+                  </dd>
+                </div>
+              )}
+              {statement.rules.resultFingerprint && (
+                <div>
+                  <dt>Result fingerprint</dt>
+                  <dd className="payroll-calculator__fingerprint">
+                    {statement.rules.resultFingerprint}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </details>
+        </div>
       </section>
     </section>
   );

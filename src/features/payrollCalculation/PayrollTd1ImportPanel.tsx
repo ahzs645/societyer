@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { Field } from "../../components/ui";
+import { Banner, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { Money } from "../../components/Money";
 import { usePermissions } from "../../hooks/usePermissions";
@@ -348,104 +348,100 @@ function Td1ReviewWorkflow({
       className="card payroll-calculator__panel"
       onSubmit={submit}
     >
-      <h3>Review and apply declarations</h3>
-      <p>
-        Import either jurisdiction or both. A one-form import preserves the
-        other jurisdiction’s reviewed record. Retain original signed forms
-        through your authorized records process; no SIN, address, signature
-        image, raw extracted text or file is saved in these payroll records.
-      </p>
-      <div className="payroll-calculator__form-grid">
-        <Field label="Applicable withholding year">
-          <input
-            className="input"
-            type="number"
-            min="2024"
-            max="2100"
-            value={year}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              if (Number.isInteger(value) && value >= 2024 && value <= 2100) {
-                cancel("federal");
-                cancel("BC");
-                setYear(value);
-                setDrafts({
-                  federal: blankTd1Review("federal", value),
-                  BC: blankTd1Review("BC", value),
-                });
-              }
-            }}
-          />
-        </Field>
-        <Field label="TD1 received on">
-          <input
-            className="input"
-            type="date"
-            required
-            max={today}
-            value={receivedOn}
-            onChange={(event) => setReceivedOn(event.target.value)}
-          />
-        </Field>
-        <Field
-          label="TD1 effective from"
-          hint="Applies to payroll payment dates on or after receipt; it does not split an earnings profile."
-        >
-          <input
-            className="input"
-            type="date"
-            required
-            min={receivedOn}
-            value={effectiveFrom}
-            onChange={(event) => setEffectiveFrom(event.target.value)}
-          />
-        </Field>
+      <div className="card__head">
+        <h3 className="card__title">Review and apply declarations</h3>
       </div>
-      {(["federal", "BC"] as const).map((form) => (
-        <PayrollTd1FormReview
-          key={form}
-          draft={drafts[form]}
-          year={year}
-          onChange={(change) => {
-            if (change.mode) {
-              delete files.current[form];
-            }
-            if (change.enabled === false) cancel(form);
-            patch(form, change);
-          }}
-          onFile={(file) => void parse(form, file)}
-          onCancel={() => cancel(form)}
-          onOcr={() => {
-            const file = files.current[form];
-            if (file) void parse(form, file, true);
-          }}
-          progress={jobs[form].progress}
-          busy={jobs[form].busy}
-          error={jobs[form].error}
-        />
-      ))}
-      <PayrollTd1Example forms={reviewed.forms} year={year} />
-      {reviewed.error && (
-        <p className="muted">Review still needed: {reviewed.error}</p>
-      )}
-      {error && (
-        <p role="alert" className="payroll-calculator__blockers">
-          {error}
+      <div className="card__body">
+        <p className="muted">
+          Import either jurisdiction or both. A one-form import preserves the
+          other jurisdiction’s reviewed record. Retain original signed forms
+          through your authorized records process; no SIN, address, signature
+          image, raw extracted text or file is saved in these payroll records.
         </p>
-      )}
-      {notice && (
-        <p role="status" className="payroll-calculator__notice">
-          {notice}
-        </p>
-      )}
-      <button
-        className="btn btn--accent"
-        disabled={!canWrite || saving || jobs.federal.busy || jobs.BC.busy}
-      >
-        {saving
-          ? "Applying reviewed declarations…"
-          : "Apply reviewed TD1 declarations"}
-      </button>
+        <div className="payroll-calculator__form-grid">
+          <Field label="Applicable withholding year">
+            <input
+              className="input"
+              type="number"
+              min="2024"
+              max="2100"
+              value={year}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (Number.isInteger(value) && value >= 2024 && value <= 2100) {
+                  cancel("federal");
+                  cancel("BC");
+                  setYear(value);
+                  setDrafts({
+                    federal: blankTd1Review("federal", value),
+                    BC: blankTd1Review("BC", value),
+                  });
+                }
+              }}
+            />
+          </Field>
+          <Field label="TD1 received on">
+            <input
+              className="input"
+              type="date"
+              required
+              max={today}
+              value={receivedOn}
+              onChange={(event) => setReceivedOn(event.target.value)}
+            />
+          </Field>
+          <Field
+            label="TD1 effective from"
+            hint="Applies to payroll payment dates on or after receipt; it does not split an earnings profile."
+          >
+            <input
+              className="input"
+              type="date"
+              required
+              min={receivedOn}
+              value={effectiveFrom}
+              onChange={(event) => setEffectiveFrom(event.target.value)}
+            />
+          </Field>
+        </div>
+        {(["federal", "BC"] as const).map((form) => (
+          <PayrollTd1FormReview
+            key={form}
+            draft={drafts[form]}
+            year={year}
+            onChange={(change) => {
+              if (change.mode) {
+                delete files.current[form];
+              }
+              if (change.enabled === false) cancel(form);
+              patch(form, change);
+            }}
+            onFile={(file) => void parse(form, file)}
+            onCancel={() => cancel(form)}
+            onOcr={() => {
+              const file = files.current[form];
+              if (file) void parse(form, file, true);
+            }}
+            progress={jobs[form].progress}
+            busy={jobs[form].busy}
+            error={jobs[form].error}
+          />
+        ))}
+        <PayrollTd1Example forms={reviewed.forms} year={year} />
+        {reviewed.error && (
+          <p className="muted">Review still needed: {reviewed.error}</p>
+        )}
+        {error && <Banner tone="danger">{error}</Banner>}
+        {notice && <Banner tone="success">{notice}</Banner>}
+        <button
+          className="btn btn--accent"
+          disabled={!canWrite || saving || jobs.federal.busy || jobs.BC.busy}
+        >
+          {saving
+            ? "Applying reviewed declarations…"
+            : "Apply reviewed TD1 declarations"}
+        </button>
+      </div>
     </form>
   );
 }

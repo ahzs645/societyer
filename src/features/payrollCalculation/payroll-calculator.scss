@@ -31,10 +31,58 @@
   &__heading p {
     margin-block: 4px;
   }
+  // Panels are cards with a card__head and card__body; the few that are bare
+  // fieldsets or disclosures pad themselves.
   &__panel {
-    padding: 18px;
     margin-block: 16px;
     min-width: 0;
+  }
+  &__panel:not(.card) {
+    padding: 18px;
+  }
+  // A card head wraps its actions under the title on a narrow panel.
+  &__panel > .card__head {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  &__panel > .card__head > .card__title {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  // The body's padding already spaces its first and last lines from the edge.
+  &__panel > .card__body > :first-child {
+    margin-top: 0;
+  }
+  &__panel > .card__body > :last-child {
+    margin-bottom: 0;
+  }
+  // Title and subtitle stacked in a card head beside its status or actions.
+  &__head-text {
+    display: grid;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  // A sub-section inside a card body: a small heading over a divider, not a
+  // nested card.
+  &__subheading {
+    font-size: token(fs-sm);
+    font-weight: 600;
+    margin: 20px 0 8px;
+  }
+  &__subheading--divided {
+    border-top: 1px solid token(border);
+    padding-top: 16px;
+  }
+  &__subsection {
+    border-top: 1px solid token(border);
+    margin-top: 16px;
+    padding-top: 4px;
+    min-width: 0;
+  }
+  &__subsection > h3:first-child,
+  &__subsection > h4:first-child {
+    margin-top: 12px;
   }
   &__form-grid,
   &__columns {
@@ -103,6 +151,10 @@
   &__result > section {
     margin-top: 20px;
   }
+  &__pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   &__fingerprint {
     overflow-wrap: anywhere;
     font-family: token(font-mono);
@@ -123,6 +175,12 @@
     border-radius: 8px;
     margin: 0;
     padding: 14px;
+    min-width: 0;
+  }
+  &__form-fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
     min-width: 0;
   }
   &__fieldset legend {
@@ -250,7 +308,7 @@
         > :nth-child(n + 5) { grid-column: 1 / -1; }
       }
     }
-    &__panel {
+    &__panel:not(.card) {
       padding: 12px;
     }
     &__amounts > div {

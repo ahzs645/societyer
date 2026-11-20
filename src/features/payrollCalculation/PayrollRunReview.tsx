@@ -313,19 +313,23 @@ export function PayrollResultReview({
               className="card payroll-calculator__panel"
               aria-label={`${employee.employeeName} calculation blockers`}
             >
-              <h2>{employee.employeeName}</h2>
-              <p>
-                Complete the required source assumptions before a calculated
-                statement is available.
-              </p>
-              <ul>
-                {employee.blockers.map((blocker, index) => (
-                  <li key={index}>{blocker}</li>
-                ))}
-                {employee.warnings.map((warning, index) => (
-                  <li key={`warning:${index}`}>{warning}</li>
-                ))}
-              </ul>
+              <div className="card__head">
+                <h2 className="card__title">{employee.employeeName}</h2>
+              </div>
+              <div className="card__body">
+                <p className="muted">
+                  Complete the required source assumptions before a calculated
+                  statement is available.
+                </p>
+                <ul>
+                  {employee.blockers.map((blocker, index) => (
+                    <li key={index}>{blocker}</li>
+                  ))}
+                  {employee.warnings.map((warning, index) => (
+                    <li key={`warning:${index}`}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
             </section>
           )}
           {employee.allocations && employee.allocations.length > 0 && (
@@ -333,38 +337,44 @@ export function PayrollResultReview({
               className="card payroll-calculator__panel"
               aria-label="Calculated employer cost allocations"
             >
-              <h3>Employer cost allocations · {employee.employeeName}</h3>
-              <div className="payroll-calculator__table-wrap">
-                <table className="table table--report">
-                  <thead>
-                    <tr>
-                      <th>Allocation</th>
-                      <th>Share</th>
-                      <th>Fund / program / grant</th>
-                      <th>Full cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employee.allocations.map((allocation, index) => (
-                      <tr key={index}>
-                        <th scope="row">{allocation.label}</th>
-                        <td>{(allocation.shareBps / 100).toFixed(2)}%</td>
-                        <td>
-                          {[
-                            allocation.fundRestrictionId,
-                            allocation.programCode,
-                            allocation.grantId,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ") || "Unrestricted"}
-                        </td>
-                        <td>
-                          <Money cents={allocation.totalCents} currency="CAD" />
-                        </td>
+              <div className="card__head">
+                <h3 className="card__title">
+                  Employer cost allocations · {employee.employeeName}
+                </h3>
+              </div>
+              <div className="card__body">
+                <div className="payroll-calculator__table-wrap">
+                  <table className="table table--report">
+                    <thead>
+                      <tr>
+                        <th>Allocation</th>
+                        <th>Share</th>
+                        <th>Fund / program / grant</th>
+                        <th>Full cost</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {employee.allocations.map((allocation, index) => (
+                        <tr key={index}>
+                          <th scope="row">{allocation.label}</th>
+                          <td>{(allocation.shareBps / 100).toFixed(2)}%</td>
+                          <td>
+                            {[
+                              allocation.fundRestrictionId,
+                              allocation.programCode,
+                              allocation.grantId,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "Unrestricted"}
+                          </td>
+                          <td>
+                            <Money cents={allocation.totalCents} currency="CAD" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
           )}
@@ -760,176 +770,186 @@ export function PayrollSavedReview({
         className="card payroll-calculator__panel"
         aria-label="Payroll approval and records"
       >
-        <h3>Approval and records</h3>
-        <p>
-          Review this concrete saved result before approval. Finalization
-          creates the payroll register record and optional accrual journal.
-          Payments and external filings are separate actions.
-        </p>
-        <div className="payroll-calculator__actions">
-          {mutable && (
-            <button
-              type="button"
-              className="btn btn--accent"
-              disabled={
-                !canWrite ||
-                busy ||
-                record.result.blockers.length > 0 ||
-                record.result.employees.some(
-                  (employee) => employee.blockers.length > 0,
-                )
-              }
-              onClick={() =>
-                void action(
-                  () =>
-                    approve({ societyId, id, expectedVersion: record.version }),
-                  "Calculation approved. Review the saved result before finalization.",
-                )
-              }
-            >
-              Approve calculation
-            </button>
-          )}
-          {approved && (
-            <>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={post}
-                  onChange={(e) => setPost(e.target.checked)}
-                  disabled={!canWrite || busy}
-                />{" "}
-                Post balanced accrual journal
-              </label>
+        <div className="card__head">
+          <h3 className="card__title">Approval and records</h3>
+        </div>
+        <div className="card__body">
+          <p className="muted">
+            Review this concrete saved result before approval. Finalization
+            creates the payroll register record and optional accrual journal.
+            Payments and external filings are separate actions.
+          </p>
+          <div className="payroll-calculator__actions">
+            {mutable && (
               <button
                 type="button"
                 className="btn btn--accent"
-                disabled={!canWrite || busy}
-                onClick={() =>
-                  void action(
-                    () =>
-                      finalize({
-                        societyId,
-                        id,
-                        idempotencyKey: `payroll-finalize:${id}:v${record.version}`,
-                        postToLedger: post,
-                      }),
-                    "Payroll finalized. No deposit or external filing was initiated.",
-                  )
-                }
-              >
-                Finalize calculation
-              </button>
-            </>
-          )}
-          {finalized && (
-            <>
-              <button
-                type="button"
-                className="btn"
                 disabled={
                   !canWrite ||
                   busy ||
-                  paidCents >= record.result.totals.netCents
+                  record.result.blockers.length > 0 ||
+                  record.result.employees.some(
+                    (employee) => employee.blockers.length > 0,
+                  )
                 }
-                onClick={() => setPayment(true)}
+                onClick={() =>
+                  void action(
+                    () =>
+                      approve({ societyId, id, expectedVersion: record.version }),
+                    "Calculation approved. Review the saved result before finalization.",
+                  )
+                }
               >
-                Link recorded bank payment
+                Approve calculation
               </button>
+            )}
+            {approved && (
+              <>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={post}
+                    onChange={(e) => setPost(e.target.checked)}
+                    disabled={!canWrite || busy}
+                  />{" "}
+                  Post balanced accrual journal
+                </label>
+                <button
+                  type="button"
+                  className="btn btn--accent"
+                  disabled={!canWrite || busy}
+                  onClick={() =>
+                    void action(
+                      () =>
+                        finalize({
+                          societyId,
+                          id,
+                          idempotencyKey: `payroll-finalize:${id}:v${record.version}`,
+                          postToLedger: post,
+                        }),
+                      "Payroll finalized. No deposit or external filing was initiated.",
+                    )
+                  }
+                >
+                  Finalize calculation
+                </button>
+              </>
+            )}
+            {finalized && (
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={
+                    !canWrite ||
+                    busy ||
+                    paidCents >= record.result.totals.netCents
+                  }
+                  onClick={() => setPayment(true)}
+                >
+                  Link recorded bank payment
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={!canWrite || busy}
+                  onClick={() => setReversing(true)}
+                >
+                  Reverse finalized calculation
+                </button>
+              </>
+            )}
+            {(finalized || record.status === "reversed") && (
               <button
                 type="button"
                 className="btn"
                 disabled={!canWrite || busy}
-                onClick={() => setReversing(true)}
+                onClick={() =>
+                  onReplacement({
+                    ...record.input,
+                    runType: "correction",
+                    correctionOfId: record._id,
+                  })
+                }
               >
-                Reverse finalized calculation
+                Create correction draft
               </button>
-            </>
+            )}
+          </div>
+          {record.payRunId && (
+            <p>
+              Recorded pay run: {record.payRunId} ·{" "}
+              <Link to={payRunHref(record.payRunId)}>Open in payroll register</Link>
+            </p>
           )}
-          {(finalized || record.status === "reversed") && (
-            <button
-              type="button"
-              className="btn"
-              disabled={!canWrite || busy}
-              onClick={() =>
-                onReplacement({
-                  ...record.input,
-                  runType: "correction",
-                  correctionOfId: record._id,
-                })
-              }
-            >
-              Create correction draft
-            </button>
-          )}
+          {record.journalEntryIds?.length ? (
+            <details>
+              <summary>Retained journal references</summary>
+              <ul>
+                {record.journalEntryIds.map((entry) => (
+                  <li key={entry}>{entry}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </div>
-        {record.payRunId && (
-          <p>
-            Recorded pay run: {record.payRunId} ·{" "}
-            <Link to={payRunHref(record.payRunId)}>Open in payroll register</Link>
-          </p>
-        )}
-        {record.journalEntryIds?.length ? (
-          <details>
-            <summary>Retained journal references</summary>
-            <ul>
-              {record.journalEntryIds.map((entry) => (
-                <li key={entry}>{entry}</li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
       </section>
       {linkedPayments.length > 0 && (
         <section
           className="card payroll-calculator__panel"
           aria-label="Recorded payroll payments"
         >
-          <h3>Recorded bank payment provenance</h3>
-          <p>
-            Linked net pay <Money cents={paidCents} currency="CAD" /> · Unlinked
-            net pay{" "}
-            <Money
-              cents={Math.max(0, record.result.totals.netCents - paidCents)}
-              currency="CAD"
-            />
-            .
-          </p>
-          <RecordListTable<PaymentRecord>
-            variant="card"
-            table={PAYMENTS_TABLE}
-            tableId="payroll-run-payments"
-            label="Recorded bank payments"
-            icon={<Landmark size={14} />}
-            records={linkedPayments.map((payment) => paymentRecord(payment, record))}
-            onOpen={(payment) => navigate(transactionHref(payment.transactionId))}
-            renderCell={({ record: payment, field }) => {
-              if (field.name === "forName" && payment.employeeId && canReadEmployees)
-                return <Link to={employeeHref(payment.employeeId)}>{payment.forName}</Link>;
-              if (field.name === "amountCents") return <Money cents={payment.amountCents} currency="CAD" />;
-              if (field.name === "method")
-                return (
-                  <>
-                    {payment.method ? PAYMENT_METHODS[payment.method] : "Method unknown"}
-                    {payment.payee && <small>{payment.payee}</small>}
-                    {payment.destinationReference && <small>{payment.destinationReference}</small>}
-                  </>
-                );
-              if (field.name === "journalEntryId")
-                return payment.journalEntryId ? <Link to={`/app/financials/journal-entries?entry=${encodeURIComponent(payment.journalEntryId)}`}>{payment.journalEntryId}</Link> : <span className="muted">—</span>;
-              return undefined;
-            }}
-            renderPhoneCard={(payment, { open, selecting }) => (
-              <RecordTablePhoneCard
-                title={payment.forName}
-                meta={[<Money key="amount" cents={payment.amountCents} currency="CAD" />, formatDate(payment.date)]}
-                detail={[payment.reference, payment.method ? PAYMENT_METHODS[payment.method] : "Method unknown"]}
-                onOpen={open}
-                selecting={selecting}
+          <div className="card__head">
+            <h3 className="card__title">Recorded bank payment provenance</h3>
+            <a className="btn btn--sm" href="/app/financials">
+              Open financial transactions
+            </a>
+          </div>
+          <div className="card__body">
+            <p className="muted">
+              Linked net pay <Money cents={paidCents} currency="CAD" /> · Unlinked
+              net pay{" "}
+              <Money
+                cents={Math.max(0, record.result.totals.netCents - paidCents)}
+                currency="CAD"
               />
-            )}
-          />
-          <a href="/app/financials">Open financial transactions</a>
+              .
+            </p>
+            <RecordListTable<PaymentRecord>
+              variant="card"
+              table={PAYMENTS_TABLE}
+              tableId="payroll-run-payments"
+              label="Recorded bank payments"
+              icon={<Landmark size={14} />}
+              records={linkedPayments.map((payment) => paymentRecord(payment, record))}
+              onOpen={(payment) => navigate(transactionHref(payment.transactionId))}
+              renderCell={({ record: payment, field }) => {
+                if (field.name === "forName" && payment.employeeId && canReadEmployees)
+                  return <Link to={employeeHref(payment.employeeId)}>{payment.forName}</Link>;
+                if (field.name === "amountCents") return <Money cents={payment.amountCents} currency="CAD" />;
+                if (field.name === "method")
+                  return (
+                    <>
+                      {payment.method ? PAYMENT_METHODS[payment.method] : "Method unknown"}
+                      {payment.payee && <small>{payment.payee}</small>}
+                      {payment.destinationReference && <small>{payment.destinationReference}</small>}
+                    </>
+                  );
+                if (field.name === "journalEntryId")
+                  return payment.journalEntryId ? <Link to={`/app/financials/journal-entries?entry=${encodeURIComponent(payment.journalEntryId)}`}>{payment.journalEntryId}</Link> : <span className="muted">—</span>;
+                return undefined;
+              }}
+              renderPhoneCard={(payment, { open, selecting }) => (
+                <RecordTablePhoneCard
+                  title={payment.forName}
+                  meta={[<Money key="amount" cents={payment.amountCents} currency="CAD" />, formatDate(payment.date)]}
+                  detail={[payment.reference, payment.method ? PAYMENT_METHODS[payment.method] : "Method unknown"]}
+                  onOpen={open}
+                  selecting={selecting}
+                />
+              )}
+            />
+          </div>
         </section>
       )}
       {reversing && finalized && canWrite && (

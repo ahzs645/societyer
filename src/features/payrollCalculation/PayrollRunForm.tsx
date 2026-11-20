@@ -3,7 +3,7 @@ import {
   payrollLocalTimestamp,
   payrollTimestampFromLocal,
 } from "./payrollTime";
-import { Field } from "../../components/ui";
+import { Banner, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import type {
   CalculationInput,
@@ -224,350 +224,352 @@ export function PayrollRunForm({
       onSubmit={submit}
       onChange={onChanged}
     >
-      <h2>Calculate payroll</h2>
-      <p>
-        Payment date selects the deduction year and official rule edition. Work
-        dates select earnings rules. Preview does not record a payment.
-      </p>
-      {error && (
-        <p role="alert" className="payroll-calculator__blockers">
-          {error}
-        </p>
-      )}
-      <div className="payroll-calculator__form-grid payroll-calculator__form-grid--run">
-        <TextInput
-          label="Pay period start"
-          name="periodStart"
-          type="date"
-          value={value?.periodStart ?? `${today.slice(0, 7)}-01`}
-          required
-        />
-        <TextInput
-          label="Pay period end"
-          name="periodEnd"
-          type="date"
-          value={value?.periodEnd ?? today}
-          required
-        />
-        <Field label="Payment date">
-          <input
-            className="input"
-            name="payDate"
-            type="date"
-            required
-            value={payDate}
-            onChange={(event) => {
-              setPayDate(event.target.value);
-              setRegularPayDate("");
-            }}
-          />
-        </Field>
-        <Field label="Run type">
-          <Select<CalculationInput["runType"]>
-            value={runType}
-            onChange={(value) => {
-              setRunType(value);
-              setRegularPayDate("");
-              onChanged();
-            }}
-            options={(
-              ["regular", "bonus", "off_cycle", "final", "correction"] as const
-            ).map((kind) => ({ value: kind, label: kind.replaceAll("_", " ") }))}
-          />
-        </Field>
-        <Field label="CRA calculation method">
-          <Select<CalculationInput["method"]>
-            value={method}
-            onChange={(value) => {
-              setMethod(value);
-              onChanged();
-            }}
-            options={[
-              { value: "option1", label: "Option 1 — annualized current pay" },
-              { value: "option2", label: "Option 2 — cumulative average" },
-            ]}
-          />
-        </Field>
-        <SelectInput
-          label="Correction of calculation"
-          name="correctionOfId"
-          value={value?.correctionOfId}
-          optional
-          onChange={onChanged}
-          choices={[
-            ...records
-              .filter(
-                (row) =>
-                  row.status === "finalized" || row.status === "reversed",
-              )
-              .map((row) => ({
-                value: row._id,
-                label: `${row.payDate} · ${row.runType} · ${row._id}`,
-              })),
-            ...(value?.correctionOfId &&
-            !records.some((row) => row._id === value.correctionOfId)
-              ? [
-                  {
-                    value: value.correctionOfId,
-                    label: `Retained correction source · ${value.correctionOfId}`,
-                  },
-                ]
-              : []),
-          ]}
-        />
+      <div className="card__head">
+        <h2 className="card__title">Calculate payroll</h2>
       </div>
-      {calendars.loader}
-      <PayrollRuleEditionPicker
-        societyId={societyId}
-        payDate={payDate}
-        method={method}
-        value={ruleEditionId}
-        onChange={(id) => {
-          setRuleEditionId(id);
-          onChanged();
-        }}
-      />
-      {schedule.showSelector && (
-        <Field
-          label="Applicable regular pay date"
-          hint="Choose the scheduled cheque this early or off-cycle payment belongs to. The saved selection determines the CRA regular period number; it does not change the actual payment date."
-        >
-          <Select
-            disabled={!calendars.ready}
-            value={regularPayDate}
-            onChange={(value) => {
-              setRegularPayDate(value);
-              onChanged();
-            }}
-            placeholder={
-              schedule.required
-                ? "Choose the applicable scheduled pay date"
-                : "Automatic only when a prior regular period identifies it"
-            }
-            clearable={!schedule.required}
-            clearLabel="Automatic only when a prior regular period identifies it"
-            options={[
-              ...(regularPayDate && !payDates.includes(regularPayDate)
+      <div className="card__body">
+        <p className="muted">
+          Payment date selects the deduction year and official rule edition. Work
+          dates select earnings rules. Preview does not record a payment.
+        </p>
+        {error && <Banner tone="danger">{error}</Banner>}
+        <div className="payroll-calculator__form-grid payroll-calculator__form-grid--run">
+          <TextInput
+            label="Pay period start"
+            name="periodStart"
+            type="date"
+            value={value?.periodStart ?? `${today.slice(0, 7)}-01`}
+            required
+          />
+          <TextInput
+            label="Pay period end"
+            name="periodEnd"
+            type="date"
+            value={value?.periodEnd ?? today}
+            required
+          />
+          <Field label="Payment date">
+            <input
+              className="input"
+              name="payDate"
+              type="date"
+              required
+              value={payDate}
+              onChange={(event) => {
+                setPayDate(event.target.value);
+                setRegularPayDate("");
+              }}
+            />
+          </Field>
+          <Field label="Run type">
+            <Select<CalculationInput["runType"]>
+              value={runType}
+              onChange={(value) => {
+                setRunType(value);
+                setRegularPayDate("");
+                onChanged();
+              }}
+              options={(
+                ["regular", "bonus", "off_cycle", "final", "correction"] as const
+              ).map((kind) => ({ value: kind, label: kind.replaceAll("_", " ") }))}
+            />
+          </Field>
+          <Field label="CRA calculation method">
+            <Select<CalculationInput["method"]>
+              value={method}
+              onChange={(value) => {
+                setMethod(value);
+                onChanged();
+              }}
+              options={[
+                { value: "option1", label: "Option 1 — annualized current pay" },
+                { value: "option2", label: "Option 2 — cumulative average" },
+              ]}
+            />
+          </Field>
+          <SelectInput
+            label="Correction of calculation"
+            name="correctionOfId"
+            value={value?.correctionOfId}
+            optional
+            onChange={onChanged}
+            choices={[
+              ...records
+                .filter(
+                  (row) =>
+                    row.status === "finalized" || row.status === "reversed",
+                )
+                .map((row) => ({
+                  value: row._id,
+                  label: `${row.payDate} · ${row.runType} · ${row._id}`,
+                })),
+              ...(value?.correctionOfId &&
+              !records.some((row) => row._id === value.correctionOfId)
                 ? [
                     {
-                      value: regularPayDate,
-                      label: `Retained date missing from current calendar · ${regularPayDate}`,
+                      value: value.correctionOfId,
+                      label: `Retained correction source · ${value.correctionOfId}`,
                     },
                   ]
                 : []),
-              ...[...payDates].sort().map((date, index) => ({
-                value: date,
-                label: `${date} · regular pay ${index + 1} of ${payDates.length}`,
-              })),
             ]}
           />
-        </Field>
-      )}
-      {schedule.showSelector && calendars.ready && !payDates.length && (
-        <p role="alert" className="payroll-calculator__blockers">
-          No reviewed annual calendar is saved for payment year{" "}
-          {calendarYear ?? "selected"}. Configure the actual pay dates under
-          Employer setup before selecting an applicable regular pay date.
-        </p>
-      )}
-      {schedule.scheduled && (
-        <p className="muted">
-          Actual payment date is in the reviewed regular calendar; its scheduled
-          period is selected automatically.
-        </p>
-      )}
-      <fieldset className="payroll-calculator__fieldset">
-        <legend>Employees in this run</legend>
-        <div className="payroll-calculator__employee-picker">
-          {employees.map((employee) => (
-            <label key={employee._id}>
-              <input
-                type="checkbox"
-                checked={selected.includes(employee._id)}
-                onChange={(e) =>
-                  setSelected((old) =>
-                    e.target.checked
-                      ? [...old, employee._id]
-                      : old.filter((id) => id !== employee._id),
-                  )
-                }
-              />{" "}
-              {pickerName(employee)}
-              {employee.status ? ` · ${employee.status}` : ""}
-            </label>
-          ))}
         </div>
-        {!employees.length && (
-          <p>
-            Create an employee in the{" "}
-            <a href="/app/employees">employee directory</a> before calculating.
+        {calendars.loader}
+        <PayrollRuleEditionPicker
+          societyId={societyId}
+          payDate={payDate}
+          method={method}
+          value={ruleEditionId}
+          onChange={(id) => {
+            setRuleEditionId(id);
+            onChanged();
+          }}
+        />
+        {schedule.showSelector && (
+          <Field
+            label="Applicable regular pay date"
+            hint="Choose the scheduled cheque this early or off-cycle payment belongs to. The saved selection determines the CRA regular period number; it does not change the actual payment date."
+          >
+            <Select
+              disabled={!calendars.ready}
+              value={regularPayDate}
+              onChange={(value) => {
+                setRegularPayDate(value);
+                onChanged();
+              }}
+              placeholder={
+                schedule.required
+                  ? "Choose the applicable scheduled pay date"
+                  : "Automatic only when a prior regular period identifies it"
+              }
+              clearable={!schedule.required}
+              clearLabel="Automatic only when a prior regular period identifies it"
+              options={[
+                ...(regularPayDate && !payDates.includes(regularPayDate)
+                  ? [
+                      {
+                        value: regularPayDate,
+                        label: `Retained date missing from current calendar · ${regularPayDate}`,
+                      },
+                    ]
+                  : []),
+                ...[...payDates].sort().map((date, index) => ({
+                  value: date,
+                  label: `${date} · regular pay ${index + 1} of ${payDates.length}`,
+                })),
+              ]}
+            />
+          </Field>
+        )}
+        {schedule.showSelector && calendars.ready && !payDates.length && (
+          <Banner tone="danger">
+            No reviewed annual calendar is saved for payment year{" "}
+            {calendarYear ?? "selected"}. Configure the actual pay dates under
+            Employer setup before selecting an applicable regular pay date.
+          </Banner>
+        )}
+        {schedule.scheduled && (
+          <p className="muted">
+            Actual payment date is in the reviewed regular calendar; its scheduled
+            period is selected automatically.
           </p>
         )}
-      </fieldset>
-      {runType === "final" && (
         <fieldset className="payroll-calculator__fieldset">
-          <legend>Final-pay timing</legend>
-          <div className="payroll-calculator__form-grid">
-            <TextInput
-              label="Employment ended at"
-              name="terminationAt"
-              type="datetime-local"
-              value={payrollLocalTimestamp(value?.termination?.at)}
-              required
-              hint={`Browser local timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. The exact instant is retained, including seconds.`}
-            />
-            <SelectInput
-              label="Termination initiated by"
-              name="initiatedBy"
-              value={value?.termination?.initiatedBy ?? "employer"}
-              choices={["employer", "employee"]}
-              onChange={onChanged}
-            />
-            <TextInput
-              label="Final wages paid at"
-              name="paidAt"
-              type="datetime-local"
-              value={payrollLocalTimestamp(value?.termination?.paidAt)}
-            />
-          </div>
-        </fieldset>
-      )}
-      <PayrollVacationPayoutFields
-        societyId={societyId}
-        employees={employees.filter((employee) =>
-          selected.includes(employee._id),
-        )}
-        rows={vacationPayouts}
-        onChange={(rows) => {
-          setVacationPayouts(rows);
-          onChanged();
-        }}
-      />
-      <PayrollRunEmployerCostsFields
-        employees={employees.filter((employee) =>
-          selected.includes(employee._id),
-        )}
-        rows={runCosts}
-        onChange={(rows) => {
-          setRunCosts(rows);
-          onChanged();
-        }}
-      />
-      <h3>Classified adjustments</h3>
-      <p>
-        Use reviewed earning codes for bonuses, taxable benefits,
-        reimbursements, and other additions. Cash and taxable bases remain
-        separate.
-      </p>
-      {adjustments.map((row, index) => (
-        <fieldset key={index} className="payroll-calculator__fieldset">
-          <legend>Adjustment {index + 1}</legend>
-          <div className="payroll-calculator__form-grid">
-            <Field label={`Adjustment ${index + 1} employee`}>
-              <Select
-                value={row.employeeId}
-                onChange={(employeeId) => {
-                  patch(index, { employeeId });
-                  onChanged();
-                }}
-                placeholder="Select employee"
-                options={employees
-                  .filter((employee) => selected.includes(employee._id))
-                  .map((employee) => ({
-                    value: employee._id,
-                    label: pickerName(employee),
-                  }))}
-              />
-            </Field>
-            <Field label={`Adjustment ${index + 1} earning code`}>
-              <Select
-                value={row.earningCodeId}
-                onChange={(earningCodeId) => {
-                  patch(index, { earningCodeId });
-                  onChanged();
-                }}
-                placeholder="Select reviewed code"
-                options={liveCodes.map((code) => ({
-                  value: code._id,
-                  label: `${payrollFields(code)?.code} · ${payrollFields(code)?.name}`,
-                }))}
-              />
-            </Field>
-            {(
-              [
-                ["date", "Date"],
-                ["amount", "Amount"],
-                ["label", "Label"],
-                ["hours", "Hours (optional)"],
-                ["rate", "Rate (optional)"],
-              ] as const
-            ).map(([key, label]) => (
-              <Field
-                key={key}
-                label={`Adjustment ${index + 1} ${label.toLowerCase()}`}
-              >
+          <legend>Employees in this run</legend>
+          <div className="payroll-calculator__employee-picker">
+            {employees.map((employee) => (
+              <label key={employee._id}>
                 <input
-                  className="input"
-                  type={key === "date" ? "date" : "text"}
-                  required={key === "date" || key === "amount"}
-                  value={row[key]}
-                  onChange={(e) => patch(index, { [key]: e.target.value })}
-                />
-              </Field>
+                  type="checkbox"
+                  checked={selected.includes(employee._id)}
+                  onChange={(e) =>
+                    setSelected((old) =>
+                      e.target.checked
+                        ? [...old, employee._id]
+                        : old.filter((id) => id !== employee._id),
+                    )
+                  }
+                />{" "}
+                {pickerName(employee)}
+                {employee.status ? ` · ${employee.status}` : ""}
+              </label>
             ))}
           </div>
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() => {
-              setAdjustments((old) => old.filter((_, i) => i !== index));
-              onChanged();
-            }}
-          >
-            Remove adjustment {index + 1}
-          </button>
+          {!employees.length && (
+            <p>
+              Create an employee in the{" "}
+              <a href="/app/employees">employee directory</a> before calculating.
+            </p>
+          )}
         </fieldset>
-      ))}
-      <button
-        type="button"
-        className="btn btn--sm"
-        disabled={!selected.length || !liveCodes.length || !canWrite}
-        onClick={() => {
-          setAdjustments((old) => [
-            ...old,
-            {
-              employeeId: selected[0] ?? "",
-              earningCodeId: liveCodes[0]?._id ?? "",
-              date: today,
-              amount: "",
-              label: "",
-              hours: "",
-              rate: "",
-            },
-          ]);
-          onChanged();
-        }}
-      >
-        Add classified adjustment
-      </button>
-      {!liveCodes.length && (
-        <p className="muted">
-          Create a reviewed active earning code in Earning codes to add
-          adjustments.
+        {runType === "final" && (
+          <fieldset className="payroll-calculator__fieldset">
+            <legend>Final-pay timing</legend>
+            <div className="payroll-calculator__form-grid">
+              <TextInput
+                label="Employment ended at"
+                name="terminationAt"
+                type="datetime-local"
+                value={payrollLocalTimestamp(value?.termination?.at)}
+                required
+                hint={`Browser local timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. The exact instant is retained, including seconds.`}
+              />
+              <SelectInput
+                label="Termination initiated by"
+                name="initiatedBy"
+                value={value?.termination?.initiatedBy ?? "employer"}
+                choices={["employer", "employee"]}
+                onChange={onChanged}
+              />
+              <TextInput
+                label="Final wages paid at"
+                name="paidAt"
+                type="datetime-local"
+                value={payrollLocalTimestamp(value?.termination?.paidAt)}
+              />
+            </div>
+          </fieldset>
+        )}
+        <PayrollVacationPayoutFields
+          societyId={societyId}
+          employees={employees.filter((employee) =>
+            selected.includes(employee._id),
+          )}
+          rows={vacationPayouts}
+          onChange={(rows) => {
+            setVacationPayouts(rows);
+            onChanged();
+          }}
+        />
+        <PayrollRunEmployerCostsFields
+          employees={employees.filter((employee) =>
+            selected.includes(employee._id),
+          )}
+          rows={runCosts}
+          onChange={(rows) => {
+            setRunCosts(rows);
+            onChanged();
+          }}
+        />
+        <h3 className="payroll-calculator__subheading payroll-calculator__subheading--divided">
+          Classified adjustments
+        </h3>
+        <p>
+          Use reviewed earning codes for bonuses, taxable benefits,
+          reimbursements, and other additions. Cash and taxable bases remain
+          separate.
         </p>
-      )}
-      <div className="payroll-calculator__actions">
+        {adjustments.map((row, index) => (
+          <fieldset key={index} className="payroll-calculator__fieldset">
+            <legend>Adjustment {index + 1}</legend>
+            <div className="payroll-calculator__form-grid">
+              <Field label={`Adjustment ${index + 1} employee`}>
+                <Select
+                  value={row.employeeId}
+                  onChange={(employeeId) => {
+                    patch(index, { employeeId });
+                    onChanged();
+                  }}
+                  placeholder="Select employee"
+                  options={employees
+                    .filter((employee) => selected.includes(employee._id))
+                    .map((employee) => ({
+                      value: employee._id,
+                      label: pickerName(employee),
+                    }))}
+                />
+              </Field>
+              <Field label={`Adjustment ${index + 1} earning code`}>
+                <Select
+                  value={row.earningCodeId}
+                  onChange={(earningCodeId) => {
+                    patch(index, { earningCodeId });
+                    onChanged();
+                  }}
+                  placeholder="Select reviewed code"
+                  options={liveCodes.map((code) => ({
+                    value: code._id,
+                    label: `${payrollFields(code)?.code} · ${payrollFields(code)?.name}`,
+                  }))}
+                />
+              </Field>
+              {(
+                [
+                  ["date", "Date"],
+                  ["amount", "Amount"],
+                  ["label", "Label"],
+                  ["hours", "Hours (optional)"],
+                  ["rate", "Rate (optional)"],
+                ] as const
+              ).map(([key, label]) => (
+                <Field
+                  key={key}
+                  label={`Adjustment ${index + 1} ${label.toLowerCase()}`}
+                >
+                  <input
+                    className="input"
+                    type={key === "date" ? "date" : "text"}
+                    required={key === "date" || key === "amount"}
+                    value={row[key]}
+                    onChange={(e) => patch(index, { [key]: e.target.value })}
+                  />
+                </Field>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => {
+                setAdjustments((old) => old.filter((_, i) => i !== index));
+                onChanged();
+              }}
+            >
+              Remove adjustment {index + 1}
+            </button>
+          </fieldset>
+        ))}
         <button
-          className="btn btn--accent"
-          disabled={
-            !selected.length ||
-            !canWrite ||
-            !calendars.ready ||
-            (schedule.required && !payDates.length)
-          }
+          type="button"
+          className="btn btn--sm"
+          disabled={!selected.length || !liveCodes.length || !canWrite}
+          onClick={() => {
+            setAdjustments((old) => [
+              ...old,
+              {
+                employeeId: selected[0] ?? "",
+                earningCodeId: liveCodes[0]?._id ?? "",
+                date: today,
+                amount: "",
+                label: "",
+                hours: "",
+                rate: "",
+              },
+            ]);
+            onChanged();
+          }}
         >
-          Preview calculation
+          Add classified adjustment
         </button>
+        {!liveCodes.length && (
+          <p className="muted">
+            Create a reviewed active earning code in Earning codes to add
+            adjustments.
+          </p>
+        )}
+        <div className="payroll-calculator__actions">
+          <button
+            className="btn btn--accent"
+            disabled={
+              !selected.length ||
+              !canWrite ||
+              !calendars.ready ||
+              (schedule.required && !payDates.length)
+            }
+          >
+            Preview calculation
+          </button>
+        </div>
       </div>
     </form>
   );

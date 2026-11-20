@@ -3,7 +3,7 @@ import { CalendarDays } from "lucide-react";
 import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable } from "@/platform/record-engine";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { Field } from "../../components/ui";
+import { Badge, Banner, Field, type ToneVariant } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { StatTile } from "../../components/StatTile";
 import { usePermissions } from "../../hooks/usePermissions";
@@ -35,6 +35,13 @@ const STATUS_LABELS: Record<PayrollVacationStatus, string> = {
   taken: "Taken",
   cancelled: "Cancelled",
   rejected: "Rejected",
+};
+const STATUS_TONES: Record<PayrollVacationStatus, ToneVariant> = {
+  requested: "info",
+  approved: "success",
+  taken: "neutral",
+  cancelled: "warn",
+  rejected: "danger",
 };
 function LeaveHistory({ events }: { events: PayrollVacationAudit[] }) {
   return (
@@ -160,98 +167,98 @@ function LeaveRequestCard({
       className="card payroll-calculator__panel payroll-leave__request"
       aria-label={`Vacation request: ${record.label}`}
     >
-      <div className="payroll-calculator__heading">
-        <div>
-          <h4>{record.label}</h4>
-          <p>
+      <div className="card__head">
+        <div className="payroll-calculator__head-text">
+          <h4 className="card__title">{record.label}</h4>
+          <p className="card__subtitle">
             {formatDate(record.startDate)}–{formatDate(record.endDate)} ·{" "}
             {vacationHoursLabel(record.minutes)}
           </p>
         </div>
-        <strong>{STATUS_LABELS[record.status]}</strong>
+        <Badge tone={STATUS_TONES[record.status]}>
+          {STATUS_LABELS[record.status]}
+        </Badge>
       </div>
-      <p>
-        Version {record.version} · Request evidence: {record.evidence}
-      </p>
-      {record.lateUseEvidence && (
-        <p>Late-use evidence: {record.lateUseEvidence}</p>
-      )}
-      {record.notes && <p>{record.notes}</p>}
-      <VacationDaysTable days={record.days} />
-      <LeaveHistory events={record.history} />
-      {!["cancelled", "rejected"].includes(record.status) && (
-        <>
-          <Field
-            label={`Action reason for ${record.label}`}
-            hint="Required for cancellation or rejection; retained in the change history."
-          >
-            <input
-              className="input"
-              value={reason}
-              disabled={!canWrite || busy}
-              onChange={(event) => setReason(event.target.value)}
-            />
-          </Field>
-          <div className="payroll-calculator__actions">
-            {record.status === "requested" && (
-              <>
+      <div className="card__body">
+        <p>
+          Version {record.version} · Request evidence: {record.evidence}
+        </p>
+        {record.lateUseEvidence && (
+          <p>Late-use evidence: {record.lateUseEvidence}</p>
+        )}
+        {record.notes && <p>{record.notes}</p>}
+        <VacationDaysTable days={record.days} />
+        <LeaveHistory events={record.history} />
+        {!["cancelled", "rejected"].includes(record.status) && (
+          <>
+            <Field
+              label={`Action reason for ${record.label}`}
+              hint="Required for cancellation or rejection; retained in the change history."
+            >
+              <input
+                className="input"
+                value={reason}
+                disabled={!canWrite || busy}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </Field>
+            <div className="payroll-calculator__actions">
+              {record.status === "requested" && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={!canWrite || busy}
+                    onClick={onEdit}
+                  >
+                    Edit requested leave
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={!canWrite || busy}
+                    onClick={() => void change("approved")}
+                  >
+                    Approve leave
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={!canWrite || busy}
+                    onClick={() => void change("rejected")}
+                  >
+                    Reject leave
+                  </button>
+                </>
+              )}
+              {record.status === "approved" && (
                 <button
                   type="button"
                   className="btn btn--sm"
-                  disabled={!canWrite || busy}
-                  onClick={onEdit}
+                  disabled={!canWrite || busy || record.endDate > today}
+                  onClick={() => void change("taken")}
                 >
-                  Edit requested leave
+                  Mark leave taken
                 </button>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={!canWrite || busy}
-                  onClick={() => void change("approved")}
-                >
-                  Approve leave
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={!canWrite || busy}
-                  onClick={() => void change("rejected")}
-                >
-                  Reject leave
-                </button>
-              </>
-            )}
-            {record.status === "approved" && (
+              )}
               <button
                 type="button"
                 className="btn btn--sm"
-                disabled={!canWrite || busy || record.endDate > today}
-                onClick={() => void change("taken")}
+                disabled={!canWrite || busy}
+                onClick={() => void change("cancelled")}
               >
-                Mark leave taken
+                Cancel leave
               </button>
+            </div>
+            {record.status === "approved" && record.endDate > today && (
+              <p className="muted">
+                Leave can be marked taken after its last scheduled date.
+              </p>
             )}
-            <button
-              type="button"
-              className="btn btn--sm"
-              disabled={!canWrite || busy}
-              onClick={() => void change("cancelled")}
-            >
-              Cancel leave
-            </button>
-          </div>
-          {record.status === "approved" && record.endDate > today && (
-            <p className="muted">
-              Leave can be marked taken after its last scheduled date.
-            </p>
-          )}
-        </>
-      )}
-      {error && (
-        <p role="alert" className="payroll-calculator__blockers">
-          {error}
-        </p>
-      )}
+          </>
+        )}
+        {error && <Banner tone="danger">{error}</Banner>}
+      </div>
     </article>
   );
 }
