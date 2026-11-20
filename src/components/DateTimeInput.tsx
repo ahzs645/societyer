@@ -4,10 +4,11 @@ import { Calendar as CalIcon, ChevronLeft, ChevronRight, Clock, X } from "lucide
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useSheetTitle } from "../lib/sheetTitle";
 import { SheetHeader } from "./SheetHeader";
+import { Select } from "./Select";
 import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { useFloatingLayerStack } from "../lib/overlayStack";
-import { backdropDismissProps, swallowFollowingClick } from "../lib/floatingLayer";
+import { backdropDismissProps, isOutsidePointerEvent, swallowFollowingClick } from "../lib/floatingLayer";
 import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 import { parseTypedDate, TYPED_DATE_HINT } from "../lib/typedDate";
 
@@ -37,6 +38,8 @@ type Props = {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+// The hour, minute and AM/PM pickers size to their two-digit values.
+const TIME_SELECT_STYLE: React.CSSProperties = { width: "auto", fontVariantNumeric: "tabular-nums" };
 
 function parse(v: string): { date: Date | null; hh: number; mm: number } {
   if (!v) return { date: null, hh: 9, mm: 0 };
@@ -166,9 +169,8 @@ export function DateTimeInput({
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (triggerRef.current?.contains(t)) return;
-      if (popRef.current?.contains(t)) return;
+      // The hour and minute menus are portaled: a pick there stays inside.
+      if (!isOutsidePointerEvent(e, triggerRef, popRef)) return;
       setOpen(false);
       // One tap closes one layer: not also the dialog behind the calendar.
       swallowFollowingClick({ onlyBackdrops: true });
@@ -398,36 +400,37 @@ export function DateTimeInput({
               </div>
               <div className="calendar__time">
                 <Clock size={12} />
-                <select
-                  className="calendar__time-select"
+                <Select
+                  size="sm"
                   aria-label="Hour"
-                  value={currentHourDisplay}
-                  onChange={(e) => handleHourChange(Number(e.target.value))}
-                >
-                  {hourOptions.map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}</option>)}
-                </select>
+                  searchable={false}
+                  style={TIME_SELECT_STYLE}
+                  value={String(currentHourDisplay)}
+                  onChange={(h) => handleHourChange(Number(h))}
+                  options={hourOptions.map((h) => ({ value: String(h), label: String(h).padStart(2, "0") }))}
+                />
                 <span>:</span>
-                <select
-                  className="calendar__time-select"
+                <Select
+                  size="sm"
                   aria-label="Minute"
-                  value={mm}
-                  onChange={(e) => setTime(hh, Number(e.target.value))}
-                >
-                  {minuteOptions.map((m) => <option key={m} value={m}>{String(m).padStart(2, "0")}</option>)}
-                </select>
+                  searchable={false}
+                  style={TIME_SELECT_STYLE}
+                  value={String(mm)}
+                  onChange={(m) => setTime(hh, Number(m))}
+                  options={minuteOptions.map((m) => ({ value: String(m), label: String(m).padStart(2, "0") }))}
+                />
                 {clock === 12 && (
-                  <select
-                    className="calendar__time-select"
+                  <Select<"AM" | "PM">
+                    size="sm"
                     aria-label="AM or PM"
+                    style={TIME_SELECT_STYLE}
                     value={isPM ? "PM" : "AM"}
-                    onChange={(e) => {
+                    onChange={(meridiem) => {
                       const base = hh % 12;
-                      setTime(e.target.value === "PM" ? base + 12 : base, mm);
+                      setTime(meridiem === "PM" ? base + 12 : base, mm);
                     }}
-                  >
-                    <option>AM</option>
-                    <option>PM</option>
-                  </select>
+                    options={[{ value: "AM", label: "AM" }, { value: "PM", label: "PM" }]}
+                  />
                 )}
               </div>
               <div className="calendar__foot">

@@ -217,11 +217,13 @@ test("recurring builder and series controls configure a real paused delivery sch
   const invoiceId = new URL(page.url()).searchParams.get("builder")!;
   const snapshot = await invoiceSnapshot(page, invoiceId);
   const seriesId = snapshot.invoice.seriesId;
+  const seriesName = snapshot.invoice.seriesName;
   expect(seriesId).toBeTruthy();
+  expect(seriesName).toBeTruthy();
   await page.getByRole("button", { name: "Configure automatic delivery", exact: true }).click();
   let dialog = page.getByRole("dialog", { name: "Configure automatic delivery", exact: true });
-  await expect(dialog.getByLabel("Schedule source", { exact: true })).toHaveValue(seriesId);
-  await expect(dialog.getByLabel("Automation type", { exact: true })).toHaveValue("recurring_invoice");
+  await expect(dialog.getByLabel("Schedule source", { exact: true })).toContainText(seriesName);
+  await expect(dialog.getByLabel("Automation type", { exact: true })).toContainText("Recurring invoice creation and delivery");
   await expect(dialog.getByRole("checkbox", { name: "Enable this schedule", exact: true })).not.toBeChecked();
   await dialog.getByRole("textbox", { name: "Schedule name", exact: true }).fill(`${name} PDF delivery`);
   await dialog.getByRole("textbox", { name: "Schedule recipients", exact: true }).fill("recurring-browser@example.test");
@@ -232,7 +234,7 @@ test("recurring builder and series controls configure a real paused delivery sch
   await expect(card).toBeVisible();
   await card.getByRole("button", { name: "Configure automatic delivery", exact: true }).click();
   dialog = page.getByRole("dialog", { name: "Configure automatic delivery", exact: true });
-  await expect(dialog.getByLabel("Schedule source", { exact: true })).toHaveValue(seriesId);
+  await expect(dialog.getByLabel("Schedule source", { exact: true })).toContainText(seriesName);
   await expect(dialog.getByRole("textbox", { name: "Schedule name", exact: true })).toHaveValue(`${name} PDF delivery`);
   await expect(dialog.getByRole("textbox", { name: "Schedule recipients", exact: true })).toHaveValue("recurring-browser@example.test");
   await expect(dialog.getByRole("checkbox", { name: "Enable this schedule", exact: true })).not.toBeChecked();

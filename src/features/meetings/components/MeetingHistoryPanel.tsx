@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Select } from "../../../components/Select";
 
 type Row = Record<string, unknown>;
 type HistoryKey = "actionObservations" | "importedSourceVersions";
@@ -33,7 +34,7 @@ function Field({ label, value, onChange, type = "text", multiline = false, optio
 }) {
   const id = useId();
   return <div style={{ display: "grid", gap: 4, minWidth: 0 }}><span><label htmlFor={id}>{label}</label>{required && <span aria-hidden="true"> *</span>}</span>
-    {options ? <select id={id} className="input" value={value} required={required} onChange={e => onChange(e.target.value)}>{options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+    {options ? <Select id={id} value={value} searchable={options.length > 8} onChange={onChange} options={options} />
       : multiline ? <textarea id={id} className="input" rows={3} value={value} required={required} onChange={e => onChange(e.target.value)} />
       : <input id={id} className="input" type={type} min={type === "number" ? 0 : undefined} step={type === "number" ? 1 : undefined} value={value} required={required} onChange={e => onChange(e.target.value)} />}
   </div>;

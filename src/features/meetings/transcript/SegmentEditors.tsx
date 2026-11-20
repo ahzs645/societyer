@@ -1,6 +1,7 @@
 /** The inline editors under a transcript line: its text, its speaker, and a minutes link. */
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { speakerName } from "../../../../shared/transcriptModel";
+import { Select } from "../../../components/Select";
 import { linkTargetMenuLabel, type MinutesLinkTarget } from "./transcriptLinks";
 import type { TranscriptSegment, TranscriptSpeaker } from "./timedTranscript";
 import { formatTranscriptTime } from "./activeIndex";
@@ -103,18 +104,20 @@ export function SegmentSpeakerEditor({
     >
       <label>
         This segment →
-        <select
+        <Select
           aria-label="Existing speaker label"
+          size="sm"
           value={labels.includes(draft) ? draft : "new"}
-          onChange={(event) => setDraft(event.target.value === "new" ? "" : event.target.value)}
-        >
-          {labels.map((value) => (
-            <option key={value} value={value}>
-              {speakerName(value, speakers)} ({value})
-            </option>
-          ))}
-          <option value="new">New label…</option>
-        </select>
+          onChange={(value) => {
+            // Re-picking "New label…" keeps the label being typed.
+            if (value === "new" && !labels.includes(draft)) return;
+            setDraft(value === "new" ? "" : value);
+          }}
+          options={[
+            ...labels.map((value) => ({ value, label: `${speakerName(value, speakers)} (${value})` })),
+            { value: "new", label: "New label…" },
+          ]}
+        />
       </label>
       <input
         autoFocus
@@ -146,6 +149,8 @@ export function SegmentLinkEditor({
 }) {
   const [key, setKey] = useState(targets[0]?.key ?? "");
   const [busy, setBusy] = useState(false);
+  const selectId = useId();
+  useEffect(() => document.getElementById(selectId)?.focus(), [selectId]);
   const target = targets.find((candidate) => candidate.key === key);
   async function save() {
     if (!target) return;
@@ -167,14 +172,16 @@ export function SegmentLinkEditor({
     >
       <label>
         Link {formatTranscriptTime(segment.startSec)}–{formatTranscriptTime(segment.endSec)} to
-        <select autoFocus value={key} onChange={(event) => setKey(event.target.value)}>
-          {targets.map((candidate) => (
-            <option key={candidate.key} value={candidate.key}>
-              {linkTargetMenuLabel(candidate)}
-              {candidate.ref ? ` (now ${formatTranscriptTime(candidate.ref.startSec)})` : ""}
-            </option>
-          ))}
-        </select>
+        <Select
+          id={selectId}
+          size="sm"
+          value={key}
+          onChange={setKey}
+          options={targets.map((candidate) => ({
+            value: candidate.key,
+            label: `${linkTargetMenuLabel(candidate)}${candidate.ref ? ` (now ${formatTranscriptTime(candidate.ref.startSec)})` : ""}`,
+          }))}
+        />
       </label>
       <button className="btn-action" disabled={busy || !target}>
         Link

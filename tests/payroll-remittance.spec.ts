@@ -6,6 +6,12 @@ import {
   expectRemittanceCards,
   remittanceRowAction,
 } from "./payroll-remittance-responsive";
+async function pick(scope: Locator, label: string, option: string) {
+  await activateRemittance(scope.getByLabel(label, { exact: true }));
+  await activateRemittance(
+    scope.page().getByRole("option", { name: option, exact: true }),
+  );
+}
 const obligationsList = (panel: Locator) =>
   panel.getByRole("region", { name: "CRA obligations", exact: true });
 const plansList = (panel: Locator) =>
@@ -264,9 +270,7 @@ test("CRA plans require review, export no payment, and actual partial bank settl
   await expect(
     planForm.getByText("Actual CRA obligation $269.60", { exact: false }),
   ).toBeVisible();
-  await planForm
-    .getByLabel("Remittance source bank", { exact: true })
-    .selectOption(bankAccountId);
+  await pick(planForm, "Remittance source bank", "Actual remittance source bank · CAD");
   await planForm
     .getByLabel("Intended remittance date", { exact: true })
     .fill("2026-06-12");
@@ -367,17 +371,18 @@ test("CRA plans require review, export no payment, and actual partial bank settl
       name: "Reconcile actual CRA payment",
       exact: true,
     });
-    const option = form.getByRole("option", { name: new RegExp(description) });
-    await expect(option).toBeAttached();
+    await activateRemittance(
+      form.getByLabel("Actual source-bank outflow", { exact: true }),
+    );
+    const option = page.getByRole("option", { name: new RegExp(description) });
+    await expect(option).toBeVisible();
     if (index === 1)
       await expect(
-        form.getByRole("option", {
+        page.getByRole("option", {
           name: /Actual partial CRA payroll remittance/,
         }),
       ).toHaveCount(0);
-    await form
-      .getByLabel("Actual source-bank outflow", { exact: true })
-      .selectOption((await option.getAttribute("value")) as string);
+    await activateRemittance(option);
     await form
       .getByLabel("Settlement evidence", { exact: true })
       .fill(
@@ -615,9 +620,7 @@ test("a stale partially paid plan releases only its unpaid remainder for a corre
   await expect(
     form.getByLabel("Planned remittance amount (CAD)", { exact: true }),
   ).toHaveValue("129.60");
-  await form
-    .getByLabel("Remittance source bank", { exact: true })
-    .selectOption(bankAccountId);
+  await pick(form, "Remittance source bank", "Actual remittance source bank · CAD");
   await form
     .getByLabel("Exact CRA payee / destination reference", { exact: true })
     .fill("CRA payroll deductions regular/quarterly 123456789RP0001");

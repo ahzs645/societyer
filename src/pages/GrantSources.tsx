@@ -9,6 +9,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { formatDate } from "../lib/format";
@@ -124,12 +125,14 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
         <div className="row grant-queue__actions">
           {(sources ?? []).length > 0 && (
             <>
-              <select aria-label="Grant discovery source" className="input grant-queue__source" value={discoverSourceId} onChange={(e) => setDiscoverSourceId(e.target.value)}>
-                <option value="">Choose a source…</option>
-                {(sources ?? []).map((s: any) => (
-                  <option key={s._id} value={s._id}>{s.name}</option>
-                ))}
-              </select>
+              <Select
+                aria-label="Grant discovery source"
+                className="grant-queue__source"
+                value={discoverSourceId}
+                onChange={setDiscoverSourceId}
+                placeholder="Choose a source…"
+                options={(sources ?? []).map((s: any) => ({ value: s._id, label: s.name }))}
+              />
               <button className="btn-action" disabled={!canDiscover || discovering || !discoverSourceId} onClick={runDiscover}>
                 <RefreshCw size={12} /> Discover
               </button>

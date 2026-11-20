@@ -13,6 +13,7 @@ import { FIELD_TYPES, RecordListTable, RecordTableEmpty, RecordTablePhoneCard, s
 import { useToast } from "../../components/Toast";
 import { useConfirm } from "../../components/Modal";
 import { Badge } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { entityHref } from "../../components/HoverCard/entityRefs";
 import { sourceRoleLabel } from "../../../shared/personHistory";
 
@@ -142,10 +143,13 @@ export function BoardRosterCard({ societyId, activeDirectorCount }: { societyId:
             icon={<Users size={14} />}
             records={records}
             toolbarActions={
-              <select className="input" value={sheet} onChange={(e) => setSheet(e.target.value)} aria-label="Roster sheet" style={{ width: "auto", display: "inline-block" }}>
-                <option value="">All board rosters</option>
-                {sheets.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select
+                value={sheet}
+                onChange={setSheet}
+                aria-label="Roster sheet"
+                style={{ width: "auto" }}
+                options={[{ value: "", label: "All board rosters" }, ...sheets.map((s) => ({ value: s, label: s }))]}
+              />
             }
             renderCell={({ record, field }) => {
               const r = record.row;

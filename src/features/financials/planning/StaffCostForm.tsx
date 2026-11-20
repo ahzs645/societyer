@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { Field } from "../../../components/ui";
 import { Checkbox } from "../../../components/Controls";
+import { Select } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
 import { parseMoneyInput } from "../../../lib/money";
 import { FieldRow, MoneyField, centsToInput } from "../../businessRegisters/formHelpers";
@@ -36,11 +37,17 @@ function EmployeePicker({ societyId, value, disabled, onChange, onCopyDates }: {
   const selected = choices.find(employee => employee._id === value);
   return <>
     <Field label="Linked employee" hint="Link an existing employee or plan a manual/vacant position. Compensation remains an editable forecast.">
-      <select className="input" value={value} disabled={disabled} onChange={event => onChange(choices.find(employee => employee._id === event.target.value) ?? null)}>
-        <option value="">Manual / vacant position</option>
-        {value && !selected && <option value={value}>Saved employee link</option>}
-        {choices.map(employee => <option key={employee._id} value={employee._id}>{employee.name}{employee.position ? ` · ${employee.position}` : ""}{employee.status && employee.status !== "active" ? ` (${employee.status})` : ""}</option>)}
-      </select>
+      <Select
+        value={value}
+        disabled={disabled}
+        searchable
+        onChange={next => onChange(choices.find(employee => employee._id === next) ?? null)}
+        options={[
+          { value: "", label: "Manual / vacant position" },
+          ...(value && !selected ? [{ value, label: "Saved employee link" }] : []),
+          ...choices.map(employee => ({ value: employee._id, label: `${employee.name}${employee.position ? ` · ${employee.position}` : ""}${employee.status && employee.status !== "active" ? ` (${employee.status})` : ""}` })),
+        ]}
+      />
     </Field>
     {!response && <p className="muted" role="status">Loading employee choices…</p>}
     {response && !response.isDone && <button type="button" className="btn btn--sm" disabled={disabled} onClick={() => { setPrior(choices); setCursor(response.continueCursor); }}>Load more employees</button>}
@@ -113,15 +120,15 @@ export function StaffCostForm({ societyId, currency, today, value, onSaved, onCa
       </FieldRow>
       <FieldRow>
         <Field label="Staff cost currency" hint="Use the currency of this wage. The plan excludes other currencies without converting them."><input className="input" value={draft.currency} maxLength={3} onChange={event => patch({ currency: event.target.value.toUpperCase() })} /></Field>
-        <Field label="Planning status"><select className="input" value={draft.status} onChange={event => patch({ status: event.target.value as Draft["status"] }, false)}>{PLANNING_STATUSES.map(status => <option key={status} value={status}>{PLANNING_STATUS_LABELS[status]}</option>)}</select></Field>
+        <Field label="Planning status"><Select value={draft.status} onChange={status => patch({ status }, false)} options={PLANNING_STATUSES.map(status => ({ value: status, label: PLANNING_STATUS_LABELS[status] }))} /></Field>
       </FieldRow>
       <FieldRow>
-        <Field label="Compensation basis"><select className="input" value={draft.compensation} onChange={event => patch({ compensation: event.target.value as Draft["compensation"] })}>{COMPENSATION_TYPES.map(kind => <option key={kind} value={kind}>{COMPENSATION_LABELS[kind]}</option>)}</select></Field>
+        <Field label="Compensation basis"><Select value={draft.compensation} onChange={compensation => patch({ compensation })} options={COMPENSATION_TYPES.map(kind => ({ value: kind, label: COMPENSATION_LABELS[kind] }))} /></Field>
         <MoneyField label={`Rate (${draft.currency || currency})`} required value={draft.rate} onChange={rate => patch({ rate })} hint={draft.compensation === "hourly" ? "Hourly wage before additions." : draft.compensation === "monthly" ? "Monthly salary before additions." : "Annual salary before additions."} />
       </FieldRow>
       {draft.compensation === "hourly" && <Field label="Hours per week" hint="Earnings are spread over Monday–Friday. Blank hours are flagged as incomplete and excluded from the forecast."><input className="input" inputMode="decimal" value={draft.hours} onChange={event => patch({ hours: event.target.value })} /></Field>}
       <FieldRow>
-        <Field label="Pay frequency"><select className="input" value={draft.payFrequency} onChange={event => patch({ payFrequency: event.target.value as Draft["payFrequency"] })}>{PAY_FREQUENCIES.map(frequency => <option key={frequency} value={frequency}>{PAY_FREQUENCY_LABELS[frequency]}</option>)}</select></Field>
+        <Field label="Pay frequency"><Select value={draft.payFrequency} onChange={payFrequency => patch({ payFrequency })} options={PAY_FREQUENCIES.map(frequency => ({ value: frequency, label: PAY_FREQUENCY_LABELS[frequency] }))} /></Field>
         <Field label="First pay date" required hint={draft.payFrequency === "semimonthly" ? "Select the 15th or the last day of a month. The pay calendar includes only active employment dates." : "Use a known pay-calendar date; it may precede employment. Recurrences keep this anchor and include only active earnings. Dates before the first anchor are treated as catch-up earnings."}><input className="input" type="date" value={draft.payAnchorDate} onChange={event => patch({ payAnchorDate: event.target.value })} /></Field>
       </FieldRow>
       <section className="form-stack" aria-label="Employer cost additions">

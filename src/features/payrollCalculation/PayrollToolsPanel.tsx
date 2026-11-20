@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Field } from '../../components/ui';
+import { Select, type SelectOption } from '../../components/Select';
 import { Money } from '../../components/Money';
 import { FieldRow, MoneyField } from '../businessRegisters/formHelpers';
 import { parseMoneyInput } from '../../lib/money';
@@ -63,11 +64,18 @@ function MileageTool() {
   </section>;
 }
 
+const RELATIONSHIP_OPTIONS: SelectOption<'employee' | 'office_holder' | 'independent_contractor' | 'unreviewed'>[] = [
+  { value: 'unreviewed', label: 'Review required' },
+  { value: 'employee', label: 'Employee' },
+  { value: 'office_holder', label: 'Office holder / director' },
+  { value: 'independent_contractor', label: 'Independent contractor' },
+];
+
 function ClassificationTool() {
   const [label, setLabel] = useState(''), [evidence, setEvidence] = useState(''), [relationship, setRelationship] = useState<'employee' | 'office_holder' | 'independent_contractor' | 'unreviewed'>('unreviewed');
   const tool = useTool<ReturnType<typeof reviewPaymentClassification>>();
   return <section className="card payroll-calculator__panel" aria-label="Payment classification review"><h2>Honoraria and payment classification</h2><p>Review the actual relationship before choosing employment deductions or an information return. An honorarium can be employment or office income.</p><form onChange={tool.clear} onSubmit={event => { event.preventDefault(); tool.calculate(() => reviewPaymentClassification({ relationship, label, evidence })); }}>
-    <FieldRow><Field label="Payment description"><input className="input" required value={label} maxLength={500} onChange={event => setLabel(event.target.value)} /></Field><Field label="Reviewed relationship"><select className="input" value={relationship} onChange={event => setRelationship(event.target.value as typeof relationship)}><option value="unreviewed">Review required</option><option value="employee">Employee</option><option value="office_holder">Office holder / director</option><option value="independent_contractor">Independent contractor</option></select></Field></FieldRow>
+    <FieldRow><Field label="Payment description"><input className="input" required value={label} maxLength={500} onChange={event => setLabel(event.target.value)} /></Field><Field label="Reviewed relationship"><Select value={relationship} onChange={value => { setRelationship(value); tool.clear(); }} options={RELATIONSHIP_OPTIONS} /></Field></FieldRow>
     <Field label="Classification evidence" hint="Record the reviewed facts or a CRA ruling/reference; a payment label is insufficient."><textarea className="input" value={evidence} maxLength={4000} onChange={event => setEvidence(event.target.value)} /></Field><ErrorMessage message={tool.result.error} /><button className="btn btn--accent" type="submit">Review payment classification</button>
   </form>{tool.result.value && <div aria-live="polite"><h3>{tool.result.value.reporting === 'employment_t4' ? 'Employment / office income — T4 path' : tool.result.value.reporting === 'contractor_information_return_review' ? 'Contractor payment — information-return review' : 'Classification remains unresolved'}</h3><p>{tool.result.value.blocker ?? (relationship === 'independent_contractor' ? 'Review the specific services, recipient and reporting exceptions before selecting T4A or another information return.' : 'Use reviewed cash, income-tax, CPP, EI, vacation, EHT and WorkSafe earning-code classifications for this relationship.')}</p><button type="button" className="btn" onClick={() => downloadCsv('payment-classification-support.csv', [['Payment description', 'Relationship', 'Evidence', 'Review outcome'], [label, relationship, evidence, tool.result.value?.reporting]])}>Download classification support CSV</button></div>}</section>;
 }

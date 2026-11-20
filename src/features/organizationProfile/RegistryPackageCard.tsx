@@ -5,6 +5,7 @@ import { formatDate } from "../../lib/format";
 import { optionLabel } from "../../lib/orgHubOptions";
 import { documentCategoryLabel } from "../../../shared/documentCategories";
 import { REGISTRY_IMPORT_TAG } from "./registryFacts";
+import { isBcJurisdiction } from "./detailRows";
 import type { OrganizationDetail, OrganizationRecord, ProfileDocument } from "./types";
 
 /** Certificates and articles always belong to the package; filings, receipts and emails only when the profile links them or an import added them. */
@@ -12,6 +13,12 @@ const PACKAGE_CATEGORIES = new Set(["CertificateOfIncorporation", "ArticlesOfInc
 const LINKED_CATEGORIES = new Set(["Filing", "Receipt", "Correspondence"]);
 
 type PackageRow = { document: ProfileDocument; status: string; tone: ToneVariant };
+
+/** "BC", or the jurisdiction's name without the internal-code note, for a short status pill. */
+function shortJurisdiction(jurisdiction: string | undefined) {
+  if (isBcJurisdiction(jurisdiction)) return "BC";
+  return optionLabel("entityJurisdictions", jurisdiction).replace(/ \(Societyer code\)$/, "");
+}
 
 /** The registry package: each document with what the profile uses it for. */
 export function registryPackageRows(society: OrganizationRecord, detail: OrganizationDetail | undefined, documents: readonly ProfileDocument[]): PackageRow[] {
@@ -22,7 +29,7 @@ export function registryPackageRows(society: OrganizationRecord, detail: Organiz
   linkUse(society.certificateEvidenceDocumentId, "Verifies the incorporation");
   linkUse(society.articlesSourceDocumentId, "Source of the articles");
   for (const row of detail?.registrations ?? []) {
-    const place = row.registrationType === "home" ? "Home registration" : `${optionLabel("entityJurisdictions", row.jurisdiction)} registration`;
+    const place = row.registrationType === "home" ? "Home registration" : `${shortJurisdiction(row.jurisdiction)} registration`;
     linkUse(row.certificateDocumentId, `${place} certificate`);
     for (const id of row.sourceDocumentIds ?? []) linkUse(id, `${place} source`, "info");
   }
@@ -69,7 +76,7 @@ export function RegistryPackageCard({ society, detail, documents, canEdit, onImp
                 </thead>
                 <tbody>
                   {rows.map(({ document, status, tone }) => (
-                    <tr key={document._id}>
+                    <tr className="gov-doc-row org-package-row" key={document._id}>
                       <td>
                         <Link to={`/app/documents/${document._id}`}><strong>{document.title?.trim() || document.fileName || "Untitled document"}</strong></Link>
                         <div className="muted org-profile-doc-meta">

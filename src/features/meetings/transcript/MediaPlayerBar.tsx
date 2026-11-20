@@ -3,6 +3,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Keyboard, Pause, Play, RotateCcw, RotateCw } from "lucide-react";
 import type { TranscriptSegment } from "./timedTranscript";
 import type { MediaClock } from "./useMediaClock";
+import { Select } from "../../../components/Select";
 import { ViewportPopover } from "../../../components/ViewportPopover";
 import { Tooltip } from "../../../components/Tooltip";
 import { useMediaQuery } from "../../../lib/useSheetDrag";
@@ -317,23 +318,20 @@ function PlaybackControls({
         </button>
       </div>
       <div className="transcript-player__track">{children}</div>
-      <select
+      <Select
         className="transcript-rate"
+        size="sm"
         aria-label="Playback speed"
-        value={rate}
+        value={String(rate)}
         disabled={!source}
-        onChange={(event) => {
-          const next = Number(event.target.value);
+        menuMinWidth={80}
+        onChange={(value) => {
+          const next = Number(value);
           setRate(next);
           clock.setRate(next);
         }}
-      >
-        {[0.75, 1, 1.25, 1.5, 2].map((value) => (
-          <option key={value} value={value}>
-            {value}×
-          </option>
-        ))}
-      </select>
+        options={[0.75, 1, 1.25, 1.5, 2].map((value) => ({ value: String(value), label: `${value}×` }))}
+      />
       <button
         ref={shortcuts}
         type="button"

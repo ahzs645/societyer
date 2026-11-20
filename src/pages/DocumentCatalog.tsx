@@ -3,6 +3,7 @@ import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
 import { entityPreparationDecision } from "../../shared/entitySetup";
 import { Badge, Banner } from "../components/ui";
+import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
 import { useState } from "react";
@@ -321,14 +322,13 @@ export function DocumentCatalogPage() {
                         eventDatesFor(key).length > 0 ? (
                           <label className="row" style={{ gap: 8, marginTop: 6, fontSize: 13, alignItems: "center" }}>
                             <span className="muted">Transaction date</span>
-                            <select
-                              className="input"
+                            <Select
+                              aria-label="Transaction date"
                               style={{ width: "auto" }}
                               value={selectedEventDate(key)}
-                              onChange={(event) => key && setEventDateByKey((current) => ({ ...current, [key]: event.target.value }))}
-                            >
-                              {eventDatesFor(key).map((date) => <option key={date} value={date}>{date}</option>)}
-                            </select>
+                              onChange={(date) => key && setEventDateByKey((current) => ({ ...current, [key]: date }))}
+                              options={eventDatesFor(key).map((date) => ({ value: date, label: date }))}
+                            />
                           </label>
                         ) : (
                           <p className="muted" style={{ margin: "6px 0", fontSize: 13 }}>No transaction of this kind is recorded yet. The draft uses today's date and contains prompts to complete.</p>

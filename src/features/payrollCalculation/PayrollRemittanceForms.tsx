@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { usePermissions } from "../../hooks/usePermissions";
 import {
   REMITTANCE_CHANNELS,
@@ -148,6 +149,10 @@ export function RemittancePlanForm({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || !preview) return;
+    if (!bankAccountId) {
+      setError("Choose a CAD remittance source bank.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -232,22 +237,15 @@ export function RemittancePlanForm({
         </>
       )}
       <div className="payroll-calculator__form-grid">
-        <Field label="Remittance source bank">
-          <select
-            className="input"
+        <Field label="Remittance source bank" required>
+          <Select
             value={bankAccountId}
-            required
-            onChange={(e) => setBank(e.target.value)}
-          >
-            <option value="">Choose a CAD bank</option>
-            {banks.rows
+            onChange={setBank}
+            placeholder="Choose a CAD bank"
+            options={banks.rows
               .filter((r) => r.currency === "CAD")
-              .map((r) => (
-                <option key={r._id} value={r._id}>
-                  {r.name} · {r.currency}
-                </option>
-              ))}
-          </select>
+              .map((r) => ({ value: r._id, label: `${r.name} · ${r.currency}` }))}
+          />
         </Field>
         {banks.hasMore && (
           <button
@@ -276,17 +274,14 @@ export function RemittancePlanForm({
           />
         </Field>
         <Field label="Manual payment channel">
-          <select
-            className="input"
+          <Select
             value={channel}
-            onChange={(e) => setChannel(e.target.value as typeof channel)}
-          >
-            {REMITTANCE_CHANNELS.map((c) => (
-              <option key={c} value={c}>
-                {REMITTANCE_CHANNEL_LABELS[c]}
-              </option>
-            ))}
-          </select>
+            onChange={setChannel}
+            options={REMITTANCE_CHANNELS.map((c) => ({
+              value: c,
+              label: REMITTANCE_CHANNEL_LABELS[c],
+            }))}
+          />
         </Field>
         <Field
           label="Exact CRA payee / destination reference"
@@ -300,20 +295,16 @@ export function RemittancePlanForm({
           />
         </Field>
         <Field label="Source-deductions liability for posting">
-          <select
-            className="input"
+          <Select
             value={liability}
-            onChange={(e) => setLiability(e.target.value)}
-          >
-            <option value="">No ledger posting configured</option>
-            {liabilities.rows
+            onChange={setLiability}
+            placeholder="No ledger posting configured"
+            clearable
+            clearLabel="No ledger posting configured"
+            options={liabilities.rows
               .filter((r) => r.currency === "CAD")
-              .map((r) => (
-                <option key={r._id} value={r._id}>
-                  {r.name}
-                </option>
-              ))}
-          </select>
+              .map((r) => ({ value: r._id, label: r.name }))}
+          />
         </Field>
         {liabilities.hasMore && (
           <button
@@ -325,20 +316,16 @@ export function RemittancePlanForm({
           </button>
         )}
         <Field label="Employer CPP / EI expense for cash basis">
-          <select
-            className="input"
+          <Select
             value={expense}
-            onChange={(e) => setExpense(e.target.value)}
-          >
-            <option value="">No cash recognition configured</option>
-            {expenses.rows
+            onChange={setExpense}
+            placeholder="No cash recognition configured"
+            clearable
+            clearLabel="No cash recognition configured"
+            options={expenses.rows
               .filter((r) => r.currency === "CAD")
-              .map((r) => (
-                <option key={r._id} value={r._id}>
-                  {r.name}
-                </option>
-              ))}
-          </select>
+              .map((r) => ({ value: r._id, label: r.name }))}
+          />
         </Field>
         {expenses.hasMore && (
           <button
@@ -481,30 +468,32 @@ export function RemittanceReadinessForm({
           label="Secure credential reference"
           hint="Store credentials in the access vault. Only this owned reference is retained here."
         >
-          <select
-            className="input"
+          <Select
             disabled={!canReadSettings}
             value={fields.credentialVaultItemId ?? ""}
-            onChange={(e) =>
-              update("credentialVaultItemId", e.target.value || undefined)
+            onChange={(value) =>
+              update("credentialVaultItemId", value || undefined)
             }
-          >
-            <option value="">Not provisioned</option>
-            {!canReadSettings && fields.credentialVaultItemId && (
-              <option value={fields.credentialVaultItemId}>
-                Existing secure reference retained
-              </option>
-            )}
-            {credentials.rows
-              .filter(
-                (r) => r.status === "Active" && r.storageMode !== "not_stored",
-              )
-              .map((r) => (
-                <option key={r._id} value={r._id}>
-                  {r.name} · {r.service}
-                </option>
-              ))}
-          </select>
+            placeholder="Not provisioned"
+            clearable
+            clearLabel="Not provisioned"
+            options={[
+              ...(!canReadSettings && fields.credentialVaultItemId
+                ? [
+                    {
+                      value: fields.credentialVaultItemId,
+                      label: "Existing secure reference retained",
+                    },
+                  ]
+                : []),
+              ...credentials.rows
+                .filter(
+                  (r) =>
+                    r.status === "Active" && r.storageMode !== "not_stored",
+                )
+                .map((r) => ({ value: r._id, label: `${r.name} · ${r.service}` })),
+            ]}
+          />
         </Field>
         {!canReadSettings && (
           <p>
@@ -621,20 +610,20 @@ export function RemittanceSettlementForm({
         settlement alone does not establish CRA’s legal receipt date.
       </p>
       <Field label="Actual source-bank outflow">
-        <select
-          className="input"
+        <Select
           value={transactionId}
-          onChange={(e) => {
-            setTransaction(e.target.value);
-            const tx = transactions.rows.find((t) => t._id === e.target.value);
+          onChange={(value) => {
+            setTransaction(value);
+            const tx = transactions.rows.find((t) => t._id === value);
             if (tx) {
               setDate(tx.date);
               setAmount(amountInput(-tx.amountCents));
             }
           }}
-        >
-          <option value="">Use actual CRA receipt without a bank link</option>
-          {transactions.rows
+          placeholder="Use actual CRA receipt without a bank link"
+          clearable
+          clearLabel="Use actual CRA receipt without a bank link"
+          options={transactions.rows
             .filter(
               (t) =>
                 t.amountCents < 0 &&
@@ -642,12 +631,11 @@ export function RemittanceSettlementForm({
                 !t.matchedId &&
                 !["pending", "rejected", "void"].includes(t.status),
             )
-            .map((tx) => (
-              <option key={tx._id} value={tx._id}>
-                {tx.date} · {money(-tx.amountCents)} · {tx.description}
-              </option>
-            ))}
-        </select>
+            .map((tx) => ({
+              value: tx._id,
+              label: `${tx.date} · ${money(-tx.amountCents)} · ${tx.description}`,
+            }))}
+        />
       </Field>
       {transactions.hasMore && (
         <button

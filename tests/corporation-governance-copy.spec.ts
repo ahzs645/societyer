@@ -49,8 +49,12 @@ async function expectAcknowledgementsWithoutOfficialPrivilege(page: Page) {
   await expect(page.getByText("Official receipt preparation available", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "New donation record", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "Record donation acknowledgement", exact: true });
-  await expect(drawer.getByRole("combobox")).toHaveValue("acknowledgement");
-  await expect(drawer.locator('option[value="official_tax_receipt"]')).toBeDisabled();
+  const documentKind = drawer.getByLabel("Document kind", { exact: true });
+  await expect(documentKind).toContainText("Donation acknowledgement");
+  await documentKind.click();
+  await expect(page.getByRole("option", { name: "Official tax receipt — paper signature", exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Record acknowledgement", exact: true })).toBeEnabled();
   await expect(drawer).toContainText("makes no tax-deductibility claim");
   await drawer.getByRole("button", { name: "Cancel", exact: true }).click();

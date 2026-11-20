@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { businessRegisters, registerPermission, type EvidenceRegister, type EvidenceField } from "../../shared/businessEvidence";
 import { evidenceRules } from "../../shared/businessEvidenceRules";
@@ -55,6 +56,9 @@ function Register({ register, org, societyId }: { register: EvidenceRegister; or
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!draft || saving) return;
+    // The pickers aren't native selects, so required choices are checked here.
+    const missing = register.fields.find(field => field.required && (field.table || field.options) && !draft[field.key]);
+    if (missing) { setError(`${missing.label} is required.`); return; }
     setSaving(true);
     try {
       const values: Record<string, string | number> = {};
@@ -105,12 +109,14 @@ function Register({ register, org, societyId }: { register: EvidenceRegister; or
           const type = ["date", "datetime-local"].includes(field.type) ? field.type : ["money", "count"].includes(field.type) ? "number" : "text";
           const props = { "aria-label": field.label, className: "input", required: field.required, value: draft[field.key] ?? "" };
           return <Field key={field.key} label={field.label}>{options
-            ? <select {...props} onChange={e => update(field.key, e.target.value)}><option value="">Choose…</option>{options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+            ? <Select aria-label={field.label} value={draft[field.key] ?? ""} placeholder="Choose…" clearable={!field.required} clearLabel="None"
+                searchable={field.table ? true : undefined}
+                options={options.map(option => ({ value: option.id, label: option.label }))} onChange={value => update(field.key, value)} />
             : <input {...props} type={type} min={field.type === "money" ? 0 : field.type === "count" ? 1 : undefined} step={field.type === "money" ? "0.01" : undefined}
                 maxLength={field.type === "last4" ? 4 : 2000} onChange={e => update(field.key, e.target.value)} />}</Field>;
         })}
-        {can("documents:read") && <Field label="Supporting document"><select className="input" aria-label="Supporting document" value={draft.documentId} onChange={e => update("documentId", e.target.value)}>
-          <option value="">None</option>{docs?.map(doc => <option key={doc._id} value={doc._id}>{doc.title}</option>)}</select></Field>}
+        {can("documents:read") && <Field label="Supporting document"><Select aria-label="Supporting document" value={draft.documentId} placeholder="None" clearable clearLabel="None" searchable
+          options={(docs ?? []).map(doc => ({ value: doc._id, label: doc.title }))} onChange={value => update("documentId", value)} /></Field>}
         {draft.documentId && <Field label="Source page"><input className="input" aria-label="Source page" type="number" min="1" value={draft.sourcePage} onChange={e => update("sourcePage", e.target.value)} /></Field>}
         {error && <p role="alert">{error}</p>}
         <button className="btn btn--accent" disabled={saving} type="submit">{saving ? "Saving…" : "Save record"}</button>
@@ -129,8 +135,8 @@ export function BusinessEvidencePage() {
   const register = available.find(item => item.table === params.get("register")) ?? available[0];
   return <div className="page"><PageHeader title="Business records" />
     {register ? <>
-      <Field label="Register"><select className="input" aria-label="Register" value={register.table} onChange={e => setParams({ register: e.target.value })}>
-        {available.map(item => <option key={item.table} value={item.table}>{item.label}</option>)}</select></Field>
+      <Field label="Register"><Select aria-label="Register" value={register.table} onChange={table => setParams({ register: table })}
+        options={available.map(item => ({ value: item.table, label: item.label }))} /></Field>
       <Register key={org._id + register.table} societyId={org._id} org={org} register={register} />
     </> : <p>No registers available for your role.</p>}
   </div>;

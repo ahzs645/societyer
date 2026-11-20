@@ -157,7 +157,7 @@ export type ImportDocumentRow = {
   file: ImportFile;
   entry: RegistryDocumentEntry;
   reasons: RestrictionReason[];
-  /** A document already in Documents with the same title and category. */
+  /** A document already in Documents with the same category and the same title or file name. */
   existing?: ProfileDocument;
   /** "Upload to Documents" starts on for ordinary documents only. */
   defaultUpload: boolean;
@@ -169,9 +169,10 @@ export function importDocumentRows(proposal: RegistryImportProposal, files: read
     const file = files[index];
     const reasons = restrictionReasons(file, files);
     // Generated drafts and archived copies never stand in for a registry document (least of all a certificate).
+    // The file name also matches, so a copy saved under an earlier title or renamed by hand still counts.
     const existing = (documents ?? []).find((document) => !isUnofficialDocument(document)
       && document.category === entry.suggestedCategory
-      && document.title?.trim() === entry.suggestedTitle);
+      && (document.title?.trim() === entry.suggestedTitle || (Boolean(document.fileName) && document.fileName === file?.name)));
     return { file, entry, reasons, ...(existing ? { existing } : {}), defaultUpload: entry.selectedByDefault && !entry.restricted && !reasons.length && !existing };
   });
 }

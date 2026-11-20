@@ -7,6 +7,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { Badge, EmptyState } from "../components/ui";
+import { Select } from "../components/Select";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { InfoPopover } from "../components/InfoPopover";
@@ -454,17 +455,17 @@ export function ExportsPage() {
           </InfoPopover>
         </summary>
         <div className="card__body exports-tables__toolbar">
-          <select
+          <Select<Format>
             value={format}
-            onChange={(e) => setFormat(e.target.value as Format)}
-            className="input"
+            onChange={setFormat}
             aria-label="Table format"
             disabled={workspaceBusy || busy !== null}
             style={{ width: "auto" }}
-          >
-            <option value="csv">CSV</option>
-            <option value="json">JSON</option>
-          </select>
+            options={[
+              { value: "csv", label: "CSV" },
+              { value: "json", label: "JSON" },
+            ]}
+          />
           <input
             className="input"
             value={searchText}

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import type { CalculationInput } from "../../../shared/payrollCalculation";
 import { amountInput, payrollMoney, payrollNumber } from "./payrollUi";
 import { pickerName, type PayrollPickerRow } from "./PayrollSourceForms";
@@ -42,6 +43,10 @@ export function readVacationPayoutDrafts(
 ): CalculationInput["vacationPayouts"] {
   return rows.length
     ? rows.map((row, index) => {
+        if (!row.employeeId)
+          throw new Error(
+            `Select the employee for vacation payout ${index + 1}.`,
+          );
         if (!selected.includes(row.employeeId))
           throw new Error(
             `Vacation payout ${index + 1} must belong to a selected employee.`,
@@ -110,27 +115,23 @@ export function PayrollVacationPayoutFields({
           <legend>Vacation payout {index + 1}</legend>
           <div className="payroll-calculator__form-grid">
             <Field label={`Vacation payout ${index + 1} employee`}>
-              <select
-                className="input"
-                required
+              <Select
                 value={row.employeeId}
-                onChange={(event) =>
+                onChange={(employeeId) =>
                   patch(index, {
-                    employeeId: event.target.value,
+                    employeeId,
                     sourceReference:"",
                     hours:"",
                     vacationRequestId: "",
                     requestLabel: "",
                   })
                 }
-              >
-                <option value="">Select employee</option>
-                {employees.map((employee) => (
-                  <option key={employee._id} value={employee._id}>
-                    {pickerName(employee)}
-                  </option>
-                ))}
-              </select>
+                placeholder="Select employee"
+                options={employees.map((employee) => ({
+                  value: employee._id,
+                  label: pickerName(employee),
+                }))}
+              />
             </Field>
             <Field label={`Vacation payout ${index + 1} amount`}>
               <input
@@ -144,26 +145,27 @@ export function PayrollVacationPayoutFields({
               />
             </Field>
             <Field label={`Vacation payout ${index + 1} treatment`}>
-              <select
-                className="input"
+              <Select<PayrollVacationPayoutDraft["treatment"]>
                 value={row.treatment}
-                onChange={(event) =>
+                onChange={(treatment) =>
                   patch(index, {
-                    treatment: event.target
-                      .value as PayrollVacationPayoutDraft["treatment"],
-                    ...(event.target.value === "unused_cashout"
+                    treatment,
+                    ...(treatment === "unused_cashout"
                       ? { vacationRequestId: "", requestLabel: "", hours: "" }
                       : {}),
                   })
                 }
-              >
-                <option value="vacation_leave">
-                  Payment for actual vacation leave
-                </option>
-                <option value="unused_cashout">
-                  Reviewed unused vacation cashout
-                </option>
-              </select>
+                options={[
+                  {
+                    value: "vacation_leave",
+                    label: "Payment for actual vacation leave",
+                  },
+                  {
+                    value: "unused_cashout",
+                    label: "Reviewed unused vacation cashout",
+                  },
+                ]}
+              />
             </Field>
             <Field
               label={`Vacation payout ${index + 1} source reference`}

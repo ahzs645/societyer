@@ -4,6 +4,7 @@ import { FIELD_TYPES, RecordListTable, RecordTablePhoneCard, staticRecordTable }
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { StatTile } from "../../components/StatTile";
 import { usePermissions } from "../../hooks/usePermissions";
 import { triggerBlobDownload } from "../../lib/zip";
@@ -464,23 +465,18 @@ function EmployeeLeaveWorkspace({
       {selected && (
         <>
           <Field label="Vacation entitlement period">
-            <select
-              className="input"
+            <Select
               value={selected._id}
               disabled={!periods.ready}
-              onChange={(event) => {
-                setChoice(event.target.value);
+              onChange={(value) => {
+                setChoice(value);
                 setEditingRequest(undefined);
               }}
-            >
-              {periods.rows.map((period) => (
-                <option key={period._id} value={period._id}>
-                  Service year {period.serviceYear} · Earned{" "}
-                  {formatDate(period.earnedOn)} · Due{" "}
-                  {formatDate(period.takeBy)}
-                </option>
-              ))}
-            </select>
+              options={periods.rows.map((period) => ({
+                value: period._id,
+                label: `Service year ${period.serviceYear} · Earned ${formatDate(period.earnedOn)} · Due ${formatDate(period.takeBy)}`,
+              }))}
+            />
           </Field>
           {ready && balance && (
             <>
@@ -651,19 +647,16 @@ export function PayrollLeavePanel({ societyId }: { societyId: string }) {
       )}
       {employees.loader}
       <Field label="Vacation employee">
-        <select
-          className="input"
+        <Select
           value={employee?._id ?? ""}
           disabled={!employees.ready}
-          onChange={(event) => setEmployeeId(event.target.value)}
-        >
-          <option value="">Select employee</option>
-          {employees.rows.map((row) => (
-            <option key={row._id} value={row._id}>
-              {row.name}
-            </option>
-          ))}
-        </select>
+          onChange={setEmployeeId}
+          placeholder="Select employee"
+          options={employees.rows.map((row) => ({
+            value: row._id,
+            label: row.name,
+          }))}
+        />
       </Field>
       {employees.ready && !employees.rows.length && (
         <p>

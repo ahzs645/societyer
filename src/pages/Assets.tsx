@@ -1,5 +1,5 @@
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
-import { type SelectHTMLAttributes, useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -1189,6 +1189,7 @@ function DisposalForm({ form, setForm, errors = {} }: { form: any; setForm: (for
   );
 }
 
+/** A plain list of string choices, labelled by its enclosing `<Field>`. */
 function Select({
   value,
   options,
@@ -1198,11 +1199,14 @@ function Select({
   value?: string;
   options: string[];
   onChange: (value: string) => void;
-} & Omit<SelectHTMLAttributes<HTMLSelectElement>, "value" | "onChange">) {
+} & Pick<ComponentProps<typeof StyledSelect<string>>, "id" | "aria-describedby" | "aria-invalid" | "disabled">) {
   return (
-    <select {...props} className="input" value={value ?? ""} onChange={(event) => onChange(event.target.value)}>
-      {options.map((option) => <option key={option} value={option}>{option}</option>)}
-    </select>
+    <StyledSelect
+      {...props}
+      value={value ?? ""}
+      onChange={onChange}
+      options={options.map((option) => ({ value: option, label: option }))}
+    />
   );
 }
 

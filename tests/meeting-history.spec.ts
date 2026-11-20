@@ -36,13 +36,16 @@ test("meeting history persists form edits, preserves source observations and pro
   // With nothing recorded yet the panel is a single "Add history" row.
   await panel.getByRole("button", { name: "Add history", exact: true }).click();
   await panel.getByText("Carry an action forward from earlier minutes", { exact: true }).click();
-  await panel.getByLabel("Previous minutes", { exact: true }).selectOption(fixture.source.minutesId);
-  await panel.getByLabel("Prior action observation", { exact: true }).selectOption("source-observation");
+  await panel.getByLabel("Previous minutes", { exact: true }).click();
+  await page.getByRole("option", { name: "Prior source meeting — 2024-01-10", exact: true }).click();
+  await panel.getByLabel("Prior action observation", { exact: true }).click();
+  await page.getByRole("option", { name: "Review monitoring plan — On hold as of 2024-01-10", exact: true }).click();
   await panel.getByRole("button", { name: "Carry selected action forward", exact: true }).click();
   await expect(panel.getByLabel("Action", { exact: true })).toHaveValue("Review monitoring plan");
-  await expect(panel.getByLabel("Observation status", { exact: true })).toHaveValue("unknown");
+  await expect(panel.getByLabel("Observation status", { exact: true })).toContainText("Unknown");
   await expect(panel.getByLabel("Status as of", { exact: true })).toHaveValue("");
-  await panel.getByLabel("Observation status", { exact: true }).selectOption("in_progress");
+  await panel.getByLabel("Observation status", { exact: true }).click();
+  await page.getByRole("option", { name: "In progress", exact: true }).click();
   await panel.getByLabel("Status as of", { exact: true }).fill("2024-02-14");
   await panel.getByRole("button", { name: "Save history", exact: true }).click();
   await expect(panel.getByText("History saved.", { exact: true })).toBeVisible();
@@ -67,7 +70,8 @@ test("meeting history persists form edits, preserves source observations and pro
   await panel.getByRole("tab", { name: /^Imported source versions/ }).click();
   await panel.getByRole("button", { name: "Add source version", exact: true }).click();
   await panel.getByLabel("Version label", { exact: false }).fill("Draft from source document");
-  await panel.getByLabel("Version status", { exact: true }).selectOption("draft");
+  await panel.getByLabel("Version status", { exact: true }).click();
+  await page.getByRole("option", { name: "Draft", exact: true }).click();
   await panel.getByLabel("Source references (one per line)", { exact: false }).fill("source:draft-fixture");
   await panel.getByLabel("Source content text (optional)", { exact: true }).fill("Original wording | retained unchanged");
   await panel.getByRole("button", { name: "Save history", exact: true }).click();
@@ -77,13 +81,14 @@ test("meeting history persists form edits, preserves source observations and pro
   await expect(panel).toBeVisible();
   await panel.getByRole("tab", { name: /^Imported source versions/ }).click();
   await expect(panel.getByLabel("Source content text (optional)", { exact: true })).toHaveValue("Original wording | retained unchanged");
-  await panel.getByLabel("Version status", { exact: true }).selectOption("adopted");
+  await panel.getByLabel("Version status", { exact: true }).click();
+  await page.getByRole("option", { name: "Adopted", exact: true }).click();
   await panel.getByLabel("Adoption date", { exact: false }).fill("2024-02-14");
   await panel.getByLabel("Adoption evidence", { exact: false }).fill("Explicit adoption recorded in signed source.");
   await panel.getByRole("button", { name: "Save history", exact: true }).click();
   await expect(panel.getByLabel("Version label", { exact: false })).toBeDisabled();
   await panel.getByRole("button", { name: "Append revision", exact: true }).click();
-  await expect(panel.getByLabel("Version status", { exact: true }).nth(1)).toHaveValue("revised");
+  await expect(panel.getByLabel("Version status", { exact: true }).nth(1)).toContainText("Revised");
   await panel.getByLabel("Source references (one per line)", { exact: false }).nth(1).fill("source:revised-fixture");
   await panel.getByRole("button", { name: "Save history", exact: true }).click();
   await expect(panel.getByText("History saved.", { exact: true })).toBeVisible();

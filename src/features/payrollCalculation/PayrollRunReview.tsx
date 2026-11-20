@@ -12,6 +12,7 @@ import type {
 } from "../../../shared/payrollCalculation";
 import { Money } from "../../components/Money";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { formatDate } from "../../lib/format";
 import { usePermissions } from "../../hooks/usePermissions";
 import { employeeHref, payRunHref } from "../businessRegisters/payrollLinks";
@@ -485,6 +486,8 @@ function PayrollPaymentForm({
       today < record.input.payDate ? record.input.payDate : today,
     ),
     [paymentDate, setPaymentDate] = useState(today),
+    [transactionId, setTransactionId] = useState(""),
+    [method, setMethod] = useState<PayrollPaymentMethod | "">(""),
     transactions = usePayrollPages<PaymentTransaction>(
       /^\d{4}-\d{2}-\d{2}$/.test(from) &&
         /^\d{4}-\d{2}-\d{2}$/.test(to) &&
@@ -499,18 +502,20 @@ function PayrollPaymentForm({
       title="Recorded payroll payment"
       onCancel={onCancel}
       onSave={async (data) => {
+        if (!transactionId) throw new Error("Select the recorded bank outflow.");
+        if (!method) throw new Error("Choose the recorded payment method.");
         await recordPayment({
           societyId,
           id: record._id,
           employeeId: formText(data, "employeeId") || undefined,
-          transactionId: formText(data, "transactionId"),
+          transactionId,
           date: formText(data, "date"),
           reference: formText(data, "reference"),
-          method: formText(data, "method"),
+          method,
           payee: formText(data, "payee") || undefined,
           destinationReference:
             formText(data, "destinationReference") || undefined,
-          idempotencyKey: `payroll-payment:${record._id}:${formText(data, "transactionId")}:${formText(data, "employeeId") || "all"}`,
+          idempotencyKey: `payroll-payment:${record._id}:${transactionId}:${formText(data, "employeeId") || "all"}`,
           postToLedger: formCheck(data, "postToLedger"),
         });
         onCancel();
@@ -574,20 +579,18 @@ function PayrollPaymentForm({
           ]}
         />
         <Field label="Recorded bank outflow">
-          <select
-            className="input"
-            name="transactionId"
-            required
+          <Select
+            value={transactionId}
             disabled={!transactions.ready}
-            onChange={(event) => {
+            onChange={(value) => {
+              setTransactionId(value);
               const transaction = transactions.rows.find(
-                (row) => row._id === event.target.value,
+                (row) => row._id === value,
               );
               if (transaction) setPaymentDate(transaction.date);
             }}
-          >
-            <option value="">Select a posted bank outflow</option>
-            {transactions.rows
+            placeholder="Select a posted bank outflow"
+            options={transactions.rows
               .filter(
                 (row) =>
                   row.amountCents < 0 &&
@@ -597,14 +600,11 @@ function PayrollPaymentForm({
                   !row.matchedKind &&
                   !row.matchedId,
               )
-              .map((row) => (
-                <option value={row._id} key={row._id}>
-                  {row.date} · {row.accountName ? `${row.accountName} · ` : ""}
-                  {row.description} · {(-row.amountCents / 100).toFixed(2)} CAD
-                  {row.matchedKind ? ` · ${row.matchedKind}` : ""}
-                </option>
-              ))}
-          </select>
+              .map((row) => ({
+                value: row._id,
+                label: `${row.date} · ${row.accountName ? `${row.accountName} · ` : ""}${row.description} · ${(-row.amountCents / 100).toFixed(2)} CAD${row.matchedKind ? ` · ${row.matchedKind}` : ""}`,
+              }))}
+          />
         </Field>
         <Field
           label="Payment effective date"
@@ -621,14 +621,14 @@ function PayrollPaymentForm({
         </Field>
         <TextInput label="Payment reference" name="reference" required />
         <Field label="Actual payment method">
-          <select className="input" name="method" defaultValue="" required>
-            <option value="">Choose the recorded payment method</option>
-            {Object.entries(PAYMENT_METHODS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={method}
+            onChange={setMethod}
+            placeholder="Choose the recorded payment method"
+            options={(
+              Object.keys(PAYMENT_METHODS) as PayrollPaymentMethod[]
+            ).map((key) => ({ value: key, label: PAYMENT_METHODS[key] }))}
+          />
         </Field>
         <TextInput
           label="Payment payee"

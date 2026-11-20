@@ -7,6 +7,11 @@ import { test, expect, type Page, type Locator } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { officialTd1Fixture as official } from "./helpers/payrollTd1Files";
 
+async function pick(scope: Locator, label: string, option: string) {
+  await scope.getByLabel(label, { exact: true }).click();
+  await scope.page().getByRole("option", { name: option, exact: true }).click();
+}
+
 test.beforeEach(watchPayrollResponsiveErrors);
 test.afterEach(checkPayrollResponsiveViewport);
 
@@ -55,9 +60,7 @@ async function seed(page: Page) {
   });
   await page.reload();
   const panel = page.getByRole("region", { name: "TD1 import", exact: true });
-  await panel
-    .getByLabel("TD1 employee", { exact: true })
-    .selectOption(data.employeeId);
+  await pick(panel, "TD1 employee", "Jordan TD1 review");
   await expect(
     panel.getByRole("form", { name: "Reviewed TD1 import", exact: true }),
   ).toBeVisible();
@@ -86,22 +89,20 @@ async function confirmations(scope: Locator, title: string) {
     .check();
 }
 async function manual(scope: Locator, title: "Federal TD1" | "BC TD1") {
-  await scope
-    .getByLabel(`${title} review source`, { exact: true })
-    .selectOption("manual");
+  await pick(
+    scope,
+    `${title} review source`,
+    "Reviewed manual / paper declaration",
+  );
   await scope
     .getByLabel(`${title} annual total claim amount`, { exact: true })
     .fill("20000.00");
-  await scope
-    .getByLabel(`${title} concurrent employer/payer declaration`, {
-      exact: true,
-    })
-    .selectOption("no");
-  await scope
-    .getByLabel(`${title} total income below total claims declaration`, {
-      exact: true,
-    })
-    .selectOption("no");
+  await pick(scope, `${title} concurrent employer/payer declaration`, "No");
+  await pick(
+    scope,
+    `${title} total income below total claims declaration`,
+    "No",
+  );
   if (title === "Federal TD1") {
     await scope
       .getByLabel("Federal TD1 additional withholding per payment", {
@@ -170,7 +171,7 @@ test("actual official PDFs require independent review and retain sanitized payme
     bc.getByLabel("BC TD1 concurrent employer/payer declaration", {
       exact: true,
     }),
-  ).toHaveValue("yes");
+  ).toContainText("Yes");
   await federal
     .getByText("Federal TD1 field and page evidence", { exact: true })
     .click();
@@ -276,9 +277,7 @@ test("actual official PDFs require independent review and retain sanitized payme
     false,
   );
   await page.reload();
-  await panel
-    .getByLabel("TD1 employee", { exact: true })
-    .selectOption(data.employeeId);
+  await pick(panel, "TD1 employee", "Jordan TD1 review");
   const history = panel.getByRole("region", {
     name: "Reviewed TD1 history",
     exact: true,
@@ -391,9 +390,7 @@ test("wrong jurisdiction blocks upload and explicit prior-year manual review imp
     setStoredUserId(id);
   }, data.readerId);
   await page.reload();
-  await panel
-    .getByLabel("TD1 employee", { exact: true })
-    .selectOption(data.employeeId);
+  await pick(panel, "TD1 employee", "Jordan TD1 review");
   await expect(
     panel.getByRole("button", {
       name: "Apply reviewed TD1 declarations",
@@ -480,9 +477,7 @@ test("registered views keep old deep links and persist user-scoped visibility, f
     name: "Employee profile",
     exact: true,
   });
-  await profile
-    .getByLabel("Employee", { exact: true })
-    .selectOption(data.employeeId);
+  await pick(profile, "Employee", "Jordan TD1 review");
   await profile
     .getByRole("button", {
       name: "Import reviewed federal and BC TD1",
@@ -494,9 +489,9 @@ test("registered views keep old deep links and persist user-scoped visibility, f
     drawer.getByRole("region", { name: "TD1 import", exact: true }),
   ).toBeVisible();
   expect(await drawer.locator("form form").count()).toBe(0);
-  await expect(drawer.getByLabel("TD1 employee", { exact: true })).toHaveValue(
-    data.employeeId,
-  );
+  await expect(
+    drawer.getByLabel("TD1 employee", { exact: true }),
+  ).toContainText("Jordan TD1 review");
   const imported = drawer.getByRole("region", {
     name: "TD1 import",
     exact: true,

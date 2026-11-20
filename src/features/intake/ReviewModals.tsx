@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Modal } from "../../components/Modal";
+import { Select } from "../../components/Select";
 import { Badge, Banner, Field } from "../../components/ui";
 import { formatDate, pluralize } from "../../lib/format";
 import { GAP_REASONS, GAP_REASON_LABELS, INFO_TYPES } from "../../../shared/gapCatalog";
@@ -81,10 +82,10 @@ export function CantRepresentModal({ field, onClose, onConfirm }: { field: Revie
       suggestedTarget: target ? `${target.table}.${target.field.split(".")[0]}` : "",
     });
   }, [field]);
-  const groups = useMemo(() => {
+  const infoTypeOptions = useMemo(() => {
     const byArea = new Map<string, typeof INFO_TYPES[number][]>();
     for (const type of INFO_TYPES) byArea.set(type.area, [...(byArea.get(type.area) ?? []), type]);
-    return [...byArea.entries()];
+    return [...byArea.entries()].flatMap(([area, types]) => types.map((type) => ({ value: type.key, label: type.label, hint: area, keywords: area })));
   }, []);
   return (
     <Modal open={Boolean(field)} onClose={onClose} title="The app can't represent this" size="md" resizable={false}
@@ -97,14 +98,10 @@ export function CantRepresentModal({ field, onClose, onConfirm }: { field: Revie
           <p className="muted" style={{ margin: 0 }}>The fact stays out of the native record and is tracked in Coverage & gaps (system gaps) with its source locator, so the backlog shows what the data model is missing.</p>
           {field.field.locators[0]?.quote && <blockquote className="coverage-excerpt">“{field.field.locators[0].quote}”</blockquote>}
           <Field label="Information type">
-            <select className="input" value={draft.infoType} onChange={(event) => setDraft({ ...draft, infoType: event.target.value })}>
-              {groups.map(([area, types]) => <optgroup key={area} label={area}>{types.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}</optgroup>)}
-            </select>
+            <Select value={draft.infoType} searchable onChange={(infoType) => setDraft({ ...draft, infoType })} options={infoTypeOptions} />
           </Field>
           <Field label="Why">
-            <select className="input" value={draft.reason} onChange={(event) => setDraft({ ...draft, reason: event.target.value })}>
-              {GAP_REASONS.map((reason) => <option key={reason} value={reason}>{GAP_REASON_LABELS[reason]}</option>)}
-            </select>
+            <Select value={draft.reason} onChange={(reason) => setDraft({ ...draft, reason })} options={GAP_REASONS.map((reason) => ({ value: reason, label: GAP_REASON_LABELS[reason] }))} />
           </Field>
           <Field label="What cannot be represented" required>
             <textarea className="input" rows={3} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />

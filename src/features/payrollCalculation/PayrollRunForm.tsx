@@ -4,6 +4,7 @@ import {
   payrollTimestampFromLocal,
 } from "./payrollTime";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import type {
   CalculationInput,
   EarningCodeFields,
@@ -144,6 +145,14 @@ export function PayrollRunForm({
         throw new Error(
           "The retained regular pay date is no longer in the reviewed calendar. Select an available scheduled date.",
         );
+      adjustments.forEach((row, index) => {
+        if (!row.employeeId)
+          throw new Error(`Select the employee for adjustment ${index + 1}.`);
+        if (!row.earningCodeId)
+          throw new Error(
+            `Select the reviewed earning code for adjustment ${index + 1}.`,
+          );
+      });
       const rows: PayrollCalculationAdjustment[] = adjustments.map(
         (row, index) => ({
           employeeId: row.employeeId,
@@ -254,41 +263,37 @@ export function PayrollRunForm({
           />
         </Field>
         <Field label="Run type">
-          <select
-            className="input"
+          <Select<CalculationInput["runType"]>
             value={runType}
-            onChange={(e) => {
-              setRunType(e.target.value as CalculationInput["runType"]);
+            onChange={(value) => {
+              setRunType(value);
               setRegularPayDate("");
+              onChanged();
             }}
-          >
-            {["regular", "bonus", "off_cycle", "final", "correction"].map(
-              (kind) => (
-                <option value={kind} key={kind}>
-                  {kind.replaceAll("_", " ")}
-                </option>
-              ),
-            )}
-          </select>
+            options={(
+              ["regular", "bonus", "off_cycle", "final", "correction"] as const
+            ).map((kind) => ({ value: kind, label: kind.replaceAll("_", " ") }))}
+          />
         </Field>
         <Field label="CRA calculation method">
-          <select
-            className="input"
-            name="method"
+          <Select<CalculationInput["method"]>
             value={method}
-            onChange={(event) =>
-              setMethod(event.target.value as CalculationInput["method"])
-            }
-          >
-            <option value="option1">Option 1 — annualized current pay</option>
-            <option value="option2">Option 2 — cumulative average</option>
-          </select>
+            onChange={(value) => {
+              setMethod(value);
+              onChanged();
+            }}
+            options={[
+              { value: "option1", label: "Option 1 — annualized current pay" },
+              { value: "option2", label: "Option 2 — cumulative average" },
+            ]}
+          />
         </Field>
         <SelectInput
           label="Correction of calculation"
           name="correctionOfId"
           value={value?.correctionOfId}
           optional
+          onChange={onChanged}
           choices={[
             ...records
               .filter(
@@ -327,30 +332,35 @@ export function PayrollRunForm({
           label="Applicable regular pay date"
           hint="Choose the scheduled cheque this early or off-cycle payment belongs to. The saved selection determines the CRA regular period number; it does not change the actual payment date."
         >
-          <select
-            className="input"
-            name="regularPayDate"
-            required={schedule.required && payDates.length > 0}
+          <Select
             disabled={!calendars.ready}
             value={regularPayDate}
-            onChange={(event) => setRegularPayDate(event.target.value)}
-          >
-            <option value="">
-              {schedule.required
+            onChange={(value) => {
+              setRegularPayDate(value);
+              onChanged();
+            }}
+            placeholder={
+              schedule.required
                 ? "Choose the applicable scheduled pay date"
-                : "Automatic only when a prior regular period identifies it"}
-            </option>
-            {regularPayDate && !payDates.includes(regularPayDate) && (
-              <option value={regularPayDate}>
-                Retained date missing from current calendar · {regularPayDate}
-              </option>
-            )}
-            {[...payDates].sort().map((date, index) => (
-              <option key={date} value={date}>
-                {date} · regular pay {index + 1} of {payDates.length}
-              </option>
-            ))}
-          </select>
+                : "Automatic only when a prior regular period identifies it"
+            }
+            clearable={!schedule.required}
+            clearLabel="Automatic only when a prior regular period identifies it"
+            options={[
+              ...(regularPayDate && !payDates.includes(regularPayDate)
+                ? [
+                    {
+                      value: regularPayDate,
+                      label: `Retained date missing from current calendar · ${regularPayDate}`,
+                    },
+                  ]
+                : []),
+              ...[...payDates].sort().map((date, index) => ({
+                value: date,
+                label: `${date} · regular pay ${index + 1} of ${payDates.length}`,
+              })),
+            ]}
+          />
         </Field>
       )}
       {schedule.showSelector && calendars.ready && !payDates.length && (
@@ -411,6 +421,7 @@ export function PayrollRunForm({
               name="initiatedBy"
               value={value?.termination?.initiatedBy ?? "employer"}
               choices={["employer", "employee"]}
+              onChange={onChanged}
             />
             <TextInput
               label="Final wages paid at"
@@ -453,38 +464,34 @@ export function PayrollRunForm({
           <legend>Adjustment {index + 1}</legend>
           <div className="payroll-calculator__form-grid">
             <Field label={`Adjustment ${index + 1} employee`}>
-              <select
-                className="input"
+              <Select
                 value={row.employeeId}
-                required
-                onChange={(e) => patch(index, { employeeId: e.target.value })}
-              >
-                <option value="">Select employee</option>
-                {employees
+                onChange={(employeeId) => {
+                  patch(index, { employeeId });
+                  onChanged();
+                }}
+                placeholder="Select employee"
+                options={employees
                   .filter((employee) => selected.includes(employee._id))
-                  .map((employee) => (
-                    <option value={employee._id} key={employee._id}>
-                      {pickerName(employee)}
-                    </option>
-                  ))}
-              </select>
+                  .map((employee) => ({
+                    value: employee._id,
+                    label: pickerName(employee),
+                  }))}
+              />
             </Field>
             <Field label={`Adjustment ${index + 1} earning code`}>
-              <select
-                className="input"
+              <Select
                 value={row.earningCodeId}
-                required
-                onChange={(e) =>
-                  patch(index, { earningCodeId: e.target.value })
-                }
-              >
-                <option value="">Select reviewed code</option>
-                {liveCodes.map((code) => (
-                  <option value={code._id} key={code._id}>
-                    {payrollFields(code)?.code} · {payrollFields(code)?.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(earningCodeId) => {
+                  patch(index, { earningCodeId });
+                  onChanged();
+                }}
+                placeholder="Select reviewed code"
+                options={liveCodes.map((code) => ({
+                  value: code._id,
+                  label: `${payrollFields(code)?.code} · ${payrollFields(code)?.name}`,
+                }))}
+              />
             </Field>
             {(
               [

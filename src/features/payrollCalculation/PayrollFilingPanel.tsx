@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { triggerBlobDownload } from "../../lib/zip";
 import { parseMoneyInput } from "../../lib/money";
 import { useFinancePermissions } from "../../hooks/useFinancePermissions";
@@ -355,29 +356,26 @@ function OtherInformationEditor({
       {value.map((row, index) => (
         <div className="form-grid" key={index}>
           <Field label={`Other information ${index + 1} code`}>
-            <select
-              className="input"
+            <Select
               value={row.code}
-              onChange={(event) =>
+              onChange={(code) =>
                 set(
                   value.map((item, i) =>
-                    i === index ? { ...item, code: event.target.value } : item,
+                    i === index ? { ...item, code } : item,
                   ),
                 )
               }
-            >
-              <option value="">Choose code</option>
-              {Object.entries(fields)
+              placeholder="Choose code"
+              options={Object.entries(fields)
                 .filter(
                   ([, field]) =>
                     /Decimal/i.test(field.type) && !field.reservedForCra,
                 )
-                .map(([code, field]) => (
-                  <option key={code} value={code}>
-                    {code} — {field.label}
-                  </option>
-                ))}
-            </select>
+                .map(([code, field]) => ({
+                  value: code,
+                  label: `${code} — ${field.label}`,
+                }))}
+            />
           </Field>
           <TextField
             label={`Other information ${index + 1} amount`}
@@ -985,47 +983,47 @@ function FilingEditor({
       <PayrollMessageList kind="warning" messages={context.warnings} />
       <div className="form-grid">
         <Field label="Filing format">
-          <select
-            className="input"
+          <Select
             value={form}
             disabled={Boolean(roeCase)}
-            onChange={(e) => {
-              setForm(e.target.value as any);
+            onChange={(value) => {
+              setForm(value);
               setResult(null);
             }}
-          >
-            <option>T4</option>
-            <option>T4A</option>
-            <option value="ROE">Record of employment (ROE)</option>
-          </select>
+            options={[
+              { value: "T4", label: "T4" },
+              { value: "T4A", label: "T4A" },
+              { value: "ROE", label: "Record of employment (ROE)" },
+            ]}
+          />
         </Field>
         {form !== "ROE" && (
           <>
             <Field label="Submission schema version">
-              <select
-                className="input"
+              <Select<CraSubmissionVersion>
                 value={submissionVersion}
-                onChange={(e) =>
-                  setSubmissionVersion(e.target.value as CraSubmissionVersion)
-                }
-              >
-                <option value="2026">
-                  2026 — accepted through December 22, 2026
-                </option>
-                <option value="2027">
-                  2027 — accepted from January 11, 2027
-                </option>
-              </select>
+                onChange={setSubmissionVersion}
+                options={[
+                  {
+                    value: "2026",
+                    label: "2026 — accepted through December 22, 2026",
+                  },
+                  {
+                    value: "2027",
+                    label: "2027 — accepted from January 11, 2027",
+                  },
+                ]}
+              />
             </Field>
             <Field label="Return type">
-              <select
-                className="input"
+              <Select
                 value={reportType}
-                onChange={(e) => setReportType(e.target.value as any)}
-              >
-                <option value="O">Original</option>
-                <option value="A">Amended</option>
-              </select>
+                onChange={setReportType}
+                options={[
+                  { value: "O", label: "Original" },
+                  { value: "A", label: "Amended" },
+                ]}
+              />
             </Field>
             <TextField
               label="Submission reference (1–8 letters/digits)"
@@ -1042,14 +1040,14 @@ function FilingEditor({
           </>
         )}
         <Field label="Filing language">
-          <select
-            className="input"
+          <Select
             value={language}
-            onChange={(e) => setLanguage(e.target.value as any)}
-          >
-            <option value="E">English</option>
-            <option value="F">French</option>
-          </select>
+            onChange={setLanguage}
+            options={[
+              { value: "E", label: "English" },
+              { value: "F", label: "French" },
+            ]}
+          />
         </Field>
       </div>
       <fieldset>
@@ -1188,27 +1186,29 @@ function FilingEditor({
               />
               <div className="form-grid">
                 <Field label="Employer dental benefit code (box 45)">
-                  <select
-                    className="input"
+                  <Select
                     value={dental[row.employeeId] ?? ""}
-                    onChange={(e) =>
+                    onChange={(value) =>
                       setDental((old) => ({
                         ...old,
-                        [row.employeeId]: e.target.value,
+                        [row.employeeId]: value,
                       }))
                     }
-                  >
-                    <option value="">Choose reviewed access code</option>
-                    <option value="1">1 — No access</option>
-                    <option value="2">2 — Employee only</option>
-                    <option value="3">
-                      3 — Employee, spouse and dependent children
-                    </option>
-                    <option value="4">4 — Employee and spouse</option>
-                    <option value="5">
-                      5 — Employee and dependent children
-                    </option>
-                  </select>
+                    placeholder="Choose reviewed access code"
+                    options={[
+                      { value: "1", label: "1 — No access" },
+                      { value: "2", label: "2 — Employee only" },
+                      {
+                        value: "3",
+                        label: "3 — Employee, spouse and dependent children",
+                      },
+                      { value: "4", label: "4 — Employee and spouse" },
+                      {
+                        value: "5",
+                        label: "5 — Employee and dependent children",
+                      },
+                    ]}
+                  />
                 </Field>
                 {(
                   [
@@ -1217,20 +1217,20 @@ function FilingEditor({
                   ] as const
                 ).map(([label, values, set]) => (
                   <Field key={label} label={label}>
-                    <select
-                      className="input"
+                    <Select
                       value={values[row.employeeId] ?? ""}
-                      onChange={(e) =>
+                      onChange={(value) =>
                         set((old) => ({
                           ...old,
-                          [row.employeeId]: e.target.value,
+                          [row.employeeId]: value,
                         }))
                       }
-                    >
-                      <option value="">Confirm status</option>
-                      <option value="no">No</option>
-                      <option value="yes">Yes</option>
-                    </select>
+                      placeholder="Confirm status"
+                      options={[
+                        { value: "no", label: "No" },
+                        { value: "yes", label: "Yes" },
+                      ]}
+                    />
                   </Field>
                 ))}
               </div>
@@ -1511,19 +1511,16 @@ function FilingEditor({
         <section>
           <h3>Record of employment</h3>
           <Field label="ROE employee">
-            <select
-              className="input"
+            <Select
               value={roeEmployee}
               disabled={Boolean(roeCase)}
-              onChange={(e) => loadRoe(e.target.value)}
-            >
-              <option value="">Select employee</option>
-              {[...names].map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              onChange={loadRoe}
+              placeholder="Select employee"
+              options={[...names].map(([id, name]) => ({
+                value: id,
+                label: name,
+              }))}
+            />
           </Field>
           {roeEmployee &&
             context.roeSources.find((row) => row.employeeId === roeEmployee)
@@ -1580,48 +1577,41 @@ function FilingEditor({
               disabled={Boolean(roeCase)}
             />
             <Field label="ROE pay-period frequency">
-              <select
-                className="input"
+              <Select
                 value={payCode}
                 disabled={Boolean(roeCase)}
-                onChange={(e) => setPayCode(e.target.value as any)}
-              >
-                {Object.keys(ROE_PAY_PERIODS).map((code) => (
-                  <option key={code} value={code}>
-                    {code} —{" "}
-                    {
-                      ROE_PAY_PERIOD_LABELS[
-                        code as keyof typeof ROE_PAY_PERIODS
-                      ]
-                    }
-                  </option>
-                ))}
-              </select>
+                onChange={setPayCode}
+                options={(
+                  Object.keys(ROE_PAY_PERIODS) as Array<
+                    keyof typeof ROE_PAY_PERIODS
+                  >
+                ).map((code) => ({
+                  value: code,
+                  label: `${code} — ${ROE_PAY_PERIOD_LABELS[code]}`,
+                }))}
+              />
             </Field>
             <Field label="Reason for issuing ROE">
-              <select
-                className="input"
+              <Select
                 value={reason}
                 disabled={Boolean(roeCase)}
-                onChange={(e) => setReason(e.target.value as any)}
-              >
-                {ROE_REASONS.map((code) => (
-                  <option key={code} value={code}>
-                    {code} — {ROE_REASON_LABELS[code]}
-                  </option>
-                ))}
-              </select>
+                onChange={setReason}
+                options={ROE_REASONS.map((code) => ({
+                  value: code,
+                  label: `${code} — ${ROE_REASON_LABELS[code]}`,
+                }))}
+              />
             </Field>
             <Field label="Expected recall">
-              <select
-                className="input"
+              <Select
                 value={recall}
-                onChange={(e) => setRecall(e.target.value as any)}
-              >
-                <option value="U">Unknown</option>
-                <option value="N">Not returning</option>
-                <option value="Y">Expected date</option>
-              </select>
+                onChange={setRecall}
+                options={[
+                  { value: "U", label: "Unknown" },
+                  { value: "N", label: "Not returning" },
+                  { value: "Y", label: "Expected date" },
+                ]}
+              />
             </Field>
             {recall === "Y" && (
               <TextField
@@ -1703,17 +1693,19 @@ function FilingEditor({
           </button>
           <div className="form-grid">
             <Field label="Vacation pay reporting">
-              <select
-                className="input"
+              <Select
                 value={vacationCode}
-                onChange={(e) => setVacationCode(e.target.value)}
-              >
-                <option value="">No vacation entry</option>
-                <option value="1">Included with each pay</option>
-                <option value="2">Paid because no longer working</option>
-                <option value="3">Vacation leave period</option>
-                <option value="4">Anniversary payment</option>
-              </select>
+                onChange={setVacationCode}
+                placeholder="No vacation entry"
+                clearable
+                clearLabel="No vacation entry"
+                options={[
+                  { value: "1", label: "Included with each pay" },
+                  { value: "2", label: "Paid because no longer working" },
+                  { value: "3", label: "Vacation leave period" },
+                  { value: "4", label: "Anniversary payment" },
+                ]}
+              />
             </Field>
             {vacationCode && vacationCode !== "1" && (
               <TextField
@@ -1802,19 +1794,14 @@ function FilingEditor({
               return (
                 <div className="form-grid" key={index}>
                   <Field label={`Other monies ${index + 1} code`}>
-                    <select
-                      className="input"
+                    <Select
                       value={row.code}
-                      onChange={(e) =>
-                        change({ code: e.target.value, start: "", end: "" })
-                      }
-                    >
-                      {Object.keys(ROE_OTHER_MONIES).map((code) => (
-                        <option key={code} value={code}>
-                          {code} — {ROE_OTHER_MONEY_LABELS[code]}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(code) => change({ code, start: "", end: "" })}
+                      options={Object.keys(ROE_OTHER_MONIES).map((code) => ({
+                        value: code,
+                        label: `${code} — ${ROE_OTHER_MONEY_LABELS[code]}`,
+                      }))}
+                    />
                   </Field>
                   {rule?.start && (
                     <TextField
@@ -1873,22 +1860,25 @@ function FilingEditor({
               return (
                 <div className="form-grid" key={index}>
                   <Field label={`Special payment ${index + 1} code`}>
-                    <select
-                      className="input"
+                    <Select
                       value={row.code}
-                      onChange={(e) => change({ code: e.target.value })}
-                    >
-                      <option value="PSL01">Paid sick leave (insurable)</option>
-                      <option value="MAT01">
-                        Paid maternity / parental / care leave
-                      </option>
-                      <option value="WLI01">
-                        Wage loss indemnity (not insurable)
-                      </option>
-                      <option value="WLI02">
-                        Wage loss indemnity (insurable)
-                      </option>
-                    </select>
+                      onChange={(code) => change({ code })}
+                      options={[
+                        { value: "PSL01", label: "Paid sick leave (insurable)" },
+                        {
+                          value: "MAT01",
+                          label: "Paid maternity / parental / care leave",
+                        },
+                        {
+                          value: "WLI01",
+                          label: "Wage loss indemnity (not insurable)",
+                        },
+                        {
+                          value: "WLI02",
+                          label: "Wage loss indemnity (insurable)",
+                        },
+                      ]}
+                    />
                   </Field>
                   <TextField
                     label={`Special payment ${index + 1} start`}
@@ -1908,15 +1898,17 @@ function FilingEditor({
                     set={(amount) => change({ amount })}
                   />
                   <Field label={`Special payment ${index + 1} frequency`}>
-                    <select
-                      className="input"
+                    <Select
                       value={row.period}
-                      onChange={(e) => change({ period: e.target.value })}
-                    >
-                      <option value="">Unspecified</option>
-                      <option value="D">Per day</option>
-                      <option value="W">Per week</option>
-                    </select>
+                      onChange={(period) => change({ period })}
+                      placeholder="Unspecified"
+                      clearable
+                      clearLabel="Unspecified"
+                      options={[
+                        { value: "D", label: "Per day" },
+                        { value: "W", label: "Per week" },
+                      ]}
+                    />
                   </Field>
                   <button
                     type="button"

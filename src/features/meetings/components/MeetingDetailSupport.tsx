@@ -10,6 +10,7 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useToast } from "../../../components/Toast";
 import { Badge, Field } from "../../../components/ui";
+import { Select } from "../../../components/Select";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { formatDate } from "../../../lib/format";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
@@ -138,11 +139,15 @@ export function StructuredMinutesEditor({
   return (
     <div className="structured-minutes-editor">
       <Field label="Quorum evidence" hint="Record what the minutes establish; quorum not recorded is kept distinct from quorum not being met.">
-        <select className="input" value={value.quorumStatus} onChange={event => patch({ quorumStatus: event.target.value as StructuredMinutesEdit["quorumStatus"] })}>
-          <option value="confirmed">Quorum confirmed</option>
-          <option value="not_met">Quorum not met</option>
-          <option value="not_recorded">Not recorded</option>
-        </select>
+        <Select<StructuredMinutesEdit["quorumStatus"]>
+          value={value.quorumStatus}
+          onChange={quorumStatus => patch({ quorumStatus })}
+          options={[
+            { value: "confirmed", label: "Quorum confirmed" },
+            { value: "not_met", label: "Quorum not met" },
+            { value: "not_recorded", label: "Not recorded" },
+          ]}
+        />
       </Field>
       <div className="structured-minutes-editor__grid">
         <Field label="Chair">
@@ -206,11 +211,15 @@ export function StructuredMinutesEditor({
       {isAgm && (
         <>
           <Field label="Financial statements presented">
-            <select className="input" value={value.financialStatementsPresented == null ? "" : String(value.financialStatementsPresented)} onChange={(event) => patch({ financialStatementsPresented: event.target.value === "" ? undefined : event.target.value === "true" })}>
-              <option value="">Not recorded</option>
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
+            <Select
+              value={value.financialStatementsPresented == null ? "" : String(value.financialStatementsPresented)}
+              onChange={(next) => patch({ financialStatementsPresented: next === "" ? undefined : next === "true" })}
+              options={[
+                { value: "", label: "Not recorded" },
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" },
+              ]}
+            />
           </Field>
           <Field label="Financial statement notes">
             <MarkdownEditor rows={3} value={value.financialStatementsNotes} onChange={(markdown) => patch({ financialStatementsNotes: markdown })} />

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { EmployeeProfileFields } from "../../../shared/payrollCalculation";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import {
   formCheck,
   formMoney,
@@ -8,6 +9,7 @@ import {
   formOptional,
   formText,
   MoneyInput,
+  SelectInput,
   TextInput,
 } from "./PayrollSourceForms";
 
@@ -25,14 +27,14 @@ export function readPayrollProfileEmployerFields(
   | "ehtAttributionEvidence"
   | "employerOverrides"
 > {
-  const ehtLocationId = formOptional(data, "ehtLocationId");
+  const ehtLocationId = formOptional(data, "ehtLocationId"),
+    ehtAttributionBasis = formOptional(data, "ehtAttributionBasis");
+  if (ehtLocationId && !ehtAttributionBasis)
+    throw new Error("Select the reviewed EHT location attribution basis.");
   return {
     ehtLocationId,
     ehtAttributionBasis: ehtLocationId
-      ? (formOptional(
-          data,
-          "ehtAttributionBasis",
-        ) as EmployeeProfileFields["ehtAttributionBasis"])
+      ? (ehtAttributionBasis as EmployeeProfileFields["ehtAttributionBasis"])
       : undefined,
     ehtAttributionEvidence: ehtLocationId
       ? formText(data, "ehtAttributionEvidence")
@@ -87,7 +89,10 @@ export function PayrollProfileEmployerFields({
   year: number;
 }) {
   const [enabled, setEnabled] = useState(!!current?.employerOverrides),
-    [locationId, setLocationId] = useState(current?.ehtLocationId ?? "");
+    [locationId, setLocationId] = useState(current?.ehtLocationId ?? ""),
+    [attributionBasis, setAttributionBasis] = useState<
+      NonNullable<EmployeeProfileFields["ehtAttributionBasis"]> | ""
+    >(current?.ehtAttributionBasis ?? "");
   const overrides = current?.employerOverrides,
     choices = locations.filter((location) => location.qualifying);
   return (
@@ -138,29 +143,29 @@ export function PayrollProfileEmployerFields({
               type="number"
               value={overrides?.pensionPercent}
             />
-            <Field label="Employee pension plan includes actual bonus remuneration">
-              <select
-                className="input"
-                name="overridePensionBonusEligible"
-                defaultValue={
-                  overrides?.pensionBonusEligible === undefined
-                    ? ""
-                    : overrides.pensionBonusEligible
-                      ? "yes"
-                      : "no"
-                }
-              >
-                <option value="">
-                  Use reviewed employer plan / not yet confirmed
-                </option>
-                <option value="yes">
-                  Yes — actual bonus remuneration is eligible
-                </option>
-                <option value="no">
-                  No — actual bonus remuneration is excluded
-                </option>
-              </select>
-            </Field>
+            <SelectInput
+              label="Employee pension plan includes actual bonus remuneration"
+              name="overridePensionBonusEligible"
+              value={
+                overrides?.pensionBonusEligible === undefined
+                  ? ""
+                  : overrides.pensionBonusEligible
+                    ? "yes"
+                    : "no"
+              }
+              choices={[
+                {
+                  value: "yes",
+                  label: "Yes — actual bonus remuneration is eligible",
+                },
+                {
+                  value: "no",
+                  label: "No — actual bonus remuneration is excluded",
+                },
+              ]}
+              optional
+              emptyLabel="Use reviewed employer plan / not yet confirmed"
+            />
             <MoneyInput
               label="Employee benefits already in earnings per pay override"
               name="overrideBenefitsAlreadyInEarningsCentsPerPay"
@@ -191,45 +196,53 @@ export function PayrollProfileEmployerFields({
         </p>
         <div className="payroll-calculator__form-grid">
           <Field label="Employee qualifying EHT location">
-            <select
-              className="input"
-              name="ehtLocationId"
+            <Select
               value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-            >
-              <option value="">Use applicable employer treatment</option>
-              {locationId &&
-                !choices.some((location) => location.id === locationId) && (
-                  <option value={locationId}>
-                    Retained location needs review · {locationId}
-                  </option>
-                )}
-              {choices.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.id} · {location.evidence}
-                </option>
-              ))}
-            </select>
+              onChange={setLocationId}
+              placeholder="Use applicable employer treatment"
+              clearable
+              clearLabel="Use applicable employer treatment"
+              options={[
+                ...(locationId &&
+                !choices.some((location) => location.id === locationId)
+                  ? [
+                      {
+                        value: locationId,
+                        label: `Retained location needs review · ${locationId}`,
+                      },
+                    ]
+                  : []),
+                ...choices.map((location) => ({
+                  value: location.id,
+                  label: `${location.id} · ${location.evidence}`,
+                })),
+              ]}
+            />
+            <input type="hidden" name="ehtLocationId" value={locationId} />
           </Field>
           {locationId && (
             <>
               <Field label="EHT location attribution basis">
-                <select
-                  className="input"
+                <Select
+                  value={attributionBasis}
+                  onChange={setAttributionBasis}
+                  placeholder="Select the reviewed attribution basis"
+                  options={[
+                    {
+                      value: "primary_reporting",
+                      label: "Primary physical reporting location",
+                    },
+                    {
+                      value: "reasonable_allocation",
+                      label: "Reviewed reasonable allocation to this location",
+                    },
+                  ]}
+                />
+                <input
+                  type="hidden"
                   name="ehtAttributionBasis"
-                  required
-                  defaultValue={current?.ehtAttributionBasis ?? ""}
-                >
-                  <option value="">
-                    Select the reviewed attribution basis
-                  </option>
-                  <option value="primary_reporting">
-                    Primary physical reporting location
-                  </option>
-                  <option value="reasonable_allocation">
-                    Reviewed reasonable allocation to this location
-                  </option>
-                </select>
+                  value={attributionBasis}
+                />
               </Field>
               <TextInput
                 label="EHT employee location attribution evidence"

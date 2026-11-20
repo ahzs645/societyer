@@ -3,6 +3,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Link } from "react-router-dom";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { Money } from "../../components/Money";
 import { usePermissions } from "../../hooks/usePermissions";
 import {
@@ -688,14 +689,17 @@ function PayrollRuleEditor({
             />
           </Field>
           <Field label="Rule method">
-            <select
-              className="input"
+            <Select
               value={method}
-              onChange={(event) => setMethod(event.target.value)}
-            >
-              <option value="option1">Option 1</option>
-              <option value="option2">Option 2</option>
-            </select>
+              onChange={(value) => {
+                setMethod(value);
+                setValidated(undefined);
+              }}
+              options={[
+                { value: "option1", label: "Option 1" },
+                { value: "option2", label: "Option 2" },
+              ]}
+            />
           </Field>
           <Field label="Rule effective from">
             <input

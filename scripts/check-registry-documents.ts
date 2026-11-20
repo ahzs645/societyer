@@ -327,7 +327,7 @@ check(facts.businessRestrictions?.value === "None", "business restrictions");
 check(JSON.stringify(facts.incorporators?.value) === JSON.stringify(["JORDAN EXAMPLE"]), "incorporators deduplicated");
 check(facts.registeredOfficeAddress?.value.street === "100 Example Road" && facts.registeredOfficeAddress.value.postalCode === "V0V 0V0" && facts.registeredOfficeAddress.value.city === "Sampletown", "registered office address");
 check(JSON.stringify(facts.directors?.value) === JSON.stringify([{ name: "JORDAN EXAMPLE", residentCanadian: true }, { name: "Priya Sample", residentCanadian: true }, { name: "Alexandrina Quillmarsh", residentCanadian: false }]), "directors with wrapped name and resident flags");
-check(certificate.suggestedCategory === "CertificateOfIncorporation" && /Certificate of incorporation with articles and Form 2 – Northwind Example Inc\./.test(certificate.suggestedTitle), "certificate title and category");
+check(certificate.suggestedCategory === "CertificateOfIncorporation" && /^Federal incorporation package – Northwind Example Inc\.$/.test(certificate.suggestedTitle), "certificate title and category");
 check(facts.corporationNumber?.snippet.includes("1234567-8"), "provenance snippet");
 
 const plain = parseRegistryDocument(PLAIN_CERTIFICATE);

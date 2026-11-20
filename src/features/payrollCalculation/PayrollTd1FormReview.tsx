@@ -1,4 +1,5 @@
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import {
   PAYROLL_TD1_SOURCES,
   type PayrollTd1Form,
@@ -60,25 +61,26 @@ export function PayrollTd1FormReview({
       {draft.enabled && (
         <>
           <Field label={`${title} review source`}>
-            <select
-              className="input"
+            <Select<Td1ReviewDraft["mode"]>
               value={draft.mode}
-              onChange={(event) => {
+              onChange={(mode) => {
                 onCancel();
                 onChange({
-                  mode: event.target.value as Td1ReviewDraft["mode"],
+                  mode,
                   parsed: undefined,
                   fieldsReviewed: false,
                   signed: false,
                   resident: false,
                 });
               }}
-            >
-              <option value="upload">Read a local PDF or image</option>
-              <option value="manual">
-                Reviewed manual / paper declaration
-              </option>
-            </select>
+              options={[
+                { value: "upload", label: "Read a local PDF or image" },
+                {
+                  value: "manual",
+                  label: "Reviewed manual / paper declaration",
+                },
+              ]}
+            />
           </Field>
           {draft.mode === "upload" ? (
             <>
@@ -255,17 +257,15 @@ export function PayrollTd1FormReview({
               ] as const
             ).map(([key, label]) => (
               <Field key={key} label={`${title} ${label.toLowerCase()}`}>
-                <select
-                  className="input"
+                <Select<Td1BooleanReview>
                   value={draft[key]}
-                  onChange={(event) =>
-                    edit({ [key]: event.target.value as Td1BooleanReview })
-                  }
-                >
-                  <option value="unknown">Review the actual form</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
+                  onChange={(value) => edit({ [key]: value })}
+                  options={[
+                    { value: "unknown", label: "Review the actual form" },
+                    { value: "yes", label: "Yes" },
+                    { value: "no", label: "No" },
+                  ]}
+                />
               </Field>
             ))}
             {draft.form === "federal" && (

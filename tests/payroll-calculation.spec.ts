@@ -5,6 +5,10 @@ import { readFile } from "node:fs/promises";
 test.beforeEach(watchPayrollResponsiveErrors);
 test.afterEach(checkPayrollResponsiveViewport);
 
+async function pick(scope: Locator, label: string, option: string) {
+  await scope.getByLabel(label, { exact: true }).click();
+  await scope.page().getByRole("option", { name: option, exact: true }).click();
+}
 async function checked(scope: Locator, label: string | RegExp) {
   const input = scope.getByRole("checkbox", { name: label, exact: typeof label === "string" });
   if (!await input.isChecked()) await input.check();
@@ -52,22 +56,21 @@ test("reviewed employer and employee setup produces a persisted, approved, froze
   await tab("Employer setup").click();
   await page.getByRole("button", { name: "Configure employer year", exact: true }).click();
   let form = page.getByRole("form", { name: "Employer setup", exact: true });
-  await form.getByLabel("Pay frequency", { exact: true }).selectOption("semimonthly");
+  await pick(form, "Pay frequency", "semimonthly");
   await form.getByLabel("Actual pay dates", { exact: true }).fill(Array.from({ length: 12 }, (_, month) => [7, 22].map(day => `2026-${String(month + 1).padStart(2, "0")}-${day.toString().padStart(2, "0")}`)).flat().join("\n"));
   for (const [label, value] of [["EI employer multiplier", "1.4"], ["Permanent establishment days in year", "365"], ["EHT opening covered through", "2025-12-31"], ["EHT opening source reference", "Reviewed synthetic opening; no earlier pay"], ["WorkSafe rate per $100", "1"], ["Annual WorkSafe assessable earnings limit", "127500.00"], ["WorkSafe classification code", "Reviewed synthetic class"], ["WorkSafe rate evidence", "Actual synthetic net-rate evidence"], ["Employer benefits per pay", "10.00"]]) await form.getByLabel(label, { exact: true }).fill(value);
   await checked(form, "EHT opening remuneration is complete and confirmed");
   await checked(form, "Default employer EI, benefits and pension assumptions reviewed for employees without overrides");
-  for (const [label, key] of [["Wages expense account", "wages"], ["Employer cost expense account", "employer"], ["Net pay liability account", "net"], ["Deductions liability account", "deductions"], ["Benefits liability account", "benefits"]]) {
-    const selector = form.getByLabel(label, { exact: true });
-    if (!await selector.isVisible()) await form.getByText("Optional accrual ledger mappings", { exact: true }).click();
-    await selector.selectOption(seeded.accounts[key]);
+  for (const [label, account] of [["Wages expense account", "PBWAGES Browser wages"], ["Employer cost expense account", "PBEMPLOYER Browser employer costs"], ["Net pay liability account", "PBNET Browser net payable"], ["Deductions liability account", "PBDEDUCTIONS Browser deductions"], ["Benefits liability account", "PBBENEFITS Browser benefits"]]) {
+    if (!await form.getByLabel(label, { exact: true }).isVisible()) await form.getByText("Optional accrual ledger mappings", { exact: true }).click();
+    await pick(form, label, account);
   }
   await form.getByRole("button", { name: "Save employer setup", exact: true }).click(); await expect(form).toBeHidden();
   await expect(page.getByRole("region", { name: "Employer setup", exact: true })).toContainText("24 actual pay dates");
 
   await tab("Employee profiles").click(); await page.getByRole("button", { name: "New employee profile", exact: true }).click();
   form = page.getByRole("form", { name: "Employee profile", exact: true });
-  await form.getByLabel("Employee", { exact: true }).selectOption(seeded.employeeId);
+  await pick(form, "Employee", "Avery Payroll browser");
   for (const [label, value] of [["Profile effective from", "2025-01-01"], ["Hourly rate or salary for selected basis", "25.00"], ["Normal weekly hours", "40"], ["Average weekly hours", "40"], ["Complete work history from", "2026-04-01"], ["Complete work history through", "2026-05-16"], ["TD1 declaration reference", "Reviewed synthetic paper TD1"]]) await form.getByLabel(label, { exact: true }).fill(value);
   for (const label of ["Daily and weekly rest periods reviewed", "Year-to-date history is complete for this legal employer", "Current TD1 declaration reviewed and confirmed"]) await checked(form, label);
   await form.getByRole("button", { name: "Add funding allocation", exact: true }).click();
@@ -78,7 +81,7 @@ test("reviewed employer and employee setup produces a persisted, approved, froze
 
   await tab("Opening balances").click(); await page.getByRole("button", { name: "Add opening balance", exact: true }).click();
   form = page.getByRole("form", { name: "Opening balance", exact: true });
-  await form.getByLabel("Employee", { exact: true }).selectOption(seeded.employeeId);
+  await pick(form, "Employee", "Avery Payroll browser");
   await form.getByLabel("Opening covered through", { exact: true }).fill("2026-04-30");
   await form.getByLabel("Opening source reference", { exact: true }).fill("Confirmed zero same-employer opening");
   await checked(form, "Opening is complete for this legal employer and year");
@@ -89,7 +92,7 @@ test("reviewed employer and employee setup produces a persisted, approved, froze
   }, seeded);
   await tab("Work & leave").click(); await page.getByRole("button", { name: "Add work day", exact: true }).click();
   form = page.getByRole("form", { name: "Work day", exact: true });
-  await form.getByLabel("Employee", { exact: true }).selectOption(seeded.employeeId);
+  await pick(form, "Employee", "Avery Payroll browser");
   await form.getByLabel("Work date", { exact: true }).fill("2026-05-15");
   await form.getByLabel("Hours worked", { exact: true }).fill("8");
   await form.getByRole("button", { name: "Save work day", exact: true }).click(); await expect(form).toBeHidden();
@@ -155,7 +158,7 @@ test("supporting payroll tools preserve current-year mileage, exact allocated ce
   await classification.getByLabel("Payment description", { exact: true }).fill("Director honorarium");
   await classification.getByRole("button", { name: "Review payment classification", exact: true }).click();
   await expect(classification).toContainText("Classification remains unresolved");
-  await classification.getByLabel("Reviewed relationship", { exact: true }).selectOption("office_holder");
+  await pick(classification, "Reviewed relationship", "Office holder / director");
   await classification.getByLabel("Classification evidence", { exact: true }).fill("Reviewed appointment and office-holder relationship");
   await classification.getByRole("button", { name: "Review payment classification", exact: true }).click();
   await expect(classification).toContainText("Employment / office income — T4 path");

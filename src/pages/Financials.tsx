@@ -587,7 +587,7 @@ export function FinancialsPage() {
               : `Loading complete transaction history: ${completeTransactions.progress.toLocaleString()} records…`}
           </span>
           {/* One currency leaves nothing to pick; the sentence above names it. */}
-          {completeTransactions.currencies.length > 1 && <select className="input financials-snapshot__currency" aria-label="Summary currency" value={completeTransactions.currency} onChange={(event) => setOverviewCurrency(event.target.value)}>{completeTransactions.currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>}
+          {completeTransactions.currencies.length > 1 && <Select className="financials-snapshot__currency" aria-label="Summary currency" value={completeTransactions.currency} onChange={setOverviewCurrency} options={completeTransactions.currencies.map((currency) => ({ value: currency, label: currency }))} />}
           <button className="btn btn--sm" onClick={completeTransactions.refresh}><span>Refresh<span className="finance-label-wide"> complete transactions</span></span></button>
           {tab === "transactions" && <MatchReceiptsButton societyId={society._id} />}
           {completeTransactions.error && <span className="field__error">{completeTransactions.error}</span>}

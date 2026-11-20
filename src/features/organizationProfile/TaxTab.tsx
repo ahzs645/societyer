@@ -2,9 +2,10 @@ import { useMemo } from "react";
 import { KeyRound, Plus } from "lucide-react";
 import { Badge, type ToneVariant } from "../../components/ui";
 import { TooltipCopyable } from "../../components/TooltipCopyable";
-import { GstAccountReference } from "../../components/GstAccountReference";
 import { TaxEvidenceFields, TaxStatusSelect, type TaxStatusField } from "../../components/EntitySetupFields";
 import { optionLabel } from "../../lib/orgHubOptions";
+import { calendarDateKey } from "../../lib/calendarDates";
+import { organizationGstAccountReference } from "../../../shared/gstAccountReference";
 import { FIELD_TYPES, RecordListTable, RecordTableEmpty, staticRecordTable } from "@/platform/record-engine";
 import { homeJurisdictionCode } from "../../../shared/organizationDomain";
 import { DetailSection, RowActions } from "./DetailDrawers";
@@ -30,14 +31,15 @@ const IDENTIFIERS_TABLE = staticRecordTable({
 /** The kinds the Tax tab adds from its rows. */
 export type TaxIdentifierKind = "business_number" | "income_tax" | "gst" | "pst" | "payroll";
 
-type Program = { kind: TaxIdentifierKind; label: string; statusField?: TaxStatusField; bcOnly?: boolean };
+type Program = { kind: TaxIdentifierKind; label: string; copyLabel: string; statusField?: TaxStatusField; bcOnly?: boolean };
 
-/** One row per CRA program account, plus BC PST where BC is relevant. */
+/** The business number, one row per CRA program account, and BC PST where BC is relevant. */
 const PROGRAMS: readonly Program[] = [
-  { kind: "income_tax", label: "Corporation income tax (RC)", statusField: "craRcStatus" },
-  { kind: "gst", label: "GST/HST (RT)", statusField: "gstHstStatus" },
-  { kind: "pst", label: "BC PST", bcOnly: true },
-  { kind: "payroll", label: "Payroll (RP)", statusField: "payrollStatus" },
+  { kind: "business_number", label: "Business number (BN)", copyLabel: "business number", statusField: "craBnStatus" },
+  { kind: "income_tax", label: "Corporation income tax (RC)", copyLabel: "corporation income tax account", statusField: "craRcStatus" },
+  { kind: "gst", label: "GST/HST (RT)", copyLabel: "organization GST/HST account", statusField: "gstHstStatus" },
+  { kind: "pst", label: "BC PST", copyLabel: "BC PST number", bcOnly: true },
+  { kind: "payroll", label: "Payroll (RP)", copyLabel: "payroll account", statusField: "payrollStatus" },
 ];
 
 type TaxProps = {
@@ -64,49 +66,42 @@ function pstStatus(row: IdentifierRow | undefined): { label: string; tone: ToneV
   return { label: optionLabel("identifierStatuses", row.status), tone: "warn" };
 }
 
-/** Tax accounts: the BN, one row per program account, and the other identifiers. */
+/** Tax accounts: one card for the BN and program accounts, and the other identifiers. */
 export function TaxTab({ form, set, detail, canEdit, onNewIdentifier, onEditIdentifier, onRemoveIdentifier }: TaxProps) {
   const identifiers = detail?.identifiers ?? [];
   const bcRelevant = isBcJurisdiction(homeJurisdictionCode(form))
     || (detail?.registrations ?? []).some((row) => isExtraProvincialRegistration(row) && row.status !== "inactive" && isBcJurisdiction(row.jurisdiction));
   const programs = PROGRAMS.filter((program) => !program.bcOnly || bcRelevant);
   const open = (kind: TaxIdentifierKind, row: IdentifierRow | undefined) => (row ? onEditIdentifier(row) : onNewIdentifier(kind));
-  const bn = primaryIdentifier(identifiers, "business_number");
+  const gstReference = detail ? organizationGstAccountReference(identifiers, calendarDateKey(new Date())) : undefined;
+  // The GST row shows the number; only a problem with the account needs words under it.
+  const gstWarning = gstReference && gstReference.status !== "ready" && gstReference.status !== "missing" ? gstReference.message : undefined;
   return (
     <div className="org-profile-panel" id="tax-identifiers">
-      <section className="card" aria-labelledby="org-business-number">
-        <div className="card__head">
-          <h2 className="card__title" id="org-business-number">CRA business number</h2>
-        </div>
-        <div className="card__body">
-          <div className="org-tax-rows">
-            <div className="org-tax-row">
-              <span className="org-tax-row__label">Business number (BN)</span>
-              <span className="org-tax-row__number"><IdentifierNumber row={bn} label="business number" /></span>
-              <span className="org-tax-row__status"><TaxStatusSelect form={form} set={set} field="craBnStatus" ariaLabel="Business number status" /></span>
-              <span className="org-tax-row__action"><button className="btn btn--sm" type="button" onClick={() => open("business_number", bn)}>{bn ? "Edit" : <><Plus size={12} /> Add</>}</button></span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="card" aria-labelledby="org-program-accounts">
-        <div className="card__head"><h2 className="card__title" id="org-program-accounts">Program accounts</h2></div>
+      <section className="card" aria-labelledby="org-cra-accounts">
+        <div className="card__head"><h2 className="card__title" id="org-cra-accounts">CRA accounts</h2></div>
         <div className="card__body">
           <div className="org-tax-rows">
             {programs.map((program) => {
               const row = primaryIdentifier(identifiers, program.kind);
               const derived = program.statusField ? undefined : pstStatus(row);
               return (
-                <div className="org-tax-row" key={program.kind}>
+                <div className="org-tax-row" key={program.kind} data-testid={program.kind === "gst" ? "gst-account-reference" : undefined}>
                   <span className="org-tax-row__label">{program.label}</span>
-                  <span className="org-tax-row__number"><IdentifierNumber row={row} label={`${program.label} number`} /></span>
+                  <span className="org-tax-row__number"><IdentifierNumber row={row} label={program.copyLabel} /></span>
                   <span className="org-tax-row__status">
                     {program.statusField
                       ? <TaxStatusSelect form={form} set={set} field={program.statusField} ariaLabel={`${program.label} status`} />
                       : derived && <Badge tone={derived.tone}>{derived.label}</Badge>}
                   </span>
-                  <span className="org-tax-row__action"><button className="btn btn--sm" type="button" onClick={() => open(program.kind, row)}>{row ? "Edit" : <><Plus size={12} /> Add</>}</button></span>
+                  <span className="org-tax-row__action">
+                    {canEdit && (
+                      <button className="btn btn--sm" type="button" aria-label={`${row ? "Edit" : "Add"} ${program.label}`} onClick={() => open(program.kind, row)}>
+                        {row ? "Edit" : <><Plus size={12} /> Add</>}
+                      </button>
+                    )}
+                  </span>
+                  {program.kind === "gst" && gstWarning && <p className="org-tax-row__note muted" role="status">{gstWarning}</p>}
                 </div>
               );
             })}
@@ -115,18 +110,15 @@ export function TaxTab({ form, set, detail, canEdit, onNewIdentifier, onEditIden
         </div>
       </section>
 
-      <GstAccountReference identifiers={detail?.identifiers} actions={canEdit ? (
-        <button className="btn-action btn-action--primary" type="button" onClick={() => onNewIdentifier("gst")}><Plus size={12} /> Add GST/HST account</button>
-      ) : undefined} />
-
-      <OtherIdentifiers identifiers={identifiers} loading={detail === undefined} onAdd={() => onNewIdentifier("other")} onEdit={onEditIdentifier} onRemove={onRemoveIdentifier} />
+      <OtherIdentifiers identifiers={identifiers} loading={detail === undefined} canEdit={canEdit} onAdd={() => onNewIdentifier("other")} onEdit={onEditIdentifier} onRemove={onRemoveIdentifier} />
     </div>
   );
 }
 
-function OtherIdentifiers({ identifiers, loading, onAdd, onEdit, onRemove }: {
+function OtherIdentifiers({ identifiers, loading, canEdit, onAdd, onEdit, onRemove }: {
   identifiers: readonly IdentifierRow[];
   loading: boolean;
+  canEdit: boolean;
   onAdd: () => void;
   onEdit: (row: IdentifierRow) => void;
   onRemove: (row: IdentifierRow) => void;
@@ -150,9 +142,12 @@ function OtherIdentifiers({ identifiers, loading, onAdd, onEdit, onRemove }: {
       icon={<KeyRound size={14} />}
       title="Other identifiers"
       count={rows.length}
-      action={<button className="btn-action btn-action--primary" type="button" onClick={onAdd}><Plus size={12} /> Identifier</button>}
+      action={canEdit ? <button className="btn-action btn-action--primary" type="button" onClick={onAdd}><Plus size={12} /> Identifier</button> : undefined}
     >
-      <RecordListTable<DetailRecord<IdentifierRow>>
+      {/* An empty table with its toolbar is a lot of page for nothing: one line says it. */}
+      {!loading && rows.length === 0 ? (
+        <div className="card__body"><p className="muted org-profile-empty">None recorded. Charity, registry account and other numbers go here.</p></div>
+      ) : <RecordListTable<DetailRecord<IdentifierRow>>
         variant="card"
         table={IDENTIFIERS_TABLE}
         tableId="organization-identifiers"
@@ -172,7 +167,7 @@ function OtherIdentifiers({ identifiers, loading, onAdd, onEdit, onRemove }: {
         }}
         renderRowActions={(record) => <RowActions onEdit={() => onEdit(record.row)} onRemove={() => onRemove(record.row)} />}
         emptyState={<RecordTableEmpty title="No other identifiers" description="Charity, registry account and other numbers go here." />}
-      />
+      />}
     </DetailSection>
   );
 }

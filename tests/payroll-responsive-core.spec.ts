@@ -15,7 +15,7 @@ test("touch navigation and expanded TD1 evidence and rule comparisons fit the vi
   await expect(
     page.getByRole("heading", { name: "Payroll calculator", exact: true }),
   ).toBeVisible();
-  const employeeId = await page.evaluate(async () => {
+  await page.evaluate(async () => {
     const { localDataClient: client } =
       await import("/src/lib/localDataClient.ts");
     const { setStoredSocietyId } = await import("/src/hooks/useSociety.ts");
@@ -54,9 +54,13 @@ test("touch navigation and expanded TD1 evidence and rule comparisons fit the vi
     exact: true,
   });
   const panel = page.getByRole("region", { name: "TD1 import", exact: true });
-  await panel
-    .getByLabel("TD1 employee", { exact: true })
-    .selectOption(employeeId);
+  await press(panel.getByLabel("TD1 employee", { exact: true }));
+  await press(
+    page.getByRole("option", {
+      name: "Jordan Long responsive employee display name",
+      exact: true,
+    }),
+  );
   const federal = panel.getByRole("group", {
     name: "Federal TD1 review",
     exact: true,

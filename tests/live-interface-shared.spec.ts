@@ -179,8 +179,10 @@ test("live date and time picker preserves an unsaved meeting when dismissed by k
   await expect(picker.getByRole("button", { name: "Previous month", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(picker.getByRole("button", { name: "Done", exact: true })).toBeFocused();
-  await picker.getByLabel("Hour", { exact: true }).selectOption("10");
-  await picker.getByLabel("Minute", { exact: true }).selectOption("35");
+  await picker.getByLabel("Hour", { exact: true }).click();
+  await page.getByRole("option", { name: "10", exact: true }).click();
+  await picker.getByLabel("Minute", { exact: true }).click();
+  await page.getByRole("option", { name: "35", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(picker).toBeHidden();
   await expect(drawer).toBeVisible();

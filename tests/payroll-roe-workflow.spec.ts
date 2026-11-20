@@ -48,6 +48,16 @@ async function activate(control: Locator) {
   if (await touch(control.page())) await control.tap();
   else await control.click();
 }
+/** Opens a Select and picks `option`, or its first option when omitted. */
+async function pick(scope: Locator, label: string, option?: string) {
+  await activate(scope.getByLabel(label, { exact: true }));
+  const page = scope.page();
+  await activate(
+    option === undefined
+      ? page.getByRole("option").first()
+      : page.getByRole("option", { name: option, exact: true }),
+  );
+}
 async function fitsViewport(page: Page, label: string) {
   const geometry = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
@@ -135,9 +145,7 @@ async function seed(page: Page) {
   await page.reload();
   const panel = page.getByRole("region", { name: "ROE workflow", exact: true });
   await expect(panel).toBeVisible();
-  await panel
-    .getByLabel("ROE workflow employee", { exact: true })
-    .selectOption(result.employeeId);
+  await pick(panel, "ROE workflow employee", "Alex Synthetic");
   await expect(
     panel.getByRole("button", { name: "Start guided ROE case", exact: true }),
   ).toBeEnabled();
@@ -334,9 +342,15 @@ test("guided ROE generates actual schema-valid XML without issuing, tracks ackno
   expect(xml).toContain("<B11>2026-01-23</B11>");
   await expect(detail.getByRole("status").first()).toContainText("generated");
   await expect(detail.getByRole("status").first()).toContainText("to_issue");
-  const selectedCaseId = await panel
-    .getByLabel("ROE workflow case", { exact: true })
-    .inputValue();
+  const selectedCaseId: string = await page.evaluate(async (societyId) => {
+    const { localDataClient: client } =
+      await import("/src/lib/localDataClient.ts");
+    const cases = await client.query("payrollRoeWorkflow:workspace", {
+      societyId,
+      collection: "cases",
+    });
+    return cases.page[0]._id;
+  }, societyId);
   const storedGenerated = await page.evaluate(
     async ({ societyId, id }) => {
       const { localDataClient: client } =
@@ -435,20 +449,15 @@ test("guided ROE generates actual schema-valid XML without issuing, tracks ackno
   expect(propagated.roes[0].serialNumber).toBe("W00000001");
   await snapshot(page, testInfo, "issued-payroll-register");
   await page.goto("/app/payroll/calculator?tab=roe");
-  await panel
-    .getByLabel("ROE workflow employee", { exact: true })
-    .selectOption({ label: "Alex Synthetic" });
-  await panel
-    .getByLabel("ROE workflow case", { exact: true })
-    .selectOption(selectedCaseId);
+  await pick(panel, "ROE workflow employee", "Alex Synthetic");
+  // The only case so far is the one generated above.
+  await pick(panel, "ROE workflow case");
   await expect(detail.getByRole("status").first()).toContainText("issued");
   const missing = detail.getByRole("form", {
     name: "ROE follow-up: Resolve missing information or an unanswered request",
     exact: true,
   });
-  await missing
-    .getByLabel("Follow-up status", { exact: true })
-    .selectOption("blocked");
+  await pick(missing, "Follow-up status", "Blocked — waiting / no response");
   await missing
     .getByLabel("Protected follow-up evidence", { exact: true })
     .fill(
@@ -459,7 +468,7 @@ test("guided ROE generates actual schema-valid XML without issuing, tracks ackno
   );
   await expect(
     missing.getByLabel("Follow-up status", { exact: true }),
-  ).toHaveValue("blocked");
+  ).toContainText("Blocked — waiting / no response");
   for (const name of [
     "Confirm employee access and any requested copy",
     "Resolve missing information or an unanswered request",
@@ -468,9 +477,7 @@ test("guided ROE generates actual schema-valid XML without issuing, tracks ackno
       name: `ROE follow-up: ${name}`,
       exact: true,
     });
-    await form
-      .getByLabel("Follow-up status", { exact: true })
-      .selectOption("done");
+    await pick(form, "Follow-up status", "Done — actually resolved");
     await form
       .getByLabel("Protected follow-up evidence", { exact: true })
       .fill("Actual review complete; source response retained securely");
@@ -479,7 +486,7 @@ test("guided ROE generates actual schema-valid XML without issuing, tracks ackno
     );
     await expect(
       form.getByLabel("Follow-up status", { exact: true }),
-    ).toHaveValue("done");
+    ).toContainText("Done — actually resolved");
   }
   await detail
     .getByLabel("Operational closure evidence", { exact: true })
@@ -494,12 +501,8 @@ test("guided ROE generates actual schema-valid XML without issuing, tracks ackno
   );
   await expect(detail.getByRole("status").first()).toContainText("closed");
   await page.reload();
-  await panel
-    .getByLabel("ROE workflow employee", { exact: true })
-    .selectOption({ label: "Alex Synthetic" });
-  await panel
-    .getByLabel("ROE workflow case", { exact: true })
-    .selectOption({ index: 1 });
+  await pick(panel, "ROE workflow employee", "Alex Synthetic");
+  await pick(panel, "ROE workflow case");
   await expect(detail.getByRole("status").first()).toContainText("closed");
   await activate(
     detail.getByRole("button", {
@@ -558,12 +561,8 @@ test("read-only director can review a persisted ROE case and cannot write its ch
     { readerId },
   );
   await page.reload();
-  await panel
-    .getByLabel("ROE workflow employee", { exact: true })
-    .selectOption({ label: "Alex Synthetic" });
-  await panel
-    .getByLabel("ROE workflow case", { exact: true })
-    .selectOption({ index: 1 });
+  await pick(panel, "ROE workflow employee", "Alex Synthetic");
+  await pick(panel, "ROE workflow case");
   const detail = panel.getByRole("article", {
     name: "Selected ROE case",
     exact: true,

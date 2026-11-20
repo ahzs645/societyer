@@ -19,9 +19,11 @@ test('qualified physical EHT locations persist, reconcile exact annual cents and
   await tabs.getByRole('button', { name: 'Employer setup', exact: true }).click();
   await page.getByRole('button', { name: 'Configure employer year', exact: true }).click();
   let form = page.getByRole('form', { name: 'Employer setup', exact: true });
-  await form.getByLabel('Pay frequency', { exact: true }).selectOption('semimonthly');
+  await form.getByLabel('Pay frequency', { exact: true }).click();
+  await page.getByRole('option', { name: 'semimonthly', exact: true }).click();
   await form.getByLabel('Actual pay dates', { exact: true }).fill(Array.from({ length: 12 }, (_, i) => [7, 22].map(day => `2026-${String(i + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`)).flat().join('\n'));
-  await form.getByLabel('EHT employer class', { exact: true }).selectOption('charitable_nonprofit');
+  await form.getByLabel('EHT employer class', { exact: true }).click();
+  await page.getByRole('option', { name: 'charitable nonprofit', exact: true }).click();
   for (const [label, value] of [
     ['EI employer multiplier', '1.4'], ['EHT qualification evidence', 'Reviewed Income Tax Act 149(1)(l) exemption and organizational records'], ['Permanent establishment days in year', '365'], ['EHT opening remuneration', '3000000.00'], ['EHT opening covered through', '2026-04-30'], ['EHT opening source reference', 'Complete synthetic annual remuneration allocated to physical locations'], ['WorkSafe rate per $100', '1'], ['Annual WorkSafe assessable earnings limit', '127500.00'], ['WorkSafe classification code', 'Synthetic actual class'], ['WorkSafe rate evidence', 'Reviewed actual 2026 net-rate notice'],
   ]) await form.getByLabel(label, { exact: true }).fill(value);

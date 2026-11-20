@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { type PayrollDeductionYtd } from "../../../shared/payrollDeductions";
 import type {
   EmployerSettingsFields,
@@ -110,29 +111,43 @@ export function SelectInput({
   value,
   choices,
   optional = false,
+  emptyLabel = "None",
+  onChange,
 }: {
   label: string;
   name: string;
   value?: string;
   choices: readonly (string | { value: string; label: string })[];
   optional?: boolean;
+  /** What the empty choice of an `optional` select reads as. */
+  emptyLabel?: string;
+  /** Called after each choice; the value itself still submits with the form. */
+  onChange?: (value: string) => void;
 }) {
+  const options = choices.map((choice) =>
+    typeof choice === "string"
+      ? { value: choice, label: choice.replaceAll("_", " ") }
+      : choice,
+  );
+  // Uncontrolled like the rest of this form: the hidden input carries the
+  // choice into FormData. Without a choice, a required select falls back to
+  // its first option, as a native one would.
+  const [chosen, setChosen] = useState(value ?? ""),
+    selected = chosen || (optional ? "" : (options[0]?.value ?? ""));
   return (
     <Field label={label}>
-      <select className="input" name={name} defaultValue={value ?? ""}>
-        {optional && <option value="">None</option>}
-        {choices.map((choice) => {
-          const option =
-            typeof choice === "string"
-              ? { value: choice, label: choice.replaceAll("_", " ") }
-              : choice;
-          return (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          );
-        })}
-      </select>
+      <Select
+        value={selected}
+        onChange={(next) => {
+          setChosen(next);
+          onChange?.(next);
+        }}
+        options={options}
+        placeholder={optional ? emptyLabel : undefined}
+        clearable={optional}
+        clearLabel={emptyLabel}
+      />
+      <input type="hidden" name={name} value={selected} />
     </Field>
   );
 }

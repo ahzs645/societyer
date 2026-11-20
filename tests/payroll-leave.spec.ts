@@ -1,5 +1,9 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+async function pick(scope: Locator, label: string, option: string | RegExp) {
+  await scope.getByLabel(label, { exact: true }).click();
+  await scope.page().getByRole("option", { name: option, exact: true }).click();
+}
 async function checked(scope: Locator, label: string) {
   const input = scope.getByRole("checkbox", { name: label, exact: true });
   if (!(await input.isChecked()))
@@ -52,9 +56,7 @@ async function seed(page: Page) {
     exact: true,
   });
   await expect(panel).toBeVisible();
-  await panel
-    .getByLabel("Vacation employee", { exact: true })
-    .selectOption(value.employeeId);
+  await pick(panel, "Vacation employee", "Taylor Vacation");
   await expect(
     panel.getByRole("button", { name: "Add entitlement period", exact: true }),
   ).toBeEnabled();
@@ -106,9 +108,19 @@ test("vacation anniversary time persists separately from money through requested
   await expect(form).toBeHidden();
   await expect(stat(panel, "Entitlement time")).toHaveText("70 h");
   await expect(stat(panel, "Remaining time")).toHaveText("63 h");
-  const periodId = await panel
-    .getByLabel("Vacation entitlement period", { exact: true })
-    .inputValue();
+  const periodId: string = await page.evaluate(
+    async ({ societyId, employeeId }) => {
+      const { localDataClient: client } =
+        await import("/src/lib/localDataClient.ts");
+      const workspace = await client.query("payrollLeave:workspace", {
+        societyId,
+        employeeId,
+        collection: "periods",
+      });
+      return workspace.page[0]._id;
+    },
+    { societyId, employeeId },
+  );
   const initial = await page.evaluate(
     async ({ societyId, employeeId, periodId }) => {
       const { localDataClient: client } =
@@ -181,9 +193,7 @@ test("vacation anniversary time persists separately from money through requested
   await expect(card.getByText("Taken", { exact: true })).toBeVisible();
   await expect(stat(panel, "Remaining time")).toHaveText("60 h");
   await page.reload();
-  await panel
-    .getByLabel("Vacation employee", { exact: true })
-    .selectOption(employeeId);
+  await pick(panel, "Vacation employee", "Taylor Vacation");
   card = panel.getByRole("article", {
     name: "Vacation request: Student study break",
     exact: true,
@@ -245,14 +255,11 @@ test("vacation anniversary time persists separately from money through requested
     },
     { societyId, employeeId, periodId },
   );
-  await expect(
-    panel
-      .getByLabel("Vacation entitlement period", { exact: true })
-      .locator("option"),
-  ).toHaveCount(2);
   await panel
     .getByLabel("Vacation entitlement period", { exact: true })
-    .selectOption(periodId);
+    .click();
+  await expect(page.getByRole("option")).toHaveCount(2);
+  await page.getByRole("option", { name: /^Service year 2 · / }).click();
   await expect(panel.getByRole("article")).toHaveCount(27);
   await expect(stat(panel, "Remaining time")).toHaveText("63 h");
   const downloading = page.waitForEvent("download", { timeout: 15000 });
@@ -310,9 +317,7 @@ test("read-only finance membership can review vacation time and export CSV but c
     { societyId, employeeId, readerId },
   );
   await page.reload();
-  await panel
-    .getByLabel("Vacation employee", { exact: true })
-    .selectOption(employeeId);
+  await pick(panel, "Vacation employee", "Taylor Vacation");
   await expect(stat(panel, "Remaining time")).toHaveText("70 h");
   for (const label of [
     "Add entitlement period",

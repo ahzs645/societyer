@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import type {
   PayrollVacationPeriodRecord,
   PayrollVacationRequestRecord,
@@ -39,20 +40,16 @@ export function PayrollVacationRequestPicker({
       {periods.loader}
       {requests.loader}
       <Field label="Vacation entitlement period for payout">
-        <select
-          className="input"
+        <Select
           value={periodId}
           disabled={!periods.ready}
-          onChange={(event) => setPeriodId(event.target.value)}
-        >
-          <option value="">Select the employee’s entitlement period</option>
-          {periods.rows.map((period) => (
-            <option key={period._id} value={period._id}>
-              Service year {period.serviceYear} · earned {period.earnedOn} · use
-              by {period.takeBy}
-            </option>
-          ))}
-        </select>
+          onChange={setPeriodId}
+          placeholder="Select the employee’s entitlement period"
+          options={periods.rows.map((period) => ({
+            value: period._id,
+            label: `Service year ${period.serviceYear} · earned ${period.earnedOn} · use by ${period.takeBy}`,
+          }))}
+        />
       </Field>
       {!periods.ready && !periods.error && (
         <p role="status">Loading all vacation periods…</p>

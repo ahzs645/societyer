@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Lock } from "lucide-react";
 import type { TranscriptRef } from "../../../../shared/transcriptModel";
 import type { MenuSection } from "../../../components/Menu";
+import { Select } from "../../../components/Select";
 import type { TranscriptSegment } from "./timedTranscript";
 import { formatTranscriptTime } from "./activeIndex";
 import type { InCameraChoice, InCameraMark, MarkInCamera } from "./useInCameraMarks";
@@ -36,6 +37,8 @@ export function SegmentInCameraEditor({
 }) {
   const [choice, setChoice] = useState(choices[0]?.title ?? NEW_SESSION);
   const [busy, setBusy] = useState(false);
+  const selectId = useId();
+  useEffect(() => document.getElementById(selectId)?.focus(), [selectId]);
   async function save() {
     setBusy(true);
     try {
@@ -55,15 +58,19 @@ export function SegmentInCameraEditor({
     >
       <label>
         Mark {formatTranscriptTime(segment.startSec)}–{formatTranscriptTime(segment.endSec)} as
-        <select autoFocus value={choice} onChange={(event) => setChoice(event.target.value)}>
-          {choices.map((candidate) => (
-            <option key={candidate.title} value={candidate.title}>
-              {candidate.title}
-              {candidate.startSec !== undefined ? ` (now ${formatTranscriptTime(candidate.startSec)}–${formatTranscriptTime(candidate.endSec ?? candidate.startSec)})` : ""}
-            </option>
-          ))}
-          <option value={NEW_SESSION}>New in-camera session</option>
-        </select>
+        <Select
+          id={selectId}
+          size="sm"
+          value={choice}
+          onChange={setChoice}
+          options={[
+            ...choices.map((candidate) => ({
+              value: candidate.title,
+              label: `${candidate.title}${candidate.startSec !== undefined ? ` (now ${formatTranscriptTime(candidate.startSec)}–${formatTranscriptTime(candidate.endSec ?? candidate.startSec)})` : ""}`,
+            })),
+            { value: NEW_SESSION, label: "New in-camera session" },
+          ]}
+        />
       </label>
       <button className="btn-action" disabled={busy}>
         Mark

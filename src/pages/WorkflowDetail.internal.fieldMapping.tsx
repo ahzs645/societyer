@@ -644,30 +644,18 @@ export function PersonRefPicker({
           ]}
         />
       </div>
-      <select
-        className="input"
+      <Select
         value={source ?? ""}
         disabled={!category || !personId}
-        onChange={(e) => onChange({ source: e.target.value || undefined })}
-      >
-        <option value="">— Pick field —</option>
-        <optgroup label="Built-in">
-          {fieldOptionsFor(category).map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </optgroup>
-        {definitions && definitions.length > 0 && (
-          <optgroup label="Custom">
-            {definitions.map((d: any) => (
-              <option key={d._id} value={`custom:${d.key}`}>
-                {d.label}
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </select>
+        onChange={(value) => onChange({ source: value || undefined })}
+        placeholder="— Pick field —"
+        clearable
+        clearLabel="— Pick field —"
+        options={[
+          ...fieldOptionsFor(category).map((opt) => ({ value: opt.value, label: opt.label, hint: "Built-in" })),
+          ...(definitions ?? []).map((d: any) => ({ value: `custom:${d.key}`, label: d.label, hint: "Custom" })),
+        ]}
+      />
       {category && !peopleRaw.length && (
         <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
           No {category} yet. Add some in <span className="mono">/app/{category}</span>.

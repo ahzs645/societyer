@@ -36,8 +36,8 @@ test("local grant discovery reports its server requirement and keeps manual oppo
   await expect(page.getByText("Feed discovery needs a connected server; add opportunities manually.", { exact: true })).toBeVisible();
   const select = page.getByLabel("Grant discovery source", { exact: true });
   if (await select.count()) {
-    const available = await select.locator("option").nth(1).getAttribute("value");
-    if (available) await select.selectOption(available);
+    await select.click();
+    await page.getByRole("option").first().click();
     await expect(page.getByRole("button", { name: "Discover", exact: true })).toBeDisabled();
   }
   await page.getByRole("button", { name: "Add opportunity", exact: true }).click();

@@ -220,7 +220,12 @@ test("manual payroll edition is edited, reviewed, published, selected and frozen
       employeeId,
       fields: { date: "2026-05-05", minutes: 480 },
     });
-    return { id: edition._id, hash: edition.contentHash, employeeId };
+    return {
+      id: edition._id,
+      hash: edition.contentHash,
+      employeeId,
+      label: `${edition.name} · revision ${edition.revision} · ${edition.rateSet.method}`,
+    };
   }, societyId);
   await page.goto("/app/payroll/calculator?tab=calculate");
   const form = page.getByRole("form", {
@@ -230,9 +235,8 @@ test("manual payroll edition is edited, reviewed, published, selected and frozen
   await form.getByLabel("Pay period start", { exact: true }).fill("2026-05-01");
   await form.getByLabel("Pay period end", { exact: true }).fill("2026-05-15");
   await form.getByLabel("Payment date", { exact: true }).fill("2026-05-15");
-  await form
-    .getByLabel("Payroll rule edition", { exact: true })
-    .selectOption(fixture.id);
+  await form.getByLabel("Payroll rule edition", { exact: true }).click();
+  await page.getByRole("option", { name: fixture.label, exact: true }).click();
   await form.getByRole("checkbox", { name: /Casey Rules QA/ }).check();
   await form
     .getByRole("button", { name: "Preview calculation", exact: true })

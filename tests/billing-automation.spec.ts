@@ -24,10 +24,16 @@ test("automatic delivery settings and schedules persist, issue once, and expose 
   await page.getByRole("button", { name: "New delivery schedule", exact: true }).click();
   dialog = page.getByRole("dialog", { name: "New delivery schedule", exact: true });
   await dialog.getByRole("textbox", { name: "Schedule name", exact: true }).fill("Sample recurring dispatch");
-  await expect(dialog.getByRole("option", { name: "Browser automation sample", exact: true })).toHaveCount(0);
+  const source = dialog.getByLabel("Schedule source", { exact: true });
+  await source.click();
+  await expect(page.getByRole("option").first()).toBeVisible();
+  await expect(page.getByRole("option", { name: "Browser automation sample", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await dialog.getByRole("button", { name: /Load more sources/ }).click();
   await dialog.getByRole("button", { name: /Load more sources/ }).click();
-  await dialog.getByLabel("Schedule source", { exact: true }).selectOption(seeded.seriesId);
+  await source.click();
+  await page.getByRole("option", { name: "Browser automation sample", exact: true }).click();
+  await expect(source).toContainText("Browser automation sample");
   await expect(dialog.getByRole("textbox", { name: "Schedule recipients", exact: true })).toHaveValue("browser-customer@example.test");
   await dialog.getByRole("textbox", { name: "Delivery timezone", exact: true }).fill("UTC");
   await dialog.getByLabel("Local delivery time", { exact: true }).fill("00:00");

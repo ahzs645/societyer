@@ -9,6 +9,7 @@ import { PageHeader, PageLoading } from "./_helpers";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
 import { WorkspaceLogo } from "../components/WorkspaceLogo";
 import { Badge } from "../components/ui";
+import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPackets";
 import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
@@ -148,15 +149,15 @@ function PortfolioBatchGenerate({ canWrite, onGenerate }: { canWrite: boolean; o
           <p>Tick entities in the table, pick a packet, then generate. A packet only applies to its entity kind; mismatched entities are skipped and reported.</p>
         </InfoPopover>
       </span>
-      <select className="input portfolio-batch__packet" aria-label="Document packet" value={packetKey} onChange={(e) => setPacketKey(e.target.value)}>
-        <option value="">Choose a packet…</option>
-        <optgroup label="Corporation packets">
-          {PACKET_OPTIONS.filter((p) => p.kind === "corporation").map((p) => <option key={`c-${p.key}`} value={p.key}>{p.label}</option>)}
-        </optgroup>
-        <optgroup label="Society packets">
-          {PACKET_OPTIONS.filter((p) => p.kind === "society").map((p) => <option key={`s-${p.key}`} value={p.key}>{p.label}</option>)}
-        </optgroup>
-      </select>
+      <Select
+        className="portfolio-batch__packet"
+        aria-label="Document packet"
+        value={packetKey}
+        onChange={setPacketKey}
+        placeholder="Choose a packet…"
+        searchable
+        options={PACKET_OPTIONS.map((p) => ({ value: p.key, label: p.label, hint: `${KIND_LABEL[p.kind]} packet` }))}
+      />
       {packetKind && (
         <button type="button" className="btn btn--ghost btn--sm" onClick={() => selectKind(packetKind)}>
           Select all {packetKind}s

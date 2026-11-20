@@ -4,6 +4,11 @@ import { readFile, writeFile } from "node:fs/promises";
 type Activate = (locator: Locator) => Promise<void>;
 const sourceUrl = "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/set-up-new-employee/filing-form-td1.html";
 const ruleName = "Synthetic propagation EI edition";
+const employeeName = "Taylor Propagation QA";
+async function pick(scope: Locator, label: string, option: string, activate: Activate) {
+  await activate(scope.getByLabel(label, { exact: true }));
+  await activate(scope.page().getByRole("option", { name: option, exact: true }));
+}
 
 async function seed(page: Page) {
   await page.goto("/app/payroll/calculator?tab=rules");
@@ -68,20 +73,20 @@ async function publishRule(page: Page, activate: Activate) {
   await expect(card).toContainText("published");
 }
 
-async function applyTd1(page: Page, employeeId: string, amount: string, effective: string, both: boolean, activate: Activate) {
+async function applyTd1(page: Page, amount: string, effective: string, both: boolean, activate: Activate) {
   await page.goto("/app/payroll/calculator?tab=td1");
   const panel = page.getByRole("region", { name: "TD1 import", exact: true });
-  await panel.getByLabel("TD1 employee", { exact: true }).selectOption(employeeId);
+  await pick(panel, "TD1 employee", employeeName, activate);
   await expect(panel.getByRole("form", { name: "Reviewed TD1 import", exact: true })).toBeVisible();
   await panel.getByLabel("TD1 received on", { exact: true }).fill(effective);
   await panel.getByLabel("TD1 effective from", { exact: true }).fill(effective);
   if (!both) await panel.getByLabel("Apply BC TD1", { exact: true }).uncheck();
   for (const title of both ? ["Federal TD1", "BC TD1"] : ["Federal TD1"]) {
     const group = panel.getByRole("group", { name: `${title} review`, exact: true });
-    await group.getByLabel(`${title} review source`, { exact: true }).selectOption("manual");
+    await pick(group, `${title} review source`, "Reviewed manual / paper declaration", activate);
     await group.getByLabel(`${title} annual total claim amount`, { exact: true }).fill(title === "Federal TD1" ? "16452.00" : "13216.00");
-    await group.getByLabel(`${title} concurrent employer/payer declaration`, { exact: true }).selectOption("no");
-    await group.getByLabel(`${title} total income below total claims declaration`, { exact: true }).selectOption("no");
+    await pick(group, `${title} concurrent employer/payer declaration`, "No", activate);
+    await pick(group, `${title} total income below total claims declaration`, "No", activate);
     if (title === "Federal TD1") {
       await group.getByLabel("Federal TD1 additional withholding per payment", { exact: true }).fill(amount);
       await group.getByLabel("Federal TD1 annual prescribed-zone deduction", { exact: true }).fill("0");
@@ -124,7 +129,7 @@ test("reviewed settings propagate through native money, freshness guard, frozen 
   }, data);
   expect(edition.rateSet.ei.rate).toBe("0.02");
   expect(edition.sourceEvidence[0].url).toBe(sourceUrl);
-  await applyTd1(page, data.employeeId, "25.50", "2026-05-01", true, activate);
+  await applyTd1(page, "25.50", "2026-05-01", true, activate);
   const declarations = await page.evaluate(async ({ societyId, employeeId }) => {
     const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
     return (await client.query("payrollTd1:workspace", { societyId, employeeId })).page;
@@ -137,7 +142,7 @@ test("reviewed settings propagate through native money, freshness guard, frozen 
   await form.getByLabel("Pay period start", { exact: true }).fill("2026-05-01");
   await form.getByLabel("Pay period end", { exact: true }).fill("2026-05-15");
   await form.getByLabel("Payment date", { exact: true }).fill("2026-05-15");
-  await form.getByLabel("Payroll rule edition", { exact: true }).selectOption(edition._id);
+  await pick(form, "Payroll rule edition", `${edition.name} · revision ${edition.revision} · ${edition.rateSet.method}`, activate);
   await form.getByRole("checkbox", { name: /Taylor Propagation QA/ }).check();
   await activate(form.getByRole("button", { name: "Preview calculation", exact: true }));
   const preview = page.getByRole("region", { name: "Live payroll preview", exact: true });
@@ -162,7 +167,7 @@ test("reviewed settings propagate through native money, freshness guard, frozen 
   expect(draft.result.rules.sources).toContain(sourceUrl);
   // Change a real saved upstream source through the interface, then prove the
   // old concrete draft cannot be approved or silently rewritten.
-  await applyTd1(page, data.employeeId, "50.00", "2026-05-10", false, activate);
+  await applyTd1(page, "50.00", "2026-05-10", false, activate);
   await page.goto(`/app/payroll/calculator?tab=records&calculation=${id}`);
   await activate(saved.getByRole("button", { name: "Approve calculation", exact: true }));
   await expect(saved.getByRole("alert")).toContainText("source data changed");
@@ -204,7 +209,7 @@ test("reviewed settings propagate through native money, freshness guard, frozen 
   expect(sinks.journal.lines.some((row: any) => row.programCode === "STUDENT")).toBe(true);
   // A subsequent current declaration must never rewrite a finalized record or
   // make its downloaded statement use today's mutable profile values.
-  await applyTd1(page, data.employeeId, "75.00", "2026-05-14", false, activate);
+  await applyTd1(page, "75.00", "2026-05-14", false, activate);
   const currentDeclarations = await page.evaluate(async ({ societyId, employeeId }) => {
     const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
     return (await client.query("payrollTd1:workspace", { societyId, employeeId })).page;

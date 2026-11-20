@@ -15,8 +15,7 @@ test("organization GST account can be saved once and referenced while filing", a
     }
   });
   const card = page.getByTestId("gst-account-reference");
-  await expect(card).toContainText("No GST/HST account is saved");
-  await page.getByRole("button", { name: "Add GST/HST account", exact: true }).click();
+  await card.getByRole("button", { name: "Add GST/HST (RT)", exact: true }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByLabel("Kind", { exact: true })).toContainText("GST/HST registration");
   await drawer.getByLabel("Number", { exact: true }).fill("123 456 789 rt 0001");

@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { speakerName } from "../../../../shared/transcriptModel";
+import { Select } from "../../../components/Select";
 import type { TranscriptSpeaker } from "./timedTranscript";
 import { formatTranscriptTime } from "./activeIndex";
 import type { SpeakerStat } from "./speakerSuggestions";
@@ -60,6 +61,7 @@ export function SpeakerAssignment({
     setName(assigned?.name ?? "");
   };
   const groups = attendeeGroups(attendees);
+  const current = other ? "other" : value >= 0 ? String(value) : assigned?.name ? "assigned" : "";
   return (
     <div className={`transcript-assignment${!assigned?.name ? " is-unnamed" : ""}`}>
       {expanded ? (
@@ -91,12 +93,18 @@ export function SpeakerAssignment({
           </button>
         </div>
       ) : (
-        <select
+        <Select
           aria-label={`Assign ${label}`}
+          size="sm"
           disabled={busy}
-          value={other ? "other" : value >= 0 ? String(value) : assigned?.name ? "assigned" : ""}
-          onChange={(event) => {
-            const choice = event.target.value;
+          placeholder="Assign to attendee…"
+          clearable
+          clearLabel="No attendee"
+          searchable={attendees.length > 8}
+          value={current}
+          onChange={(choice) => {
+            // Re-picking the current choice is not a change.
+            if (choice === current) return;
             if (choice === "other") {
               chooseOther();
               return;
@@ -107,25 +115,18 @@ export function SpeakerAssignment({
               choice === "" ? undefined : attendee?.personId,
             );
           }}
-        >
-          <option value="">Assign to attendee…</option>
-          {value < 0 && assigned?.name && <option value="assigned">{assigned.name}</option>}
-          {groups.map((group) => {
-            const options = group.rows.map(({ attendee, index }) => (
-              <option value={index} key={`${attendee.name}-${index}`}>
-                {attendee.name}
-              </option>
-            ));
-            return group.label ? (
-              <optgroup key={group.label} label={group.label}>
-                {options}
-              </optgroup>
-            ) : (
-              options
-            );
-          })}
-          <option value="other">Someone else…</option>
-        </select>
+          options={[
+            ...(value < 0 && assigned?.name ? [{ value: "assigned", label: assigned.name }] : []),
+            ...groups.flatMap((group) =>
+              group.rows.map(({ attendee, index }) => ({
+                value: String(index),
+                label: attendee.name,
+                ...(group.label ? { hint: group.label, keywords: group.label } : {}),
+              })),
+            ),
+            { value: "other", label: "Someone else…" },
+          ]}
+        />
       )}
       {other && (
         <form
@@ -251,25 +252,21 @@ export function SameSpeakerSelect({
     }
   }
   return (
-    <select
+    <Select
       className="transcript-same-as"
+      size="sm"
       aria-label={`${speakerName(label, speakers)} is the same person as…`}
       value=""
+      placeholder="Same person as…"
       disabled={busy || labels.length < 2}
-      onChange={(event) => void merge(event.target.value)}
-    >
-      <option value="">Same person as…</option>
-      {labels
+      onChange={(target) => void merge(target)}
+      options={labels
         .filter((target) => target !== label)
         .map((target) => {
           const targetName = speakerName(target, speakers);
-          return (
-            <option key={target} value={target}>
-              {targetName === target ? target : `${targetName} (${target})`}
-            </option>
-          );
+          return { value: target, label: targetName === target ? target : `${targetName} (${target})` };
         })}
-    </select>
+    />
   );
 }
 

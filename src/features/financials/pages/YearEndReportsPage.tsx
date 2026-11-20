@@ -19,6 +19,7 @@ import { useSociety } from "../../../hooks/useSociety";
 import { organizationVocabulary } from "../../../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "../../../pages/_helpers";
 import { Badge, Field } from "../../../components/ui";
+import { Select } from "../../../components/Select";
 import { centsToDollarInput, dollarInputToCents, formatDate } from "../../../lib/format";
 import { formatMoney } from "../../../lib/money";
 import { OrgStatementTable, RestrictedFundsTable } from "../components/YearEndStatementTables";
@@ -311,18 +312,15 @@ export function YearEndReportsPage() {
 
       <div className="row year-end-controls" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 12 }}>
         <Field label="Fiscal year">
-          <select className="input year-end-fy-select" value={fiscalYear ?? ""} onChange={(e) => setSelectedYear(e.target.value)}>
-            {fiscalYears.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
+          <Select
+            className="year-end-fy-select"
+            value={fiscalYear ?? ""}
+            onChange={(year) => setSelectedYear(year)}
+            options={fiscalYears.map((y) => ({ value: y, label: y }))}
+          />
         </Field>
         {(tab === "annual" || tab === "org" || tab === "restricted") && <Field label="Report currency">
-          <select className="input" aria-label="Report currency" value={currency} onChange={(event) => setSelectedCurrency(event.target.value)} disabled={!branding}>
-            {(branding?.currencies ?? [baseCurrency]).map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
+          <Select aria-label="Report currency" value={currency} onChange={(value) => setSelectedCurrency(value)} disabled={!branding} options={(branding?.currencies ?? [baseCurrency]).map((value) => ({ value, label: value }))} />
         </Field>}
         {(tab === "annual" || tab === "org" || tab === "restricted") && <p className="meta">Only {currency} source amounts are included. No currency conversion.</p>}
       </div>
@@ -474,22 +472,19 @@ export function YearEndReportsPage() {
                   <Plus size={12} /> New statement
                 </button>
                 <Field label="Prefill from grant">
-                  <select
-                    className="input"
+                  <Select
                     value={grantPick}
                     disabled={!restricted || !grantTxns}
-                    onChange={(e) => {
-                      setGrantPick(e.target.value);
-                      if (e.target.value) startFromGrant(e.target.value);
+                    placeholder="Select a grant…"
+                    onChange={(grantId) => {
+                      setGrantPick(grantId);
+                      if (grantId) startFromGrant(grantId);
                     }}
-                  >
-                    <option value="">Select a grant…</option>
-                    {(grants ?? []).filter((grant: any) => restricted?.programGrantScopes?.some((scope: any) => scope.grantId === String(grant._id) && scope.currency === baseCurrency)).map((g: any) => (
-                      <option key={g._id} value={g._id}>
-                        {g.title} — {g.funder}
-                      </option>
-                    ))}
-                  </select>
+                    options={(grants ?? []).filter((grant: any) => restricted?.programGrantScopes?.some((scope: any) => scope.grantId === String(grant._id) && scope.currency === baseCurrency)).map((g: any) => ({
+                      value: String(g._id),
+                      label: `${g.title} — ${g.funder}`,
+                    }))}
+                  />
                 </Field>
               </div>
               {statements === undefined ? (
@@ -690,10 +685,14 @@ function ProgramStatementEditor({
           />
         </Field>
         <Field label="Status">
-          <select className="input" value={edit.status} onChange={(e) => onField({ status: e.target.value })}>
-            <option value="Draft">Draft</option>
-            <option value="Final">Final</option>
-          </select>
+          <Select
+            value={edit.status}
+            onChange={(status) => onField({ status })}
+            options={[
+              { value: "Draft", label: "Draft" },
+              { value: "Final", label: "Final" },
+            ]}
+          />
         </Field>
       </div>
 

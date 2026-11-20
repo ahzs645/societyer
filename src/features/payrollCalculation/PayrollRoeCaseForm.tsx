@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import {
   ROE_PAY_PERIOD_LABELS,
   ROE_REASON_LABELS,
@@ -209,81 +210,66 @@ export function PayrollRoeCaseForm({
       {registers.loader}
       {!record && !parent && (
         <Field label="Existing ROE register record">
-          <select
-            className="input"
+          <Select
             value={registerId}
             disabled={!registers.ready}
-            onChange={(event) => setRegisterId(event.target.value)}
-          >
-            <option value="">
-              Create the corresponding register obligation when required
-            </option>
-            {registers.rows.map((row) => (
-              <option key={row._id} value={row._id}>
-                {row.lastDayPaid} · {row.status} ·{" "}
-                {row.serialNumber ?? "Not issued"}
-              </option>
-            ))}
-          </select>
+            onChange={setRegisterId}
+            placeholder="Create the corresponding register obligation when required"
+            clearable
+            clearLabel="Create the corresponding register obligation when required"
+            options={registers.rows.map((row) => ({
+              value: row._id,
+              label: `${row.lastDayPaid} · ${row.status} · ${row.serialNumber ?? "Not issued"}`,
+            }))}
+          />
         </Field>
       )}
       <div className="form-grid">
         <Field label="Interruption trigger">
-          <select
-            className="input"
+          <Select<RoeWorkflowFacts["trigger"]>
             value={facts.trigger}
-            onChange={(event) =>
-              set("trigger", event.target.value as RoeWorkflowFacts["trigger"])
-            }
-          >
-            <option value="seven_days">
-              Seven consecutive days without work or insurable earnings
-            </option>
-            <option value="reduced_earnings">
-              Weekly earnings below 60% for a listed leave reason
-            </option>
-            <option value="wage_loss">
-              Wage-loss-insurance payments begin
-            </option>
-            <option value="request">
-              Actual request from employee / Service Canada
-            </option>
-            <option value="other">
-              Other specifically reviewed requirement
-            </option>
-          </select>
+            onChange={(value) => set("trigger", value)}
+            options={[
+              {
+                value: "seven_days",
+                label: "Seven consecutive days without work or insurable earnings",
+              },
+              {
+                value: "reduced_earnings",
+                label: "Weekly earnings below 60% for a listed leave reason",
+              },
+              { value: "wage_loss", label: "Wage-loss-insurance payments begin" },
+              {
+                value: "request",
+                label: "Actual request from employee / Service Canada",
+              },
+              { value: "other", label: "Other specifically reviewed requirement" },
+            ]}
+          />
         </Field>
         <Field label="ROE format">
-          <select
-            className="input"
+          <Select<RoeWorkflowFacts["format"]>
             value={facts.format}
-            onChange={(event) =>
-              set("format", event.target.value as "electronic" | "paper")
-            }
-          >
-            <option value="electronic">
-              Electronic — ROE Web / authorized provider
-            </option>
-            <option value="paper">Official pre-numbered paper ROE</option>
-          </select>
+            onChange={(value) => set("format", value)}
+            options={[
+              {
+                value: "electronic",
+                label: "Electronic — ROE Web / authorized provider",
+              },
+              { value: "paper", label: "Official pre-numbered paper ROE" },
+            ]}
+          />
         </Field>
         <Field label="Case pay-period frequency">
-          <select
-            className="input"
+          <Select<RoeWorkflowFacts["payPeriodCode"]>
             value={facts.payPeriodCode}
-            onChange={(event) =>
-              set(
-                "payPeriodCode",
-                event.target.value as RoeWorkflowFacts["payPeriodCode"],
-              )
-            }
-          >
-            {Object.entries(ROE_PAY_PERIOD_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => set("payPeriodCode", value)}
+            options={(
+              Object.keys(ROE_PAY_PERIOD_LABELS) as Array<
+                RoeWorkflowFacts["payPeriodCode"]
+              >
+            ).map((key) => ({ value: key, label: ROE_PAY_PERIOD_LABELS[key] }))}
+          />
         </Field>
         {input("First day worked since previous ROE", "firstDayWorked", true)}
         {input("Last day for which paid", "lastDayPaid", true)}
@@ -312,67 +298,54 @@ export function PayrollRoeCaseForm({
           />
         </Field>
         <Field label="Work-arrangement review">
-          <select
-            className="input"
+          <Select<RoeWorkflowFacts["exception"]>
             value={facts.exception}
-            onChange={(event) =>
-              set(
-                "exception",
-                event.target.value as RoeWorkflowFacts["exception"],
-              )
-            }
-          >
-            <option value="ordinary">Ordinary rule reviewed</option>
-            <option value="casual">
-              Part-time / on-call / casual special rule
-            </option>
-            <option value="annual_vacation">
-              Regular annual business vacation exception review
-            </option>
-            <option value="self_funded">
-              Self-funded leave agreement review
-            </option>
-            <option value="nonstandard">
-              Nonstandard work arrangement review
-            </option>
-            <option value="needs_review">
-              Other facts require Service Canada review
-            </option>
-          </select>
+            onChange={(value) => set("exception", value)}
+            options={[
+              { value: "ordinary", label: "Ordinary rule reviewed" },
+              {
+                value: "casual",
+                label: "Part-time / on-call / casual special rule",
+              },
+              {
+                value: "annual_vacation",
+                label: "Regular annual business vacation exception review",
+              },
+              {
+                value: "self_funded",
+                label: "Self-funded leave agreement review",
+              },
+              {
+                value: "nonstandard",
+                label: "Nonstandard work arrangement review",
+              },
+              {
+                value: "needs_review",
+                label: "Other facts require Service Canada review",
+              },
+            ]}
+          />
         </Field>
         <Field label="Actual request from">
-          <select
-            className="input"
+          <Select<RoeWorkflowFacts["requestFrom"]>
             value={facts.requestFrom}
-            onChange={(event) =>
-              set(
-                "requestFrom",
-                event.target.value as RoeWorkflowFacts["requestFrom"],
-              )
-            }
-          >
-            <option value="none">No actual request recorded</option>
-            <option value="employee">Employee</option>
-            <option value="service_canada">Service Canada</option>
-          </select>
+            onChange={(value) => set("requestFrom", value)}
+            options={[
+              { value: "none", label: "No actual request recorded" },
+              { value: "employee", label: "Employee" },
+              { value: "service_canada", label: "Service Canada" },
+            ]}
+          />
         </Field>
         <Field label="Case reason for issuing ROE">
-          <select
-            className="input"
+          <Select<RoeWorkflowFacts["reasonCode"]>
             value={facts.reasonCode}
-            onChange={(event) =>
-              set(
-                "reasonCode",
-                event.target.value as RoeWorkflowFacts["reasonCode"],
-              )
-            }
-          >
-            {ROE_REASONS.map((code) => (
-              <option key={code} value={code}>
-                {code} — {ROE_REASON_LABELS[code]}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => set("reasonCode", value)}
+            options={ROE_REASONS.map((code) => ({
+              value: code,
+              label: `${code} — ${ROE_REASON_LABELS[code]}`,
+            }))}
+          />
         </Field>
       </div>
       <label>
@@ -417,29 +390,27 @@ export function PayrollRoeCaseForm({
             true,
           )}
           <Field label="Reduced-earnings reason">
-            <select
-              className="input"
+            <Select<NonNullable<RoeWorkflowFacts["reductionReason"]>>
               value={facts.reductionReason ?? ""}
-              onChange={(event) =>
-                set(
-                  "reductionReason",
-                  event.target.value as RoeWorkflowFacts["reductionReason"],
-                )
-              }
-            >
-              <option value="">Choose actual reason</option>
-              <option value="illness_injury_quarantine">
-                Illness, injury or quarantine
-              </option>
-              <option value="pregnancy">Pregnancy</option>
-              <option value="parental">
-                Parental / newborn or adopted child care
-              </option>
-              <option value="family_care">
-                Compassionate / critically ill family care
-              </option>
-              <option value="other">Other — specific review required</option>
-            </select>
+              onChange={(value) => set("reductionReason", value)}
+              placeholder="Choose actual reason"
+              options={[
+                {
+                  value: "illness_injury_quarantine",
+                  label: "Illness, injury or quarantine",
+                },
+                { value: "pregnancy", label: "Pregnancy" },
+                {
+                  value: "parental",
+                  label: "Parental / newborn or adopted child care",
+                },
+                {
+                  value: "family_care",
+                  label: "Compassionate / critically ill family care",
+                },
+                { value: "other", label: "Other — specific review required" },
+              ]}
+            />
           </Field>
         </div>
       )}

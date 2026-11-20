@@ -668,26 +668,31 @@ const CATEGORY: Record<RegistryDocumentKind, RegistryDocumentCategory> = {
   unknown: "Other",
 };
 
+/**
+ * Every title reads "<Issuer> <document> – <legal name>", in sentence case, so
+ * a registry package sorts and scans as one set in Documents.
+ */
 function suggestedTitle(kind: RegistryDocumentKind, sections: RegistrySectionKind[], facts: RegistryFacts, fileName?: string): string {
   const name = facts.legalName?.value ?? facts.nameInHomeJurisdiction?.value ?? facts.portalAccess?.value.organizationName;
   const suffix = name ? ` – ${name}` : "";
   const date = facts.payment?.value.date ?? facts.emailDateISO?.value.slice(0, 10);
   switch (kind) {
     case "federal_certificate_of_incorporation": {
-      const extras = [sections.includes("federal_articles_of_incorporation") ? "articles" : "", sections.includes("federal_initial_office_and_directors") ? "Form 2" : ""].filter(Boolean);
-      return `Certificate of incorporation${extras.length ? ` with ${extras.join(" and ")}` : ""}${suffix}`;
+      // A certificate filed with its articles or Form 2 is the incorporation package, like BC's registration package.
+      const bundled = sections.includes("federal_articles_of_incorporation") || sections.includes("federal_initial_office_and_directors");
+      return `${bundled ? "Federal incorporation package" : "Federal certificate of incorporation"}${suffix}`;
     }
-    case "federal_articles_of_incorporation": return `Articles of incorporation (Form 1)${suffix}`;
-    case "federal_initial_office_and_directors": return `Initial registered office and first directors (Form 2)${suffix}`;
-    case "federal_corporation_information_sheet": return `Corporation information sheet${suffix}`;
-    case "federal_initial_isc": return `Initial individuals with significant control${suffix}`;
-    case "federal_incorporated_email": return `Business number confirmation email${suffix}`;
-    case "federal_incorporation_email": return `Incorporation email from Corporations Canada${suffix}`;
-    case "federal_payment_email": return `Corporations Canada payment receipt${date ? ` – ${date}` : ""}`;
-    case "federal_access_updated_email": return `Online Filing Centre access update${suffix}`;
+    case "federal_articles_of_incorporation": return `Federal articles of incorporation (Form 1)${suffix}`;
+    case "federal_initial_office_and_directors": return `Federal registered office and first directors (Form 2)${suffix}`;
+    case "federal_corporation_information_sheet": return `Federal corporation information sheet${suffix}`;
+    case "federal_initial_isc": return `Federal initial significant control filing${suffix}`;
+    case "federal_incorporated_email": return `Federal business number email${suffix}`;
+    case "federal_incorporation_email": return `Federal incorporation email${suffix}`;
+    case "federal_payment_email": return `Federal payment receipt${suffix}${date ? ` (${date})` : ""}`;
+    case "federal_access_updated_email": return `Federal Online Filing Centre access update${suffix}`;
     case "bc_statement_of_registration": return `BC statement of registration (Form 33)${suffix}`;
     case "bc_certificate_of_registration": return `BC certificate of registration${facts.duplicateCopy ? " (duplicate copy)" : ""}${suffix}`;
-    case "bc_filing_receipt": return `BC Registries filing receipt${suffix}`;
+    case "bc_filing_receipt": return `BC filing receipt${suffix}`;
     case "bc_cover_sheet": return `BC extra-provincial registration package${suffix}`;
     case "unknown": return fileName?.replace(/\.[^.]+$/, "") || "Registry document";
   }

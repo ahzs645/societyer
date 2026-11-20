@@ -114,7 +114,8 @@ test("the shared payment manager opens from an unsaved invoice and settings; inf
   await activate(manager.getByRole("button", { name: "Add payment method", exact: true }), hasTouch);
   const method = manager.getByRole("group", { name: "Payment method 1", exact: true });
   await method.getByLabel("Method name", { exact: true }).fill("Community EFT");
-  await method.getByLabel("Method type", { exact: true }).selectOption("eft");
+  await activate(method.getByLabel("Method type", { exact: true }), hasTouch);
+  await activate(page.getByRole("option", { name: "EFT / bank transfer", exact: true }), hasTouch);
   await method.getByLabel("Payment details", { exact: true }).fill("Account holder: Community Society\nBank: Demo Credit Union\nInstitution: 809; transit: 12345; account: 0001234567");
   await activate(method.getByText("Use by default on new invoices", { exact: true }), hasTouch);
   const instructions = manager.getByLabel("Payment instructions", { exact: true });

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field, Drawer } from "../../components/ui";
+import { Select } from "../../components/Select";
 import type { EmployeeProfileFields } from "../../../shared/payrollCalculation";
 import type { PayrollCostAllocation } from "../../../shared/payrollEarnings";
 import { payrollFields, type PayrollRow } from "./payrollUi";
@@ -118,10 +119,7 @@ export function PayrollProfileForm({
         data,
         "employmentKind",
       ) as EmployeeProfileFields["employmentKind"],
-      compensation: formText(
-        data,
-        "compensation",
-      ) as EmployeeProfileFields["compensation"],
+      compensation,
       salaryProration:
         compensation !== "hourly" &&
         (salaryProrationReviewed || formText(data, "salaryProrationEvidence"))
@@ -282,22 +280,13 @@ export function PayrollProfileForm({
           ]}
         />
         <Field label="Compensation basis">
-          <select
-            className="input"
-            name="compensation"
+          <Select<EmployeeProfileFields["compensation"]>
             value={compensation}
-            onChange={(event) =>
-              setCompensation(
-                event.target.value as EmployeeProfileFields["compensation"],
-              )
-            }
-          >
-            {["hourly", "monthly", "annual"].map((basis) => (
-              <option key={basis} value={basis}>
-                {basis}
-              </option>
-            ))}
-          </select>
+            onChange={setCompensation}
+            options={(["hourly", "monthly", "annual"] as const).map(
+              (basis) => ({ value: basis, label: basis }),
+            )}
+          />
         </Field>
         <MoneyInput
           label="Hourly rate or salary for selected basis"
@@ -561,23 +550,24 @@ export function PayrollProfileForm({
               ["provincialTaxExempt", "BC income below claims instruction"],
             ] as const
           ).map(([key, label]) => (
-            <Field key={key} label={label}>
-              <select
-                className="input"
-                name={key}
-                defaultValue={
-                  current?.td1[key] === undefined
-                    ? ""
-                    : current.td1[key]
-                      ? "yes"
-                      : "no"
-                }
-              >
-                <option value="">Use shared profile instruction</option>
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </Field>
+            <SelectInput
+              key={key}
+              label={label}
+              name={key}
+              value={
+                current?.td1[key] === undefined
+                  ? ""
+                  : current.td1[key]
+                    ? "yes"
+                    : "no"
+              }
+              choices={[
+                { value: "yes", label: "Yes" },
+                { value: "no", label: "No" },
+              ]}
+              optional
+              emptyLabel="Use shared profile instruction"
+            />
           ))}
         </div>
       </details>
@@ -620,22 +610,18 @@ export function PayrollProfileForm({
           <legend>CPP election {index + 1}</legend>
           <div className="payroll-calculator__form-grid">
             <Field label={`Election ${index + 1} action`}>
-              <select
-                className="input"
+              <Select<Election["action"]>
                 value={row.action}
-                onChange={(e) =>
+                onChange={(action) =>
                   setElections((old) =>
-                    old.map((r, i) =>
-                      i === index
-                        ? { ...r, action: e.target.value as Election["action"] }
-                        : r,
-                    ),
+                    old.map((r, i) => (i === index ? { ...r, action } : r)),
                   )
                 }
-              >
-                <option value="stop">Stop</option>
-                <option value="restart">Restart</option>
-              </select>
+                options={[
+                  { value: "stop", label: "Stop" },
+                  { value: "restart", label: "Restart" },
+                ]}
+              />
             </Field>
             <Field label={`Election ${index + 1} received date`}>
               <input
@@ -812,38 +798,34 @@ export function PayrollProfileForm({
               />
             </Field>
             <Field label={`Allocation ${index + 1} fund restriction`}>
-              <select
-                className="input"
+              <Select
                 value={row.fundRestrictionId ?? ""}
-                onChange={(e) =>
-                  allocation(index, {
-                    fundRestrictionId: e.target.value || undefined,
-                  })
+                onChange={(value) =>
+                  allocation(index, { fundRestrictionId: value || undefined })
                 }
-              >
-                <option value="">None</option>
-                {funds.map((fund) => (
-                  <option key={fund._id} value={fund._id}>
-                    {pickerName(fund)}
-                  </option>
-                ))}
-              </select>
+                placeholder="None"
+                clearable
+                clearLabel="None"
+                options={funds.map((fund) => ({
+                  value: fund._id,
+                  label: pickerName(fund),
+                }))}
+              />
             </Field>
             <Field label={`Allocation ${index + 1} grant`}>
-              <select
-                className="input"
+              <Select
                 value={row.grantId ?? ""}
-                onChange={(e) =>
-                  allocation(index, { grantId: e.target.value || undefined })
+                onChange={(value) =>
+                  allocation(index, { grantId: value || undefined })
                 }
-              >
-                <option value="">None</option>
-                {grants.map((grant) => (
-                  <option key={grant._id} value={grant._id}>
-                    {pickerName(grant)}
-                  </option>
-                ))}
-              </select>
+                placeholder="None"
+                clearable
+                clearLabel="None"
+                options={grants.map((grant) => ({
+                  value: grant._id,
+                  label: pickerName(grant),
+                }))}
+              />
             </Field>
             <Field label={`Allocation ${index + 1} program code`}>
               <input

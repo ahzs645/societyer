@@ -18,6 +18,7 @@ import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { DatePicker } from "../components/DatePicker";
+import { Select } from "../components/Select";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { RecordTable, RecordTableScope, RecordTableViewToolbar, RecordTableFilterChips, RecordTableFilterPopover, RecordTableEmpty, RecordTablePhoneCard, useObjectRecordTableData } from "@/platform/record-engine";
 import { useIsMobile } from "../lib/useIsMobile";
@@ -238,7 +239,8 @@ export function ReceiptsPage() {
         footer={<><button className="btn" onClick={() => setForm(null)} disabled={busy}>Cancel</button><button className="btn btn--accent" onClick={() => void save()} disabled={!canWrite || busy || (form?.documentKind === "official_tax_receipt" && !officialReady)}>{busy ? "Saving…" : form?.documentKind === "official_tax_receipt" ? "Prepare for signature" : "Record acknowledgement"}</button></>}>
         {form && <div>
           {error && <Banner tone="danger">{error}</Banner>}
-          <Field label="Document kind"><select className="input" value={form.documentKind} disabled={Boolean(form.sourceAcknowledgementId || form.replacesReceiptId)} onChange={event => setForm({ ...form, documentKind: event.target.value, giftEligibilityConfirmed: false })}><option value="acknowledgement">Donation acknowledgement</option><option value="official_tax_receipt" disabled={!officialReady}>Official tax receipt — paper signature</option></select></Field>
+          <Field label="Document kind"><Select<ReceiptDocumentKind> value={form.documentKind} disabled={Boolean(form.sourceAcknowledgementId || form.replacesReceiptId)} onChange={documentKind => setForm({ ...form, documentKind, giftEligibilityConfirmed: false })}
+            options={[{ value: "acknowledgement", label: "Donation acknowledgement" }, { value: "official_tax_receipt", label: "Official tax receipt — paper signature", disabled: !officialReady }]} /></Field>
           {form.documentKind === "official_tax_receipt" ? <Banner tone="info" title="Prepare, sign, then record issue">The number, registered issuer, gift facts and intended issue date are fixed when prepared. Obtain an authorized paper signature, upload the signed copy, then choose Record signed issue.</Banner> : <p>This document acknowledges the contribution and makes no tax-deductibility claim.</p>}
           <Field label="Donor full name" hint="For an individual, include the middle initial when applicable." required><input className="input" value={form.donorName} readOnly={Boolean(form.sourceAcknowledgementId)} onChange={event => setForm({ ...form, donorName: event.target.value })} /></Field>
           <Field label="Donor address" required={form.documentKind === "official_tax_receipt"}><textarea className="input" rows={3} value={form.donorAddress} onChange={event => setForm({ ...form, donorAddress: event.target.value })} /></Field>
@@ -261,7 +263,8 @@ export function ReceiptsPage() {
           {error && <Banner tone="danger">{error}</Banner>}
           <p>Receipt <strong>{signatureForm.receiptNumber}</strong> · {formatMoney(signatureForm.amountCents)} · Printed issue date {formatDate(signatureForm.signedOn)}</p>
           <p>Retain the signed paper receipt as a PDF or image in <Link to="/app/documents?intent=new&category=Other&title=Signed%20donation%20receipt">Documents</Link>, then select it below. If the actual issue date changed, void this preparation and prepare a replacement.</p>
-          <Field label="Signed copy document" required><select className="input" value={signatureForm.signedCopyDocumentId} onChange={event => setSignatureForm({ ...signatureForm, signedCopyDocumentId: event.target.value, expectedSignedCopyRevision: "", authorityConfirmed: false })}><option value="">Choose a retained signed copy</option>{(documents ?? []).filter(document => !document.flaggedForDeletion && !document.archivedAtISO).map(document => <option key={document._id} value={document._id}>{document.title || document.fileName || "Untitled document"}</option>)}</select></Field>
+          <Field label="Signed copy document" required><Select value={signatureForm.signedCopyDocumentId} placeholder="Choose a retained signed copy" searchable onChange={signedCopyDocumentId => setSignatureForm({ ...signatureForm, signedCopyDocumentId, expectedSignedCopyRevision: "", authorityConfirmed: false })}
+            options={(documents ?? []).filter(document => !document.flaggedForDeletion && !document.archivedAtISO).map(document => ({ value: document._id, label: document.title || document.fileName || "Untitled document" }))} /></Field>
           {selectedProof?.reviewIssue && <Banner tone="warn">{selectedProof.reviewIssue}</Banner>}
           {signedProofReady && selectedProof && <DocumentPreviewButton document={{ _id: selectedProof.documentId, latestVersionId: selectedProof.documentVersionId, storageId: selectedProof.storageId, fileName: selectedProof.fileName, mimeType: selectedProof.mimeType, sha256: selectedProof.sha256, fileSizeBytes: selectedProof.fileSizeBytes, versionOnly: Boolean(selectedProof.documentVersionId) }} label="Review retained signed copy" />}
           <Field label="Authorized signatory name" required><input className="input" value={signatureForm.signatoryName} onChange={event => setSignatureForm({ ...signatureForm, signatoryName: event.target.value })} /></Field>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
-import { chromium, devices } from "@playwright/test";
+import { chromium, devices, type Locator } from "@playwright/test";
 const destination = "/workspace/scratch/payroll-responsive-roe-inspection",
   baseURL = process.env.PAYROLL_RESPONSIVE_ROE_URL ?? "http://127.0.0.1:4211";
 await mkdir(destination, { recursive: true });
@@ -88,12 +88,15 @@ try {
       name: "ROE workflow",
       exact: true,
     });
-    await panel
-      .getByLabel("ROE workflow employee", { exact: true })
-      .selectOption(saved.employeeId);
-    await panel
-      .getByLabel("ROE workflow case", { exact: true })
-      .selectOption(saved.id);
+    const activate = (control: Locator) =>
+      layout.touch ? control.tap() : control.click();
+    await activate(panel.getByLabel("ROE workflow employee", { exact: true }));
+    await activate(
+      page.getByRole("option", { name: "Alex Source review", exact: true }),
+    );
+    // The seeded case is the only one for this employee.
+    await activate(panel.getByLabel("ROE workflow case", { exact: true }));
+    await activate(page.getByRole("option").first());
     const detail = panel.getByRole("article", {
       name: "Selected ROE case",
       exact: true,

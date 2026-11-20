@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { FileText, GitCompare, Lock } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { PdfPreview, type PdfTextLayerInfo } from "../../components/PdfPreview";
+import { Select } from "../../components/Select";
 import { diffTokens, tokenize, type Chunk } from "../../lib/wordDiff";
 import { getRestoredFile } from "../../lib/workspaceArchiveFiles";
 import type { IntakeBlock } from "../../../shared/intake/blocks";
@@ -257,9 +258,14 @@ function VersionDiff({ societyId, extract, versions, compareFileId, onCompare }:
     <div className="intake-diff">
       <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
         <label className="muted" htmlFor="intake-compare">Compare this copy with</label>
-        <select id="intake-compare" className="input" style={{ maxWidth: 360 }} value={compareFileId ?? ""} onChange={(event) => onCompare(event.target.value)}>
-          {versions.filter((version) => version.fileId).map((version) => <option key={version.fileKey} value={version.fileId}>{version.name} ({version.relation.replace(/-/g, " ")})</option>)}
-        </select>
+        <Select
+          id="intake-compare"
+          style={{ maxWidth: 360 }}
+          value={compareFileId ?? ""}
+          placeholder="Choose a copy"
+          onChange={onCompare}
+          options={versions.flatMap((version) => version.fileId ? [{ value: version.fileId, label: `${version.name} (${version.relation.replace(/-/g, " ")})` }] : [])}
+        />
       </div>
       {!other && compareFileId && <p className="muted">Loading…</p>}
       {other && !other.extract && <p className="muted">That copy has no stored text (catalogued or unreadable).</p>}

@@ -12,6 +12,7 @@ import {
 } from "../../../components/charts";
 import { MobileFold } from "../../../components/MobileFold";
 import { Money } from "../../../components/Money";
+import { Select } from "../../../components/Select";
 import { StatTile } from "../../../components/StatTile";
 import { todayDateOnly } from "../../../lib/format";
 import { useIsMobile } from "../../../lib/useIsMobile";
@@ -136,7 +137,7 @@ export function FinancialInsights({
         compareNote={compareMode !== "off" && !data.loading && !view.previousCovered ? UNCOVERED_NOTE[compareMode] : undefined}
       />
       <div className="insights__tools">
-        {data.availableCurrencies.length > 1 && <label className="finance-report-control"><span className="finance-report-control__label">Chart currency</span><select className="input" aria-label="Chart currency" value={data.currency} onChange={(event) => { setCurrencyChoice(event.target.value); setSelection(null); }}>{data.availableCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label>}
+        {data.availableCurrencies.length > 1 && <label className="finance-report-control"><span className="finance-report-control__label">Chart currency</span><Select aria-label="Chart currency" value={data.currency} onChange={(currency) => { setCurrencyChoice(currency); setSelection(null); }} options={data.availableCurrencies.map((currency) => ({ value: currency, label: currency }))} /></label>}
         <button className="btn btn--sm" onClick={data.refreshSource}><span>Refresh<span className="finance-label-wide"> complete chart sources</span><span className="finance-label-narrow" aria-hidden="true"> charts</span></span></button>
         {data.loading && <span>Loading {data.sourceProgress.toLocaleString()} records…</span>}
         {data.sourceError && <span role="alert" className="field__error">{data.sourceError}</span>}

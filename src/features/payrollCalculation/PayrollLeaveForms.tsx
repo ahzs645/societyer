@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { formatDate } from "../../lib/format";
 import {
   bcVacationTimeEntitlement,
@@ -375,31 +376,26 @@ export function VacationRequestForm({
             label={`Linked payroll work record ${index + 1}`}
             hint="Optional: link the same dated absence already entered in payroll."
           >
-            <select
-              className="input"
+            <Select
               value={day.payrollWorkDayId}
               disabled={!work.ready}
-              onChange={(event) =>
+              onChange={(payrollWorkDayId) =>
                 setDays((old) =>
                   old.map((row, i) =>
-                    i === index
-                      ? { ...row, payrollWorkDayId: event.target.value }
-                      : row,
+                    i === index ? { ...row, payrollWorkDayId } : row,
                   ),
                 )
               }
-            >
-              <option value="">No linked work record</option>
-              {work.rows
+              placeholder="No linked work record"
+              clearable
+              clearLabel="No linked work record"
+              options={work.rows
                 .filter((row) => row.date === day.date)
-                .map((row) => (
-                  <option key={row._id} value={row._id}>
-                    {formatDate(row.date)} · Vacation{" "}
-                    {vacationHoursLabel(row.paidVacationMinutes ?? 0)}
-                    {row.holiday ? " · statutory holiday review required" : ""}
-                  </option>
-                ))}
-            </select>
+                .map((row) => ({
+                  value: row._id,
+                  label: `${formatDate(row.date)} · Vacation ${vacationHoursLabel(row.paidVacationMinutes ?? 0)}${row.holiday ? " · statutory holiday review required" : ""}`,
+                }))}
+            />
           </Field>
           <button
             type="button"

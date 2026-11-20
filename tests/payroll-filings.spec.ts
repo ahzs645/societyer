@@ -7,6 +7,10 @@ import {
 } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+async function pick(scope: Locator, label: string, option: string | RegExp) {
+  await scope.getByLabel(label, { exact: true }).click();
+  await scope.page().getByRole("option", { name: option, exact: true }).click();
+}
 async function checked(scope: Locator, label: string) {
   const input = scope.getByRole("checkbox", { name: label, exact: true });
   if (!(await input.isChecked())) await input.check();
@@ -143,7 +147,7 @@ test("actual T4A/T619 form generates official-schema XML without persisting tran
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const panel = await seeded(page);
-  await panel.getByLabel("Filing format", { exact: true }).selectOption("T4A");
+  await pick(panel, "Filing format", "T4A");
   await employer(panel);
   for (const [label, value] of [
     ["Submission reference (1–8 letters/digits)", "TEST0001"],
@@ -152,9 +156,11 @@ test("actual T4A/T619 form generates official-schema XML without persisting tran
     ["Transmitter contact email", "example@example.test"],
   ])
     await panel.getByLabel(label, { exact: true }).fill(value);
-  await panel
-    .getByLabel("Submission schema version", { exact: true })
-    .selectOption("2027");
+  await pick(
+    panel,
+    "Submission schema version",
+    "2027 — accepted from January 11, 2027",
+  );
   await panel
     .getByRole("button", { name: "Add T4A recipient", exact: true })
     .click();
@@ -184,9 +190,11 @@ test("actual T4A/T619 form generates official-schema XML without persisting tran
     await panel
       .getByRole("button", { name: "Add information code", exact: true })
       .click();
-    await panel
-      .getByLabel(`Other information ${index + 1} code`, { exact: true })
-      .selectOption(code);
+    await pick(
+      panel,
+      `Other information ${index + 1} code`,
+      new RegExp(`^${code} — `),
+    );
     await panel
       .getByLabel(`Other information ${index + 1} amount`, { exact: true })
       .fill(code === "037" ? "-10.00" : "10.00");
@@ -235,11 +243,11 @@ test("actual ROE form supports historical periods and all separation blocks in v
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const panel = await seeded(page);
-  await panel.getByLabel("Filing format", { exact: true }).selectOption("ROE");
+  await pick(panel, "Filing format", "Record of employment (ROE)");
   await employer(panel);
-  const employee = panel.getByLabel("ROE employee", { exact: true });
-  await expect(employee.locator("option")).toHaveCount(2);
-  await employee.selectOption({ label: "Alex Synthetic" });
+  await panel.getByLabel("ROE employee", { exact: true }).click();
+  await expect(page.getByRole("option")).toHaveCount(1);
+  await page.getByRole("option", { name: "Alex Synthetic", exact: true }).click();
   await identity(panel, "ROE employee");
   for (const [label, value] of [
     ["First day worked since previous ROE", "2026-10-01"],
@@ -249,9 +257,7 @@ test("actual ROE form supports historical periods and all separation blocks in v
     ["ROE contact surname", "Sample"],
   ])
     await panel.getByLabel(label, { exact: true }).fill(value);
-  await panel
-    .getByLabel("ROE pay-period frequency", { exact: true })
-    .selectOption("B");
+  await pick(panel, "ROE pay-period frequency", "B — Biweekly");
   for (let index = 0; index < 2; index++) {
     await panel
       .getByRole("button", { name: "Add earlier pay period", exact: true })
@@ -266,9 +272,7 @@ test("actual ROE form supports historical periods and all separation blocks in v
         .getByLabel(`PP${index + 1} ${label}`, { exact: true })
         .fill(value);
   }
-  await panel
-    .getByLabel("Vacation pay reporting", { exact: true })
-    .selectOption("2");
+  await pick(panel, "Vacation pay reporting", "Paid because no longer working");
   await panel.getByLabel("ROE vacation amount", { exact: true }).fill("200.00");
   await panel
     .getByText("Additional separation amounts (blocks 17B, 17C and 19)", {
@@ -405,15 +409,19 @@ test("complete recorded sources paginate into one T4 and apply earnings-year cap
     ["Transmitter contact email", "example@example.test"],
   ])
     await panel.getByLabel(label, { exact: true }).fill(value);
-  await panel
-    .getByLabel("Submission schema version", { exact: true })
-    .selectOption("2027");
+  await pick(
+    panel,
+    "Submission schema version",
+    "2027 — accepted from January 11, 2027",
+  );
   await identity(panel, "Alex Synthetic");
-  await panel
-    .getByLabel("Employer dental benefit code (box 45)", { exact: true })
-    .selectOption("3");
-  await panel.getByLabel("CPP exempt", { exact: true }).selectOption("no");
-  await panel.getByLabel("EI exempt", { exact: true }).selectOption("no");
+  await pick(
+    panel,
+    "Employer dental benefit code (box 45)",
+    "3 — Employee, spouse and dependent children",
+  );
+  await pick(panel, "CPP exempt", "No");
+  await pick(panel, "EI exempt", "No");
   await checked(
     panel,
     "I reviewed all source records and required historical amounts for this export.",

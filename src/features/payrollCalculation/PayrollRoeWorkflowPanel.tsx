@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, type FormEvent } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { usePermissions } from "../../hooks/usePermissions";
 import { useFinancePermissions } from "../../hooks/useFinancePermissions";
 import { triggerBlobDownload } from "../../lib/zip";
@@ -248,23 +249,24 @@ function FollowUpEditor({
             />
           </Field>
           <Field label="Follow-up status">
-            <select
-              className="input"
+            <Select<RoeFollowUp["status"]>
               value={status}
-              onChange={(event) =>
-                setStatus(event.target.value as RoeFollowUp["status"])
-              }
-            >
-              <option value="open">Open</option>
-              <option value="blocked">Blocked — waiting / no response</option>
-              <option value="done">Done — actually resolved</option>
-              {(item.key !== "acceptance" ||
-                row.assessment.requirement === "not_required") && (
-                <option value="not_applicable">
-                  Reviewed — not applicable
-                </option>
-              )}
-            </select>
+              onChange={setStatus}
+              options={[
+                { value: "open", label: "Open" },
+                { value: "blocked", label: "Blocked — waiting / no response" },
+                { value: "done", label: "Done — actually resolved" },
+                ...(item.key !== "acceptance" ||
+                row.assessment.requirement === "not_required"
+                  ? [
+                      {
+                        value: "not_applicable" as const,
+                        label: "Reviewed — not applicable",
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           </Field>
           <Field label="Protected follow-up evidence">
             <textarea
@@ -531,24 +533,21 @@ function CaseDetail({
                     />
                   </Field>
                   <Field label="Actual submission channel">
-                    <select
-                      className="input"
+                    <Select<typeof channel>
                       value={channel}
-                      onChange={(event) =>
-                        setChannel(event.target.value as typeof channel)
+                      onChange={setChannel}
+                      options={
+                        row.facts.format === "paper"
+                          ? [{ value: "paper", label: "Official paper copies" }]
+                          : [
+                              {
+                                value: "roe_web",
+                                label: "ROE Web — upload or reviewed direct entry",
+                              },
+                              { value: "provider", label: "Authorized provider" },
+                            ]
                       }
-                    >
-                      {row.facts.format === "paper" ? (
-                        <option value="paper">Official paper copies</option>
-                      ) : (
-                        <>
-                          <option value="roe_web">
-                            ROE Web — upload or reviewed direct entry
-                          </option>
-                          <option value="provider">Authorized provider</option>
-                        </>
-                      )}
-                    </select>
+                    />
                   </Field>
                   <Field label="Actual submission reference">
                     <input
@@ -943,43 +942,37 @@ export function PayrollRoeWorkflowPanel({ societyId }: { societyId: string }) {
       {cases.loader}
       <div className="form-grid">
         <Field label="ROE workflow employee">
-          <select
-            className="input"
+          <Select
             value={employeeId}
             disabled={!employees.ready}
-            onChange={(event) => {
-              setEmployee(event.target.value);
+            onChange={(value) => {
+              setEmployee(value);
               setSelected("");
               setEditor(null);
             }}
-          >
-            <option value="">All employees — select one to start a case</option>
-            {employees.rows.map((row) => (
-              <option key={row._id} value={row._id}>
-                {row.name}
-              </option>
-            ))}
-          </select>
+            placeholder="All employees — select one to start a case"
+            clearable
+            clearLabel="All employees — select one to start a case"
+            options={employees.rows.map((row) => ({
+              value: row._id,
+              label: row.name,
+            }))}
+          />
         </Field>
         <Field label="ROE workflow case">
-          <select
-            className="input"
+          <Select
             value={selectedId}
             disabled={!cases.ready}
-            onChange={(event) => {
-              setSelected(event.target.value);
+            onChange={(value) => {
+              setSelected(value);
               setEditor(null);
             }}
-          >
-            <option value="">Select case</option>
-            {cases.rows.map((row) => (
-              <option key={row._id} value={row._id}>
-                {row.employeeName} · {row.facts.lastDayPaid} ·{" "}
-                {row.amendmentOfCaseId ? "amendment · " : ""}
-                {row.stage}
-              </option>
-            ))}
-          </select>
+            placeholder="Select case"
+            options={cases.rows.map((row) => ({
+              value: row._id,
+              label: `${row.employeeName} · ${row.facts.lastDayPaid} · ${row.amendmentOfCaseId ? "amendment · " : ""}${row.stage}`,
+            }))}
+          />
         </Field>
       </div>
       <div className="payroll-calculator__actions">

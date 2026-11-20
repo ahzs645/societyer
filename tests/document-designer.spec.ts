@@ -323,7 +323,7 @@ test("overview, Sankey and year-end pages produce their own searchable report PD
 
   await page.goto("/app/financials/year-end");
   await expect(page.getByRole("button", { name: "Download branded PDF", exact: true })).toBeEnabled();
-  const fiscalYear = await page.getByLabel("Fiscal year", { exact: true }).inputValue();
+  const fiscalYear = (await page.getByLabel("Fiscal year", { exact: true }).innerText()).trim();
   const yearEndTabs = page.locator(".financials-tabs");
   for (const [tab, title, graph] of [
     ["Readiness checklist", "Year-End Readiness Checklist", "Readiness progress"],

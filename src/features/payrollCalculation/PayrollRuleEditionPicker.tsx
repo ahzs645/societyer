@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { PayrollQueryBoundary } from "./payrollUi";
 import {
   payrollRuleCompatibility,
@@ -133,25 +134,28 @@ export function PayrollRuleEditionPicker({
         label="Payroll rule edition"
         hint="Leave the default to use Societyer’s reviewed built-in edition for the actual payment date. An explicit workspace edition must be published, effective and compatible; its full rates, sources and review are frozen in the calculation."
       >
-        <select
-          className="input"
+        <Select
           value={value ?? ""}
           disabled={!result.ready}
-          onChange={(event) => onChange(event.target.value || undefined)}
-        >
-          <option value="">Reviewed built-in rates for payment date</option>
-          {available.map((row) => (
-            <option key={row._id} value={row._id}>
-              {row.name} · revision {row.revision} · {row.rateSet.method}
-            </option>
-          ))}
-          {value && !available.some((row) => row._id === value) && (
-            <option value={value}>
-              {selected?.name ?? "Selected edition"} — unavailable for this
-              date/method
-            </option>
-          )}
-        </select>
+          onChange={(id) => onChange(id || undefined)}
+          placeholder="Reviewed built-in rates for payment date"
+          clearable
+          clearLabel="Reviewed built-in rates for payment date"
+          options={[
+            ...available.map((row) => ({
+              value: row._id,
+              label: `${row.name} · revision ${row.revision} · ${row.rateSet.method}`,
+            })),
+            ...(value && !available.some((row) => row._id === value)
+              ? [
+                  {
+                    value,
+                    label: `${selected?.name ?? "Selected edition"} — unavailable for this date/method`,
+                  },
+                ]
+              : []),
+          ]}
+        />
       </Field>
       {selected && (
         <p>

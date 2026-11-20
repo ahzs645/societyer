@@ -1,4 +1,5 @@
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import type { CalculationInput } from "../../../shared/payrollCalculation";
 import { amountInput, payrollMoney } from "./payrollUi";
 import { pickerName, type PayrollPickerRow } from "./PayrollSourceForms";
@@ -35,7 +36,11 @@ export function readRunCostDrafts(
 ): CalculationInput["employerCostOverrides"] {
   const seen = new Set<string>();
   return rows.length
-    ? rows.map((row) => {
+    ? rows.map((row, index) => {
+        if (!row.employeeId)
+          throw new Error(
+            `Select the employee for employer-cost override ${index + 1}.`,
+          );
         if (!selected.includes(row.employeeId))
           throw new Error(
             "Each employer-cost override must belong to a selected employee.",
@@ -88,21 +93,17 @@ export function PayrollRunEmployerCostsFields({
           <legend>Run employer-cost override {index + 1}</legend>
           <div className="payroll-calculator__form-grid">
             <Field label={`Run cost ${index + 1} employee`}>
-              <select
-                className="input"
-                required
+              <Select
                 value={row.employeeId}
-                onChange={(event) =>
-                  patch(index, { employeeId: event.target.value,evidence:"" })
+                onChange={(employeeId) =>
+                  patch(index, { employeeId, evidence: "" })
                 }
-              >
-                <option value="">Select employee</option>
-                {employees.map((employee) => (
-                  <option key={employee._id} value={employee._id}>
-                    {pickerName(employee)}
-                  </option>
-                ))}
-              </select>
+                placeholder="Select employee"
+                options={employees.map((employee) => ({
+                  value: employee._id,
+                  label: pickerName(employee),
+                }))}
+              />
             </Field>
             {FIELDS.map(([key, label]) => (
               <Field

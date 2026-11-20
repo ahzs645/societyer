@@ -40,6 +40,8 @@ async function settings(page: Page, base = "/app") {
   return drawer;
 }
 
+const METHOD_TYPE_LABELS: Record<string, string> = { eft: "EFT / bank transfer", e_transfer: "E-transfer", cheque: "Cheque" };
+
 async function addMethods(page: Page, base = "/app") {
   const drawer = await settings(page, base);
   await drawer.getByLabel("Payment instructions", { exact: true }).fill("Please quote the invoice number with your payment.");
@@ -53,7 +55,8 @@ async function addMethods(page: Page, base = "/app") {
     await drawer.getByRole("button", { name: "Add payment method", exact: true }).click();
     const group = drawer.getByRole("group", { name: `Payment method ${index + 1}`, exact: true });
     await group.getByLabel("Method name", { exact: true }).fill(method.name);
-    await group.getByLabel("Method type", { exact: true }).selectOption(method.type);
+    await group.getByLabel("Method type", { exact: true }).click();
+    await page.getByRole("option", { name: METHOD_TYPE_LABELS[method.type], exact: true }).click();
     await group.getByLabel("Payment details", { exact: true }).fill(method.details);
     if (method.default) await group.getByText("Use by default on new invoices", { exact: true }).click();
   }

@@ -4,6 +4,7 @@ import {
   datePrecisionOf, emptyValueFor, formatFieldValue, isPromotedDecision, thresholdFor, validateEditedValue,
   type FieldKind, type ReviewField, type ReviewGroup, type ReviewRow,
 } from "../../../shared/intake/review";
+import { Select } from "../../components/Select";
 import { ShortcutHint } from "../../components/ShortcutHint";
 import { Tooltip } from "../../components/Tooltip";
 
@@ -163,8 +164,10 @@ function FieldEditor({ field, initial, onSave, onCancel }: { field: ReviewField;
   const [draft, setDraft] = useState<any>(() => (initial === undefined || initial === null ? emptyValueFor(field.kind) : structuredClone(initial)));
   const [jsonText, setJsonText] = useState(() => JSON.stringify(initial ?? null, null, 2));
   const [error, setError] = useState<string | null>(null);
-  const first = useRef<HTMLInputElement & HTMLSelectElement & HTMLTextAreaElement>(null);
-  useEffect(() => first.current?.focus(), []);
+  const first = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  const id = `edit-${field.path.replace(/[^a-z0-9]/gi, "-")}`;
+  // Yes/no and enum fields use the app Select, which focuses through its trigger id.
+  useEffect(() => (first.current ?? document.getElementById(id))?.focus(), [id]);
   const save = () => {
     let value: unknown = draft;
     if (field.kind === "json") {
@@ -183,7 +186,6 @@ function FieldEditor({ field, initial, onSave, onCancel }: { field: ReviewField;
     }
     onSave(value);
   };
-  const id = `edit-${field.path.replace(/[^a-z0-9]/gi, "-")}`;
   const set = (patch: Record<string, unknown>) => setDraft((current: any) => ({ ...(current ?? {}), ...patch }));
   return (
     <form className="intake-field__editor" onSubmit={(event) => { event.preventDefault(); save(); }} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onCancel(); } }}>
@@ -192,14 +194,10 @@ function FieldEditor({ field, initial, onSave, onCancel }: { field: ReviewField;
       {field.kind === "time" && <input ref={first} id={id} className="input" type="time" aria-label={field.label} value={String(draft ?? "")} onChange={(event) => setDraft(event.target.value)} />}
       {field.kind === "number" && <input ref={first} id={id} className="input" type="number" min={0} step={1} aria-label={field.label} value={draft ?? ""} onChange={(event) => setDraft(event.target.value === "" ? undefined : Number(event.target.value))} />}
       {field.kind === "boolean" && (
-        <select ref={first} id={id} className="input" aria-label={field.label} value={draft ? "yes" : "no"} onChange={(event) => setDraft(event.target.value === "yes")}>
-          <option value="yes">Yes</option><option value="no">No</option>
-        </select>
+        <Select id={id} aria-label={field.label} value={draft ? "yes" : "no"} onChange={(value) => setDraft(value === "yes")} options={[{ value: "yes", label: "Yes" }, { value: "no", label: "No" }]} />
       )}
       {field.kind === "enum" && (
-        <select ref={first} id={id} className="input" aria-label={field.label} value={String(draft ?? "")} onChange={(event) => setDraft(event.target.value)}>
-          {(field.options ?? []).map((option) => <option key={option} value={option}>{option.replace(/_/g, " ")}</option>)}
-        </select>
+        <Select id={id} aria-label={field.label} value={String(draft ?? "")} onChange={(value) => setDraft(value)} options={(field.options ?? []).map((option) => ({ value: option, label: option.replace(/_/g, " ") }))} />
       )}
       {field.kind === "date" && <input ref={first} id={id} className="input" aria-label={`${field.label} (YYYY-MM-DD)`} placeholder="YYYY-MM-DD" value={String(draft?.iso ?? "")} onChange={(event) => set({ iso: event.target.value })} />}
       {field.kind === "person" && (

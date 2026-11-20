@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "../../components/ui";
+import { Select } from "../../components/Select";
 import { Money } from "../../components/Money";
 import { usePermissions } from "../../hooks/usePermissions";
 import type { PayrollTd1Form } from "../../../shared/payrollTd1";
@@ -480,23 +481,20 @@ export function PayrollTd1ImportPanel({
         <p role="status">Loading complete employee choices…</p>
       )}
       <Field label="TD1 employee">
-        <select
-          className="input"
+        <Select
           value={employeeId}
           disabled={!employees.ready || !!fixedEmployeeId}
-          onChange={(event) => {
-            setSelected(event.target.value);
+          onChange={(value) => {
+            setSelected(value);
             setToday(undefined);
             setAttempt(0);
           }}
-        >
-          <option value="">Select an employee</option>
-          {employees.rows.map((employee) => (
-            <option value={employee._id} key={employee._id}>
-              {pickerName(employee)}
-            </option>
-          ))}
-        </select>
+          placeholder="Select an employee"
+          options={employees.rows.map((employee) => ({
+            value: employee._id,
+            label: pickerName(employee),
+          }))}
+        />
       </Field>
       {employeeId && (
         <>

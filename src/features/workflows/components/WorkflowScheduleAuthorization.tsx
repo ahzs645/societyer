@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { Banner, Field } from "../../../components/ui";
 import { Modal } from "../../../components/Modal";
+import { Select } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { formatDateTime } from "../../../lib/format";
@@ -136,11 +137,16 @@ export function WorkflowScheduleAuthorization({ workflow, canManage }: { workflo
       <p>The current supported recipes prepare review work. They do not send meeting notices or file reports automatically. Any required manual actions remain visible in the run history.</p>
       <p>You can revoke scheduled runs here. Access is checked again at execution, and editing the workflow’s steps or configuration requires fresh authorization.</p>
       <Field label="Authorization duration">
-        <select className="input" value={days} disabled={busy} onChange={event => setDays(Number(event.target.value))}>
-          <option value={30}>30 days</option>
-          <option value={60}>60 days</option>
-          <option value={90}>90 days</option>
-        </select>
+        <Select
+          value={String(days)}
+          disabled={busy}
+          onChange={value => setDays(Number(value))}
+          options={[
+            { value: "30", label: "30 days" },
+            { value: "60", label: "60 days" },
+            { value: "90", label: "90 days" },
+          ]}
+        />
       </Field>
       {changedSinceReview && <Banner tone="warn">The workflow changed while this review was open. Close this review and inspect the updated workflow before authorizing it.</Banner>}
     </Modal>

@@ -471,12 +471,11 @@ button.transcript-speaker-name:focus-visible .transcript-speaker-name__hint {
   display: grid;
   gap: token("s-2");
   color: token("text-primary");
-  select {
+  .select-trigger {
     width: 100%;
-    text-overflow: ellipsis;
     font-size: token("fs-xs");
   }
-  &.is-unnamed > select {
+  &.is-unnamed > .select-trigger {
     color: token("warn");
     background: token("warn-soft");
     border-color: token("warn");
@@ -1074,7 +1073,7 @@ button.transcript-speaker-name:focus-visible .transcript-speaker-name__hint {
   justify-self: start;
 }
 // One calm list: unnamed rows are counted in the intro instead of washed in warning colour.
-.transcript-review .transcript-assignment.is-unnamed > select {
+.transcript-review .transcript-assignment.is-unnamed > .select-trigger {
   color: token("text-primary");
   background: token("bg-panel");
   border-color: token("border");
