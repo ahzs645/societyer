@@ -1,6 +1,7 @@
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { test, expect } from "@playwright/test";
-import { recordRows } from "./helpers/rowActions";
+import { recordRows, runRowAction } from "./helpers/rowActions";
+import { searchRecords } from "./helpers/recordTableToolbar";
 
 function monitor(page: import("@playwright/test").Page) {
   const errors: string[] = [];
@@ -52,8 +53,10 @@ test("people directory rejects blank names and retains saved edits on narrow scr
   await form.getByLabel("Full name", { exact: true }).fill("Interface Audit Person");
   await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(form).toHaveCount(0);
-  await page.getByLabel("Search people", { exact: true }).fill("Interface Audit");
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  // The directory is a record table: search from its toolbar (phones: the
+  // View options sheet), then Edit is a row action.
+  await searchRecords(page, "Interface Audit");
+  await runRowAction(recordRows(page).filter({ hasText: "Interface Audit Person" }), "Edit");
   form = page.getByRole("dialog", { name: "Edit person", exact: true });
   await form.getByLabel("Full name", { exact: true }).fill("Interface Audit Person With A Long Name For A Narrow Phone");
   await form.getByRole("button", { name: "Save", exact: true }).click();

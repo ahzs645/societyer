@@ -1,145 +1,130 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
+import { Link, useNavigate } from "react-router-dom";
+import { useQuery } from "convex/react";
+import { Contact, GitMerge, Pencil, Plus, UserPlus, Users } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
-import { useToast } from "../components/Toast";
 import { useSociety } from "../hooks/useSociety";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, EmptyState, Field } from "../components/ui";
-import { Contact, GitMerge, MoreHorizontal, Plus, Undo2, UserPlus } from "lucide-react";
-import { Menu } from "../components/Menu";
+import { Badge } from "../components/ui";
+import { Tabs } from "../components/primitives";
+import type { MenuSection } from "../components/Menu";
 import { formatDate } from "../lib/format";
-import { DatePicker } from "../components/DatePicker";
-import { Select } from "../components/Select";
-import { Modal, useConfirm, usePrompt } from "../components/Modal";
-import { PersonPicker } from "../components/PersonPicker";
 import { PersonMergeDialog, type MergeCandidate } from "../features/people/PersonMergeDialog";
-import { personMatchesSearch } from "../../shared/personMatching";
+import { DuplicatesTab, suggestionCandidates, type DuplicateSuggestion, type SameNameGroup } from "../features/people/directory/DuplicatesTab";
+import { MergeHistoryTab, type DirectoryMergeRow } from "../features/people/directory/MergeHistoryTab";
+import {
+  AddToSocietyDialog,
+  ChooseMergeTarget,
+  EMPTY_PERSON_FORM,
+  PersonDrawer,
+  type PersonForm,
+} from "../features/people/directory/PersonDialogs";
+import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  RecordTablePhoneCard,
+  staticRecordTable,
+} from "@/platform/record-engine";
 
-const ROLE_LABELS: Record<string, string> = { director: "Director", officer: "Officer", member: "Member", controller: "Significant individual" };
-const PAGE_SIZE = 50;
+const TABS = ["profiles", "duplicates", "merges"] as const;
+type DirectoryTab = (typeof TABS)[number];
+
+/** A profile as peopleDirectory:list returns it. */
+type DirectoryPerson = {
+  _id: string;
+  fullName: string;
+  firstName?: string;
+  lastName?: string;
+  dob?: string;
+  isIndividual?: boolean;
+  editable?: boolean;
+  aliases?: string[];
+};
+type DirectoryRecord = DirectoryPerson & { personType: "individual" | "organization"; aliasText: string };
+type PersonRef = { id: string; fullName: string };
+
+const PEOPLE_TABLE = staticRecordTable({
+  id: "people-directory",
+  nameSingular: "person",
+  namePlural: "people",
+  labelSingular: "Person",
+  labelPlural: "People",
+  labelIdentifierFieldName: "fullName",
+  routePath: "/app/people-directory",
+  sorts: [{ field: "fullName", direction: "asc" }],
+  fields: [
+    { name: "fullName", label: "Name", fieldType: FIELD_TYPES.TEXT, size: 280, config: { groupable: false } },
+    { name: "aliasText", label: "Also known as", fieldType: FIELD_TYPES.TEXT, size: 240, config: { groupable: false } },
+    { name: "dob", label: "Date of birth", fieldType: FIELD_TYPES.DATE, size: 140 },
+    {
+      name: "personType",
+      label: "Type",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 140,
+      config: { options: [{ value: "individual", label: "Individual", color: "gray" }, { value: "organization", label: "Organization", color: "blue" }] },
+    },
+  ],
+});
 
 /**
  * Permission-scoped people directory with linked person history profiles.
  */
 export function PeopleDirectoryPage() {
   const society = useSociety();
-  const toast = useToast();
   const { loaded, can } = usePermissions();
   const canManage = loaded && can("members:write");
-  const [saving, setSaving] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>(null);
+  const canReadHistory = can("members:read");
+  const [tab, setTab] = useUrlTab<DirectoryTab>(TABS, "profiles");
 
-  const people = useQuery(api.peopleDirectory.list, society ? { societyId: society._id } : "skip") as
-    | Array<{
-        _id: string;
-        fullName: string;
-        firstName?: string;
-        lastName?: string;
-        dob?: string;
-        isIndividual?: boolean;
-        editable?: boolean;
-      }>
-    | undefined;
-
-  const duplicateGroups = useQuery(api.peopleDirectory.duplicates, society ? { societyId: society._id } : "skip") as
-    | Array<Array<{ id: string; fullName: string; dob?: string }>>
-    | undefined;
-
-  const suggestions = useQuery(api.personHistory.duplicateSuggestions, society && can("members:read") ? { societyId: society._id } : "skip") as
-    | Array<{ ids: [string, string]; names: [string, string]; score: number; reasons: string[]; sharedMeetings: number; occurrences: [number, number]; observed: [string, string] }>
-    | undefined;
-  const mergeHistory = useQuery(api.personHistory.mergeHistory, society && can("members:read") ? { societyId: society._id } : "skip") as any[] | undefined;
-  const upsert = useMutation(api.peopleDirectory.upsert);
-  const dismiss = useMutation(api.personHistory.dismissDuplicate);
-  const unmerge = useMutation(api.personHistory.unmergePeople);
-  const confirm = useConfirm();
-  const prompt = usePrompt();
+  const people = useQuery(api.peopleDirectory.list, society ? { societyId: society._id } : "skip") as DirectoryPerson[] | undefined;
+  const duplicateGroups = useQuery(api.peopleDirectory.duplicates, society ? { societyId: society._id } : "skip") as SameNameGroup[] | undefined;
+  const suggestions = useQuery(
+    api.personHistory.duplicateSuggestions,
+    society && canReadHistory ? { societyId: society._id } : "skip",
+  ) as DuplicateSuggestion[] | undefined;
+  const mergeHistory = useQuery(
+    api.personHistory.mergeHistory,
+    society && canReadHistory ? { societyId: society._id } : "skip",
+  ) as DirectoryMergeRow[] | undefined;
+  const [form, setForm] = useState<PersonForm | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mergePair, setMergePair] = useState<{ people: [MergeCandidate, MergeCandidate]; reasons?: string[] } | null>(null);
-  const [mergeFrom, setMergeFrom] = useState<{ id: string; fullName: string } | null>(null);
-  const [addTo, setAddTo] = useState<{ id: string; fullName: string } | null>(null);
-  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
-  const [listQuery, setListQuery] = useState("");
-  const [page, setPage] = useState(0);
-  const filteredPeople = useMemo(() => (people ?? []).filter((p: any) => personMatchesSearch(p, listQuery)), [people, listQuery]);
+  const [mergeFrom, setMergeFrom] = useState<PersonRef | null>(null);
+  const [addTo, setAddTo] = useState<PersonRef | null>(null);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const dismissSuggestion = async (ids: [string, string], names: [string, string]) => {
-    const rationale = await prompt({ title: "Different people?", message: `Record why ${names[0]} and ${names[1]} are different people. The suggestion will not be shown again.`, placeholder: "e.g. different organizations in the same year", confirmLabel: "Not the same person", required: true });
-    if (!rationale) return;
-    try { await dismiss({ societyId: society._id, personIds: ids as any, rationale }); toast.success("Suggestion dismissed"); }
-    catch (error) { toast.error("Could not dismiss", error instanceof Error ? error.message : undefined); }
-  };
-
-  const undoMerge = async (row: any) => {
-    const ok = await confirm({ title: `Undo merge of ${row.mergedName}?`, message: `${row.mergedName} becomes a separate profile again. The ${row.movedReferences} links moved into ${row.survivorName} by this merge go back, except any that were changed since.`, confirmLabel: "Undo merge", tone: "warn" });
-    if (!ok) return;
-    try { const result: any = await unmerge({ societyId: society._id, mergeId: row._id }); toast.success("Merge undone", `${result.restored} links restored${result.skipped ? `, ${result.skipped} left in place` : ""}`); }
-    catch (error) { toast.error("Could not undo the merge", error instanceof Error ? error.message : undefined); }
-  };
-
-  const openNew = () => {
-    setEditingId(null);
-    setForm({
-      fullName: "",
-      firstName: "",
-      lastName: "",
-      dob: "",
-      isIndividual: true,
-      defaultAddress: "",
-      gender: "",
-      pronouns: "",
-    });
-    setOpen(true);
-  };
-
-  const openEdit = (person: { id: string; fullName: string; firstName?: string; lastName?: string; dob?: string; isIndividual?: boolean; editable?: boolean }) => {
+  const openEdit = (person: DirectoryPerson) => {
     if (!canManage || person.editable === false) return;
-    setEditingId(person.id);
+    setEditingId(person._id);
     setForm({
+      ...EMPTY_PERSON_FORM,
       fullName: person.fullName ?? "",
       firstName: person.firstName ?? "",
       lastName: person.lastName ?? "",
       dob: person.dob ?? "",
       isIndividual: person.isIndividual ?? true,
-      // Only supplied fields are patched server-side, so leaving these blank
-      // never clears the stored values.
-      defaultAddress: "",
-      gender: "",
-      pronouns: "",
+      // Address, gender and pronouns start blank: only supplied fields are
+      // patched server-side, so blank never clears the stored values.
     });
-    setOpen(true);
   };
 
-  const save = async () => {
-    if (!canManage || saving || !form?.fullName.trim()) return;
-    setSaving(true);
-    try {
-      await upsert({
-      societyId: society._id,
-      id: (editingId ?? undefined) as any,
-      fullName: form.fullName.trim(),
-      firstName: form.firstName || undefined,
-      lastName: form.lastName || undefined,
-      dob: form.dob || undefined,
-      isIndividual: form.isIndividual,
-      defaultAddress: form.defaultAddress || undefined,
-      gender: form.gender || undefined,
-      pronouns: form.pronouns || undefined,
-      nowISO: new Date().toISOString(),
-    });
-    setOpen(false);
+  const closeForm = () => {
+    setForm(null);
     setEditingId(null);
-    } catch (error) {
-      toast.error("Person could not be saved", error instanceof Error ? error.message : "Please try again.");
-    } finally { setSaving(false); }
   };
+
+  const duplicateCount = (suggestions?.length ?? 0) + (duplicateGroups?.length ?? 0);
+  const tabItems = [
+    { id: "profiles" as const, label: "Profiles", count: people?.length ?? null },
+    { id: "duplicates" as const, label: "Possible duplicates", count: duplicateCount || null },
+    { id: "merges" as const, label: "Merge history", count: mergeHistory?.length || null },
+  ];
 
   return (
     <div className="page">
@@ -156,334 +141,161 @@ export function PeopleDirectoryPage() {
           </p>
         }
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
+          <button className="btn-action btn-action--primary" onClick={() => setForm({ ...EMPTY_PERSON_FORM })} disabled={!canManage}>
             <Plus size={12} /> New person
           </button>
         }
       />
 
+      <Tabs<DirectoryTab> value={tab} onChange={setTab} tabRoles ariaLabel="People directory sections" items={tabItems} />
 
-      {suggestions && suggestions.length > 0 && (
-        <div className="card people-duplicates">
-          <h2 className="page__title-text">Possible duplicates ({suggestions.length})</h2>
-          <p style={{ opacity: 0.7 }}>
-            Profiles with spelling variants, nicknames, a first name only, or one name inside another. Check the sources before merging; profiles listed at the same meeting are probably different people.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-            {(showAllSuggestions ? suggestions : suggestions.slice(0, 12)).map((s) => (
-              <div key={s.ids.join(":")} className="row people-duplicates__row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid var(--border)", paddingBottom: 6 }}>
-                <span style={{ minWidth: 0, flex: "1 1 260px", overflowWrap: "anywhere" }}>
-                  <Link to={`/app/people-directory/${s.ids[0]}`}>{s.names[0]}</Link> <span className="muted">({s.occurrences[0]})</span>
-                  {" ↔ "}
-                  <Link to={`/app/people-directory/${s.ids[1]}`}>{s.names[1]}</Link> <span className="muted">({s.occurrences[1]})</span>
-                  <br />
-                  <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{s.reasons.join(" · ")}</span>
-                </span>
-                <span className="row" style={{ gap: 6 }}>
-                  <button type="button" className="btn btn--sm" disabled={!canManage} onClick={() => setMergePair({ people: [{ id: s.ids[0], fullName: s.names[0], occurrences: s.occurrences[0], observed: s.observed[0] }, { id: s.ids[1], fullName: s.names[1], occurrences: s.occurrences[1], observed: s.observed[1] }], reasons: s.reasons })}>
-                    <GitMerge size={12} /> Merge…
-                  </button>
-                  <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => void dismissSuggestion(s.ids, s.names)}>Not the same</button>
-                </span>
-              </div>
-            ))}
-          </div>
-          {suggestions.length > 12 && (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowAllSuggestions(!showAllSuggestions)}>
-              {showAllSuggestions ? "Show fewer" : `Show all ${suggestions.length}`}
-            </button>
-          )}
-        </div>
-      )}
-
-      {duplicateGroups && duplicateGroups.length > 0 && (
-        <div className="card">
-          <h2 className="page__title-text">Same name and date of birth</h2>
-          <p style={{ opacity: 0.7 }}>
-            These people share a normalized name and date of birth.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
-            {duplicateGroups.map((group, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {group.map((p) => (
-                  <div
-                    key={p.id}
-                    className="row"
-                    style={{ gap: 8, justifyContent: "space-between" }}
-                  >
-                    <Link style={{ minWidth: 0, overflowWrap: "anywhere" }} to={`/app/people-directory/${p.id}`}>{p.fullName}</Link>
-                    {p.dob && <span style={{ opacity: 0.6 }}>{formatDate(p.dob)}</span>}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="card">
-        <div className="card__head" style={{ flexWrap: "wrap", gap: 8 }}>
-          <h2 className="card__title">Directory profiles</h2>
-          {people && <span className="card__subtitle">{people.length}</span>}
-          {people && people.length > 0 && (
-            <input
-              className="input"
-              type="search"
-              aria-label="Search people"
-              placeholder="Search names"
-              value={listQuery}
-              onChange={(e) => { setListQuery(e.target.value); setPage(0); }}
-              style={{ marginLeft: "auto", width: 220, maxWidth: "100%" }}
-            />
-          )}
-        </div>
-        <div className="card__body">
-        {people === undefined ? (
-          <p className="muted" style={{ margin: 0 }}>Loading…</p>
-        ) : people.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>
-            {organizationRuleScope(society).isCorporation ? (
-              <>No directory profiles yet. Directors, officers and shareholders are in <Link style={{ color: "var(--accent)" }} to="/app/role-holders">Role holders</Link>.</>
-            ) : (
-              <>No directory profiles yet. Board and members are in <Link style={{ color: "var(--accent)" }} to="/app/directors">Directors</Link> and <Link style={{ color: "var(--accent)" }} to="/app/members">Members</Link>.</>
-            )}
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {filteredPeople.length === 0 && (
-              <EmptyState
-                variant="filtered"
-                size="sm"
-                description={`No one matches “${listQuery}”.`}
-                clearFiltersLabel="Clear search"
-                onClearFilters={() => { setListQuery(""); setPage(0); }}
-              />
-            )}
-            {filteredPeople.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE).map((p: any) => (
-              <div
-                key={p._id}
-                className="row"
-                style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}
-              >
-                <span style={{ minWidth: 0, flex: 1 }}>
-                  <Link style={{ overflowWrap: "anywhere" }} to={`/app/people-directory/${p._id}`}>{p.fullName}</Link>
-                  {Boolean(p.dob || p.isIndividual === false || p.aliases?.length) && (
-                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                      {" · "}
-                      {[p.dob ? formatDate(p.dob) : null, p.isIndividual === false ? "Organization" : null, p.aliases?.length ? `also ${p.aliases.slice(0, 2).join(", ")}` : null].filter(Boolean).join(" · ")}
-                    </span>
-                  )}
-                </span>
-                <span className="row" style={{ gap: 4, alignItems: "center", flex: "none" }}>
-                  {canManage && p.editable !== false && (
-                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => openEdit({ ...p, id: p._id })}>
-                      Edit
-                    </button>
-                  )}
-                  <Menu
-                    align="right"
-                    trigger={
-                      <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`More actions for ${p.fullName}`}>
-                        <MoreHorizontal size={14} />
-                      </button>
-                    }
-                    sections={[{
-                      id: "row",
-                      items: [
-                        { id: "merge", label: "Merge with another profile…", icon: <GitMerge size={14} />, disabled: !canManage || p.editable === false, onSelect: () => setMergeFrom({ id: p._id, fullName: p.fullName }) },
-                        { id: "add", label: "Add to society…", icon: <UserPlus size={14} />, disabled: !canManage, onSelect: () => setAddTo({ id: p._id, fullName: p.fullName }) },
-                      ],
-                    }]}
-                  />
-                </span>
-              </div>
-            ))}
-            {filteredPeople.length > PAGE_SIZE && (
-              <div className="row" style={{ gap: 12, alignItems: "center", marginTop: 8 }}>
-                <button type="button" className="btn btn--sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>
-                <span className="muted">Page {page + 1} of {Math.ceil(filteredPeople.length / PAGE_SIZE)}</span>
-                <button type="button" className="btn btn--sm" disabled={(page + 1) * PAGE_SIZE >= filteredPeople.length} onClick={() => setPage(page + 1)}>Next</button>
-              </div>
-            )}
-          </div>
+      <div role="tabpanel" aria-label={tabItems.find((item) => item.id === tab)?.label}>
+        {tab === "profiles" && (
+          <ProfilesTable
+            people={people}
+            canManage={canManage}
+            isCorporation={organizationRuleScope(society).isCorporation}
+            onEdit={openEdit}
+            onMerge={setMergeFrom}
+            onAddToSociety={setAddTo}
+          />
         )}
-        </div>
+        {tab === "duplicates" && (
+          <DuplicatesTab
+            societyId={society._id}
+            suggestions={suggestions}
+            groups={duplicateGroups}
+            canReadHistory={canReadHistory}
+            canManage={canManage}
+            onMerge={(suggestion) => setMergePair({ people: suggestionCandidates(suggestion), reasons: suggestion.reasons })}
+          />
+        )}
+        {tab === "merges" && (
+          <MergeHistoryTab
+            societyId={society._id}
+            merges={mergeHistory ?? []}
+            loading={canReadHistory && mergeHistory === undefined}
+            canManage={canManage}
+          />
+        )}
       </div>
-
-      {!!mergeHistory?.length && (
-        <div className="card">
-          <h2 className="page__title-text">Merge history</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-            {mergeHistory.map((row) => (
-              <div key={row._id} className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <span style={{ flex: "1 1 260px" }}>
-                  {formatDate(row.createdAtISO)} · <strong>{row.mergedName}</strong> into <Link to={`/app/people-directory/${row.survivorId}`}>{row.survivorName}</Link> · {row.movedReferences} links moved · {row.rationale}
-                  {row.status === "undone" && <span className="muted"> · undone {row.undoneAtISO ? formatDate(row.undoneAtISO) : ""}</span>}
-                </span>
-                {row.status === "applied" && <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => void undoMerge(row)}><Undo2 size={12} /> Undo</button>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {mergePair && <PersonMergeDialog societyId={society._id} people={mergePair.people} reasons={mergePair.reasons} onClose={() => setMergePair(null)} />}
       {mergeFrom && (
         <ChooseMergeTarget
           person={mergeFrom}
-          people={(people ?? []) as any}
+          people={people ?? []}
           onClose={() => setMergeFrom(null)}
-          onChoose={(other) => { setMergeFrom(null); setMergePair({ people: [{ id: mergeFrom.id, fullName: mergeFrom.fullName }, other] }); }}
+          onChoose={(other) => {
+            setMergeFrom(null);
+            setMergePair({ people: [mergeFrom, other] });
+          }}
         />
       )}
       {addTo && <AddToSocietyDialog societyId={society._id} person={addTo} onClose={() => setAddTo(null)} />}
 
-      <Drawer
-        open={open}
-        onClose={() => setOpen(false)}
-        title={editingId ? "Edit person" : "New person"}
-        footer={
-          <>
-            <button className="btn" onClick={() => setOpen(false)}>
-              Cancel
-            </button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage || saving || !form?.fullName.trim()}>
-              {saving ? "Saving…" : "Save"}
-            </button>
-          </>
-        }
-      >
-        {form && (
-          <div>
-            <Field label="Full name">
-              <input
-                className="input"
-                value={form.fullName}
-                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-              />
-            </Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="First name">
-                <input
-                  className="input"
-                  value={form.firstName}
-                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                />
-              </Field>
-              <Field label="Last name">
-                <input
-                  className="input"
-                  value={form.lastName}
-                  onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                />
-              </Field>
-            </div>
-            <Field label="Date of birth">
-              <DatePicker
-                value={form.dob}
-                onChange={(value) => setForm({ ...form, dob: value })}
-              />
-            </Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Default address">
-                <input
-                  className="input"
-                  value={form.defaultAddress}
-                  onChange={(e) => setForm({ ...form, defaultAddress: e.target.value })}
-                />
-              </Field>
-              <Field label="Gender (for document grammar)">
-                <Select
-                  value={form.gender}
-                  onChange={(value) => setForm({ ...form, gender: value })}
-                  options={[
-                    { value: "", label: "—" },
-                    { value: "M", label: "Male (he/his)" },
-                    { value: "F", label: "Female (she/her)" },
-                    { value: "X", label: "Neutral (they/their)" },
-                  ]}
-                />
-              </Field>
-              <Field label="Stated pronouns (override gender)">
-                <input
-                  className="input"
-                  placeholder="e.g. they/them, xe/xir"
-                  value={form.pronouns ?? ""}
-                  onChange={(e) => setForm({ ...form, pronouns: e.target.value })}
-                />
-              </Field>
-            </div>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={form.isIndividual}
-                onChange={(e) => setForm({ ...form, isIndividual: e.target.checked })}
-              />{" "}
-              This is an individual (not an organization)
-            </label>
-          </div>
-        )}
-      </Drawer>
+      <PersonDrawer
+        societyId={society._id}
+        editingId={editingId}
+        form={form}
+        canManage={canManage}
+        onChange={setForm}
+        onClose={closeForm}
+      />
     </div>
   );
 }
 
-function ChooseMergeTarget({ person, people, onClose, onChoose }: { person: { id: string; fullName: string }; people: Array<{ _id: string; fullName: string; aliases?: string[] }>; onClose: () => void; onChoose: (other: MergeCandidate) => void }) {
-  const [otherId, setOtherId] = useState("");
-  const other = people.find((p) => p._id === otherId);
-  return (
-    <Modal open onClose={onClose} title={`Merge ${person.fullName} with…`} size="sm" footer={<>
-      <button className="btn" onClick={onClose}>Cancel</button>
-      <button className="btn btn--accent" disabled={!other} onClick={() => other && onChoose({ id: other._id, fullName: other.fullName })}>Continue</button>
-    </>}>
-      <p style={{ marginTop: 0 }}>Choose the other profile for the same person. You pick which one to keep on the next step.</p>
-      <PersonPicker people={people.filter((p) => p._id !== person.id)} value={otherId} onChange={setOtherId} sourceName={person.fullName} ariaLabel="Profile to merge with" />
-    </Modal>
+/** The directory's profiles: open one, edit it, merge it with another or add it to the society. */
+function ProfilesTable({
+  people,
+  canManage,
+  isCorporation,
+  onEdit,
+  onMerge,
+  onAddToSociety,
+}: {
+  people: DirectoryPerson[] | undefined;
+  canManage: boolean;
+  isCorporation: boolean;
+  onEdit: (person: DirectoryPerson) => void;
+  onMerge: (person: PersonRef) => void;
+  onAddToSociety: (person: PersonRef) => void;
+}) {
+  const navigate = useNavigate();
+  const records = useMemo<DirectoryRecord[]>(
+    () => (people ?? []).map((person) => ({
+      ...person,
+      personType: person.isIndividual === false ? "organization" : "individual",
+      aliasText: (person.aliases ?? []).join(", "),
+    })),
+    [people],
   );
-}
 
-/** P14: adding a person to the society is a register change: confirm it, with a start date and source. */
-function AddToSocietyDialog({ societyId, person, onClose }: { societyId: string; person: { id: string; fullName: string }; onClose: () => void }) {
-  const addToSociety = useMutation(api.peopleDirectory.addToSociety);
-  const toast = useToast();
-  const [roleType, setRoleType] = useState("director");
-  const [startDate, setStartDate] = useState("");
-  const [position, setPosition] = useState("Director");
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [sourceReference, setSourceReference] = useState("");
-  const [busy, setBusy] = useState(false);
-  const validDate = !startDate || /^\d{4}(-\d{2}(-\d{2})?)?$/.test(startDate);
-  const needsDate = roleType === "director";
+  const menu = (person: DirectoryRecord): MenuSection[] => [
+    {
+      id: "row",
+      items: [
+        {
+          id: "merge",
+          label: "Merge with another profile…",
+          icon: <GitMerge size={14} />,
+          disabled: !canManage || person.editable === false,
+          onSelect: () => onMerge({ id: person._id, fullName: person.fullName }),
+        },
+        {
+          id: "add",
+          label: "Add to society…",
+          icon: <UserPlus size={14} />,
+          disabled: !canManage,
+          onSelect: () => onAddToSociety({ id: person._id, fullName: person.fullName }),
+        },
+      ],
+    },
+  ];
+
+  const emptyDescription = isCorporation ? (
+    <>Directors, officers and shareholders are in <Link to="/app/role-holders">Role holders</Link>.</>
+  ) : (
+    <>Board and members are in <Link to="/app/directors">Directors</Link> and <Link to="/app/members">Members</Link>.</>
+  );
+
   return (
-    <Modal open onClose={onClose} title={`Add ${person.fullName} to this society`} size="md" footer={<>
-      <button className="btn" onClick={onClose} disabled={busy}>Cancel</button>
-      <button className="btn btn--accent" disabled={busy || !validDate || (needsDate && !startDate) || !sourceReference.trim()} onClick={async () => {
-        setBusy(true);
-        try {
-          await addToSociety({ directoryPersonId: person.id as any, societyId: societyId as any, roleType, ...(startDate ? { startDate } : {}), ...(roleType === "director" && position.trim() ? { position: position.trim() } : {}), ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}), sourceReference: sourceReference.trim(), nowISO: new Date().toISOString() });
-          toast.success(`${person.fullName} added as ${ROLE_LABELS[roleType]}`, roleType === "director" ? "Listed on the Directors register. Record consent and residency there." : undefined);
-          onClose();
-        } catch (error) {
-          toast.error("Could not add", error instanceof Error ? error.message : undefined);
-        } finally { setBusy(false); }
-      }}>{busy ? "Adding…" : `Add as ${ROLE_LABELS[roleType]}`}</button>
-    </>}>
-      <Field label="Role">
-        <Select value={roleType} onChange={setRoleType} options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} />
-      </Field>
-      {roleType === "director" && (
-        <p className="muted" style={{ marginTop: 0 }}>
-          This creates an <strong>Active</strong> entry on the Directors register (and a role-holder record). Consent and BC residency start as not recorded.
-          For a person only seen on an old roster, use the Directors page to add them as “needs review” instead.
-        </p>
+    <RecordListTable<DirectoryRecord>
+      table={PEOPLE_TABLE}
+      tableId="people-directory"
+      label="People"
+      icon={<Users size={14} />}
+      records={records}
+      loading={people === undefined}
+      showTotals={false}
+      onOpen={(person) => navigate(`/app/people-directory/${person._id}`)}
+      renderCell={({ record, field }) => {
+        if (field.name === "fullName") return <strong>{record.fullName}</strong>;
+        if (field.name === "personType") {
+          return record.personType === "organization" ? <Badge>Organization</Badge> : <span className="muted">Individual</span>;
+        }
+        return undefined;
+      }}
+      renderRowActions={(person) =>
+        canManage && person.editable !== false ? (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => onEdit(person)}>
+            <Pencil size={12} /> Edit
+          </button>
+        ) : null
+      }
+      rowMenuSections={menu}
+      renderPhoneCard={(person, { open, selecting }) => (
+        <RecordTablePhoneCard
+          title={person.fullName}
+          badge={person.personType === "organization" ? <Badge>Organization</Badge> : undefined}
+          meta={[person.dob ? formatDate(person.dob) : "", person.aliasText ? `also ${person.aliasText}` : ""]}
+          onOpen={open}
+          selecting={selecting}
+        />
       )}
-      <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-        <Field label={`Start date${needsDate ? "" : " (optional)"} — YYYY, YYYY-MM or YYYY-MM-DD`}><input className="input" aria-invalid={!validDate} value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="2025-06-12" /></Field>
-        {roleType === "director" && <Field label="Position"><input className="input" value={position} onChange={(e) => setPosition(e.target.value)} /></Field>}
-      </div>
-      <Field label="Source URL (optional)"><input className="input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://…" /></Field>
-      <Field label="Source (resolution, minutes or filing that establishes the role)"><input className="input" value={sourceReference} onChange={(e) => setSourceReference(e.target.value)} placeholder="e.g. AGM 2025 minutes, election results" /></Field>
-    </Modal>
+      emptyState={<RecordTableEmpty title="No directory profiles yet" description={emptyDescription} />}
+    />
   );
 }
 

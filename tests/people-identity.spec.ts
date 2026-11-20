@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { recordRows, runRowAction } from "./helpers/rowActions";
 
 /**
  * WP-H: people merge, members & representatives, historical source actions.
@@ -33,26 +34,32 @@ test("duplicate profiles are suggested, merged with history and undone", async (
     await client.mutation("personHistory:observe", { societyId, observation: { occurrenceKey: "fixture-attendance", recordTable: "minutes", recordId: minutes._id, personName: "Jordon Fixture", context: "Attendance (Present)", observedDate: "2019-03-01", meetingId, personId: duplicate, sourceUrl: "https://example.invalid/minutes", sourceReference: "Attendance list" } });
     return { keep, duplicate };
   });
-  await page.goto("/app/people-directory");
-  const suggestions = page.locator(".people-duplicates");
+  // Suggestions live on the directory's "Possible duplicates" tab.
+  await page.goto("/app/people-directory?tab=duplicates");
+  const suggestions = page.locator(".card").filter({ has: page.getByRole("heading", { name: "Possible duplicates", exact: true }) });
+  const suggestion = recordRows(page).filter({ hasText: "Jordon Fixture" });
   await expect(suggestions).toContainText("Jordon Fixture", { timeout: 30_000 });
-  await suggestions.locator(".people-duplicates__row", { hasText: "Jordon Fixture" }).getByRole("button", { name: /Merge/ }).click();
+  await runRowAction(suggestion, "Merge…");
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Jordan Fixture", { exact: false }).first().check().catch(() => {});
   await dialog.getByPlaceholder(/same organization/).fill("Same person; spelling variant in one set of minutes");
   await dialog.getByRole("button", { name: /^Merge into/ }).click();
-  await expect(page.getByRole("heading", { name: "Merge history" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator(".people-duplicates__row", { hasText: "Jordon Fixture" })).toHaveCount(0);
+  await expect(dialog).toHaveCount(0, { timeout: 20_000 });
+  await expect(suggestion).toHaveCount(0);
+  await page.getByRole("tab", { name: /Merge history/ }).click();
+  await expect(recordRows(page).filter({ hasText: "Jordon Fixture" })).toContainText("Merged", { timeout: 20_000 });
 
   await page.goto(`/app/people-directory/${fixture.duplicate}`);
   await expect(page.getByText("Jordon Fixture was merged")).toBeVisible({ timeout: 20_000 });
   await page.getByRole("link", { name: "Open Jordan Fixture" }).click();
-  await expect(page.getByRole("heading", { name: /Meetings, roster observations/ })).toContainText("(1)", { timeout: 20_000 });
+  // The profile's Observations tab counts the moved attendance.
+  await expect(page.getByRole("tab", { name: /Observations/ })).toContainText("1", { timeout: 20_000 });
 
-  await page.goto("/app/people-directory");
-  await page.getByRole("button", { name: "Undo" }).first().click();
+  await page.goto("/app/people-directory?tab=merges");
+  const merge = recordRows(page).filter({ hasText: "Jordon Fixture" });
+  await runRowAction(merge, "Undo");
   await page.getByRole("dialog").getByRole("button", { name: "Undo merge" }).click();
-  await expect(page.getByText(/· undone/).first()).toBeVisible({ timeout: 20_000 });
+  await expect(merge).toContainText("Undone", { timeout: 20_000 });
   await page.goto(`/app/people-directory/${fixture.duplicate}`);
   await expect(page.getByRole("heading", { name: "Jordon Fixture" })).toBeVisible({ timeout: 20_000 });
   expect(errors).toEqual([]);
