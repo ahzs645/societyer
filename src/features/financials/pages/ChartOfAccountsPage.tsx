@@ -7,6 +7,7 @@ import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useCreateIntent } from "../../../hooks/useCreateIntent";
 import { FinanceCreateMenu } from "../components/FinanceCreateMenu";
 import { useSociety } from "../../../hooks/useSociety";
+import { useUrlTab } from "../../../hooks/useUrlTab";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { Money } from "../../../components/Money";
 import { useToast } from "../../../components/Toast";
@@ -14,7 +15,7 @@ import { BooksNav } from "../components/BooksNav";
 import { booksErrorMessage } from "../settings/booksSettings";
 import { AccountDrawer } from "../registers/AccountDrawer";
 import { SectionTabs } from "../registers/SectionTabs";
-import { sectionCounts, type SectionTab } from "../registers/registerModel";
+import { SECTION_TAB_IDS, sectionCounts, type SectionTab } from "../registers/registerModel";
 import { toChartRecords, type ChartAccountRecord, type ChartRegisterRowView } from "../registers/registerRecords";
 
 /** Name cell: indented by depth, with the parent account muted under a sub-account. */
@@ -49,7 +50,7 @@ export function ChartOfAccountsPage() {
   const toast = useToast();
   const rows = useQuery(api.accounting.chartOfAccountsRegister, society ? { societyId: society._id } : "skip") as ChartRegisterRowView[] | undefined;
   const seedChart = useMutation(api.accounting.seedSocietyChartOfAccounts);
-  const [tab, setTab] = useState<SectionTab>("all");
+  const [tab, setTab] = useUrlTab<SectionTab>(SECTION_TAB_IDS, "all");
   const [drawer, setDrawer] = useState<{ id: string | null } | null>(null);
   const [seeding, setSeeding] = useState(false);
 

@@ -223,8 +223,8 @@ function BuyerSiteLink({ recordKey }: { recordKey: string }) {
   }, [record]);
   if (!url) return null;
   return (
-    <a className="btn btn--sm" href={url} target="_blank" rel="noreferrer noopener" title={url} aria-label="Procurement site, in a new tab">
-      <ExternalLink size={14} aria-hidden="true" /> Procurement site
+    <a className="btn-action" href={url} target="_blank" rel="noreferrer noopener" title={url} aria-label="Procurement site, in a new tab">
+      <ExternalLink size={12} aria-hidden="true" /> Procurement site
     </a>
   );
 }

@@ -7,6 +7,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -62,7 +63,8 @@ type Confidence = "High" | "Medium" | "Review";
 type Status = "Draft" | "Verified" | "NeedsReview" | "Archived";
 type BadgeTone = "neutral" | "success" | "warn" | "danger" | "info" | "accent";
 type HistorySection = "facts" | "people" | "motions" | "budgets" | "timeline" | "sources";
-type PeopleSection = "summary" | "terms";
+const PEOPLE_SECTIONS = ["summary", "terms"] as const;
+type PeopleSection = (typeof PEOPLE_SECTIONS)[number];
 
 const HISTORY_SECTIONS: HistorySection[] = ["facts", "people", "motions", "budgets", "timeline", "sources"];
 
@@ -413,7 +415,7 @@ export function OrganizationHistoryPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState("");
-  const [peopleSection, setPeopleSection] = useState<PeopleSection>("summary");
+  const [peopleSection, setPeopleSection] = useUrlTab<PeopleSection>(PEOPLE_SECTIONS, "summary", "people");
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [factsViewId, setFactsViewId] = useState<Id<"views"> | undefined>(undefined);
   const [factsFilterOpen, setFactsFilterOpen] = useState(false);

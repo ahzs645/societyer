@@ -8,6 +8,7 @@ import { InfoPopover } from "../components/InfoPopover";
 import { DatePicker } from "../components/DatePicker";
 import { LiveBrowserView } from "../components/LiveBrowserView";
 import { useSociety } from "../hooks/useSociety";
+import { isUrlTab, useUrlTab } from "../hooks/useUrlTab";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
@@ -213,6 +214,8 @@ function requireSocietyOwned<T extends { societyId?: string }>(value: T, society
   return value;
 }
 
+const CONNECTOR_TABS = ["apps", "runtime", "sessions"] as const;
+
 export function BrowserConnectorsPage() {
   const staticDemo = isStaticDemoRuntime();
   const localOnly = isLocalDataRuntime();
@@ -239,7 +242,7 @@ export function BrowserConnectorsPage() {
   const [gcosIncludeAgreementPdfs, setGcosIncludeAgreementPdfs] = useState(true);
   const [gcosExportJson, setGcosExportJson] = useState("");
   const [pasteText, setPasteText] = useState("");
-  const [activeTab, setActiveTab] = useState("apps");
+  const [activeTab, setActiveTab] = useUrlTab(CONNECTOR_TABS, "apps");
   const refreshInFlight = useRef<{ societyId: string; controller: AbortController } | null>(null);
   const currentSocietyId = useRef(society?._id);
   currentSocietyId.current = society?._id;
@@ -1142,7 +1145,7 @@ export function BrowserConnectorsPage() {
         activeTab={workspaceConnector ? "sessions" : activeTab}
         onTabChange={(tab) => {
           if (tab !== "sessions") backToApps();
-          setActiveTab(tab);
+          if (isUrlTab(CONNECTOR_TABS, tab)) setActiveTab(tab);
         }}
         actions={
           <>

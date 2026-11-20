@@ -4,7 +4,8 @@
 import type { ImageValue } from "../../components/ImageUploadField";
 import { todayDateOnly } from "../../../shared/dateOnly";
 
-export type TabKey = "stock" | "locations" | "lots" | "counts";
+export const INVENTORY_TABS = ["stock", "locations", "lots", "counts"] as const;
+export type TabKey = (typeof INVENTORY_TABS)[number];
 
 // "count" is intentionally excluded from manual movements — counting is done
 // through the physical-count flow, which posts proper "adjustment" deltas. A

@@ -50,6 +50,7 @@ import {
   type FieldErrors,
 } from "../../shared/recordValidation";
 import { useRecordQuery } from "../hooks/useRecordQuery";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { AssetQrLabel } from "../features/assets/AssetQrLabel";
 import { AssetScanner } from "../features/assets/AssetScanner";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
@@ -591,7 +592,8 @@ export function AssetsPage() {
   );
 }
 
-type DetailTab = "overview" | "maintenance" | "custody" | "compliance" | "label";
+const DETAIL_TABS = ["overview", "maintenance", "custody", "compliance", "label"] as const;
+type DetailTab = (typeof DETAIL_TABS)[number];
 
 export function AssetDetailPage() {
   const { canWrite, canExport } = useFinancePermissions();
@@ -614,7 +616,7 @@ export function AssetDetailPage() {
   // the form), not the side drawer — the drawer edit is reserved for the table
   // view, where you're editing a row without leaving the list.
   const [editing, setEditing] = useState(false);
-  const [tab, setTab] = useState<DetailTab>("overview");
+  const [tab, setTab] = useUrlTab<DetailTab>(DETAIL_TABS, "overview");
   const [form, setForm] = useState<AssetFormValue | null>(null);
   const [eventForm, setEventForm] = useState<any>({ eventType: "checkout", toCustodianType: "member", toCustodianName: "", responsiblePersonName: "", location: "", condition: "Good", expectedReturnDate: "", acceptanceSignature: "", notes: "" });
   const [maintenanceForm, setMaintenanceForm] = useState<any>({ title: "Asset maintenance", kind: "maintenance", dueDate: todayDate(), createTask: true, notes: "" });

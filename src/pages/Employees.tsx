@@ -201,7 +201,7 @@ export function EmployeesPage() {
           ? <p>Societies Act s.36 requires a financial-statement note for all director remuneration and employees or contractors receiving at least $75,000. Employee/contractor names are optional and the regulation permits aggregate reporting. Payroll tax and employment-record retention are separate obligations.</p>
           : <p>The payroll source of truth for T4/T4A slips and employment-standards record retention.</p>}
         actions={<>
-          {permissions.can("financials:read") && <Link className="btn btn--sm" to="/app/financials/planning">Plan semester staff costs</Link>}
+          {permissions.can("financials:read") && <Link className="btn-action" to="/app/financials/planning">Plan semester staff costs</Link>}
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New employee
           </button>

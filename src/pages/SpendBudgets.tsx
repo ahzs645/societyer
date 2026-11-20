@@ -6,6 +6,7 @@ import { FIELD_TYPES, RecordTablePhoneCard, staticRecordTable } from "@/platform
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
 import { Progress, Tabs } from "../components/primitives";
@@ -22,7 +23,8 @@ import { RecordListTable } from "@/platform/record-engine";
 import { SPEND_BUDGET_CYCLES, SPEND_BUDGET_CYCLE_LABELS } from "../../shared/spendBudgets";
 import { SPEND_BUDGET_PARAM } from "../features/financials/spendBudgets/spendBudgetLinks";
 
-type BudgetTab = "active" | "upcoming" | "ended" | "archived";
+const BUDGET_TABS = ["active", "upcoming", "ended", "archived"] as const;
+type BudgetTab = (typeof BUDGET_TABS)[number];
 
 const TAB_LABELS: Record<BudgetTab, string> = { active: "Active", upcoming: "Upcoming", ended: "Ended", archived: "Archived" };
 
@@ -118,7 +120,7 @@ export function SpendBudgetsPage() {
   const remove = useMutation(api.spendBudgets.remove);
   const confirm = useConfirm();
   const toast = useToast();
-  const [tab, setTab] = useState<BudgetTab>("active");
+  const [tab, setTab] = useUrlTab<BudgetTab>(BUDGET_TABS, "active");
   const [editing, setEditing] = useState<{ budget: SpendBudgetRow | null } | null>(null);
   // The open budget lives in the URL (?budget=<id>), so claims can link to it.
   const [searchParams, setSearchParams] = useSearchParams();

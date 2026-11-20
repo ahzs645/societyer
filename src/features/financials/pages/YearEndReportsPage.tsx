@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSociety } from "../../../hooks/useSociety";
+import { useUrlTab } from "../../../hooks/useUrlTab";
 import { organizationVocabulary } from "../../../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "../../../pages/_helpers";
 import { Badge, Field } from "../../../components/ui";
@@ -45,7 +46,8 @@ import {
   renderRestrictedFundsHtml,
 } from "../lib/yearEndRenderers";
 
-type TabId = "readiness" | "annual" | "restricted" | "org" | "programs";
+const TAB_IDS = ["readiness", "annual", "restricted", "org", "programs"] as const;
+type TabId = (typeof TAB_IDS)[number];
 
 type EditLine = { key: string; label: string; actual: string; budget: string; notes?: string };
 type EditState = {
@@ -157,7 +159,7 @@ function PreviewBox({ bodyHtml }: { bodyHtml: string }) {
 export function YearEndReportsPage() {
   const { canEditSettings } = useFinancePermissions();
   const society = useSociety();
-  const [tab, setTab] = useState<TabId>("readiness");
+  const [tab, setTab] = useUrlTab<TabId>(TAB_IDS, "readiness");
   const financials = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
   const branding = useQuery(api.invoices.documentTemplates, society ? { societyId: society._id } : "skip") as { currency: string; currencies: string[] } | undefined;
   const [selectedCurrency, setSelectedCurrency] = useState<string | null>(null);

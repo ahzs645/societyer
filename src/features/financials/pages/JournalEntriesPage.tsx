@@ -7,6 +7,7 @@ import { ObjectRecordTable, RecordTableEmpty, type RecordTableCellRenderer } fro
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useCreateIntent } from "@/hooks/useCreateIntent";
 import { useSociety } from "../../../hooks/useSociety";
+import { useUrlTab } from "../../../hooks/useUrlTab";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { Badge } from "../../../components/ui";
 import { Money } from "../../../components/Money";
@@ -17,7 +18,7 @@ import { AccountRefList } from "../registers/AccountRefList";
 import { JournalEntryDrawer, STATUS_TONE, type AccountLookup, type JournalEntryDetail } from "../registers/JournalEntryDrawer";
 import { JournalEntryEditor, type GridAccount } from "../registers/JournalEntryEditor";
 import { SectionTabs } from "../registers/SectionTabs";
-import { REVIEW_FLAG_HINT, REVIEW_FLAG_LABEL, humanise, sectionCounts, sourceLabel, type SectionTab } from "../registers/registerModel";
+import { REVIEW_FLAG_HINT, REVIEW_FLAG_LABEL, humanise, SECTION_TAB_IDS, sectionCounts, sourceLabel, type SectionTab } from "../registers/registerModel";
 import { toJournalRecords, type JournalRecord, type JournalRegisterView } from "../registers/registerRecords";
 import { useJournalLinkOptions } from "../registers/useJournalLinkOptions";
 
@@ -82,7 +83,7 @@ export function JournalEntriesPage() {
   const register = useQuery(api.accounting.journalEntryRegister, societyArgs) as JournalRegisterView | undefined;
   const chartAccounts = useQuery(api.accounting.chartAccounts, societyArgs) as ChartAccountRow[] | undefined;
   const links = useJournalLinkOptions(society?._id);
-  const [tab, setTab] = useState<SectionTab>("all");
+  const [tab, setTab] = useUrlTab<SectionTab>(SECTION_TAB_IDS, "all");
   const [editor, setEditor] = useState<EditorState>({ open: false, entry: null });
 
   const records = useMemo(() => (register ? toJournalRecords(register.rows) : []), [register]);

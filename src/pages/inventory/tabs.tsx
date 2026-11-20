@@ -12,6 +12,7 @@ import { Menu } from "../../components/Menu";
 import { Segmented } from "../../components/primitives";
 import { Badge } from "../../components/ui";
 import { useSociety } from "../../hooks/useSociety";
+import { useUrlTab } from "../../hooks/useUrlTab";
 import { ObjectRecordTable, RecordTableEmpty, type HydratedView } from "@/platform/record-engine";
 import { formatDate, money } from "../../lib/format";
 import { ItemThumb, LocationGlyph, ReceiptEvidence } from "./components";
@@ -28,6 +29,9 @@ type Maps = {
 function receiptTitles(links: any[] | undefined) {
   return (links ?? []).map((link) => link.receiptDocument?.title ?? link.receiptDocumentId).filter(Boolean).join(", ");
 }
+
+const STOCK_VIEWS = ["items", "balances", "movements"] as const;
+type StockView = (typeof STOCK_VIEWS)[number];
 
 export function StockTab({
   itemRows,
@@ -59,7 +63,7 @@ export function StockTab({
   const { itemById, locationById, onHandByItemId, receiptLinksByItemId } = maps;
   const navigate = useNavigate();
   // Items, balances and the movement ledger are three different lists; show one at a time.
-  const [view, setView] = useState<"items" | "balances" | "movements">("items");
+  const [view, setView] = useUrlTab(STOCK_VIEWS, "items", "view");
 
   const itemRecords = useMemo(() => {
     // item id -> the location names it has any balance in ("Stored in" filter).
@@ -118,7 +122,7 @@ export function StockTab({
   return (
     <>
       <div style={{ margin: "8px 0 12px" }}>
-        <Segmented<"items" | "balances" | "movements">
+        <Segmented<StockView>
           value={view}
           onChange={setView}
           items={[

@@ -4,6 +4,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { capitalize, organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -40,7 +41,8 @@ const DELIVERY_SEEDED_VIEWS = ["Problems", "Suppressed", "Email", "SMS"] as cons
  * non-empty set to zero" so we don't tell someone to "clear filters" when
  * there's nothing to clear. Must render inside a <RecordTableScope>.
  */
-type CommsSection = "templates" | "segments" | "campaigns" | "deliveries" | "preferences";
+const COMMS_SECTIONS = ["templates", "segments", "campaigns", "deliveries", "preferences"] as const;
+type CommsSection = (typeof COMMS_SECTIONS)[number];
 
 function CommunicationsEmptyState({
   hasAnyRecords,
@@ -269,7 +271,7 @@ export function CommunicationsPage() {
   const sendCampaign = useAction(api.communications.sendCampaign);
   const toast = useToast();
   const confirm = useConfirm();
-  const [section, setSection] = useState<CommsSection>("templates");
+  const [section, setSection] = useUrlTab<CommsSection>(COMMS_SECTIONS, "templates");
   const [templateDraft, setTemplateDraft] = useState<any | null>(null);
   const [segmentDraft, setSegmentDraft] = useState<any | null>(null);
   const [prefDraft, setPrefDraft] = useState<any | null>(null);

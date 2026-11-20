@@ -9,7 +9,7 @@ import { isLocalDataRuntime } from "../../lib/staticRuntime";
 
 export function TeamsMeetingImport({ societyId }: { societyId: string }) {
   const [open, setOpen] = useState(false);
-  return <><button className="btn" onClick={() => setOpen(true)}>Import from Teams</button>{open && <TeamsImportDrawer societyId={societyId} onClose={() => setOpen(false)} />}</>;
+  return <><button className="btn-action" onClick={() => setOpen(true)}>Import from Teams</button>{open && <TeamsImportDrawer societyId={societyId} onClose={() => setOpen(false)} />}</>;
 }
 function TeamsImportDrawer({ societyId, onClose }: { societyId: string; onClose: () => void }) {
   const settings = useQuery(api.microsoftMeetings.settings, { societyId });
