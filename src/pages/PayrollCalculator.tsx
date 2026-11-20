@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
-import { PageLoading, SeedPrompt } from "./_helpers";
+import { Banner } from "../components/ui";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { PayrollCalculatorWorkspace } from "../features/payrollCalculation/PayrollCalculatorWorkspace";
 import { PayrollQueryBoundary } from "../features/payrollCalculation/payrollUi";
 
@@ -15,8 +16,10 @@ export function PayrollCalculatorPage() {
   if (!permissions.can("financials:read"))
     return (
       <div className="page">
-        <h1>Payroll calculator</h1>
-        <p>Finance read permission is required to view payroll calculations.</p>
+        <PageHeader title="Payroll calculator" />
+        <Banner tone="info">
+          Finance read permission is required to view payroll calculations.
+        </Banner>
       </div>
     );
   return (

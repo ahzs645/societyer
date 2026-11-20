@@ -1,21 +1,20 @@
 import {
   Suspense,
   lazy,
-  useEffect,
-  useRef,
   useState,
   type ComponentType,
   type LazyExoticComponent,
 } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { Star } from "lucide-react";
 import type {
   CalculationInput,
   EarningCodeFields,
 } from "../../../shared/payrollCalculation";
 import { usePermissions } from "../../hooks/usePermissions";
-import { Field } from "../../components/ui";
-import { useScrollOverflow } from "../../hooks/useScrollOverflow";
-import { useIsMobile } from "../../lib/useIsMobile";
+import { Banner, Field, SkeletonRows } from "../../components/ui";
+import { Tabs } from "../../components/primitives";
+import { PageHeader } from "../../pages/_helpers";
 import { PayrollSourcesPanel } from "./PayrollSourcesPanel";
 import {
   PayrollQueryBoundary,
@@ -81,71 +80,20 @@ const PANELS: Record<
     })),
   ),
 };
-/** What the calculator covers. Phones fold the detail under its headline. */
-function PayrollCoverageNotice({ folded }: { folded: boolean }) {
-  const headline = "Native coverage: ordinary British Columbia employment, 2026.";
-  const detail =
-    "Earnings use work-date rules; deductions use the payment-year and January/July CRA edition. Unsupported dates, provinces, missing history, or unreviewed assumptions block approval. Preview and finalization do not initiate deposits or external filings.";
-  if (folded)
-    return (
-      <details className="payroll-calculator__notice">
-        <summary>{headline}</summary>
-        <p>{detail}</p>
-      </details>
-    );
-  return (
-    <div className="payroll-calculator__notice">
-      <strong>{headline}</strong> {detail}
-    </div>
-  );
-}
-
-/**
- * The calculator's sections. They wrap on wide screens; phones get one row that
- * swipes sideways, with the current section kept in view.
- */
-function PayrollSectionNav({
-  items,
-  activeId,
-  favorites,
-  onSelect,
-}: {
-  items: ReadonlyArray<{ id: PayrollViewId; label: string }>;
-  activeId: PayrollViewId;
-  favorites: readonly PayrollViewId[];
-  onSelect: (id: PayrollViewId) => void;
-}) {
-  const navRef = useRef<HTMLElement>(null);
-  const overflow = useScrollOverflow(navRef, [items.length]);
-  useEffect(() => {
-    const nav = navRef.current;
-    const active = nav?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (!nav || !active || nav.scrollWidth <= nav.clientWidth) return;
-    const offset = active.getBoundingClientRect().left - nav.getBoundingClientRect().left;
-    nav.scrollLeft += offset - (nav.clientWidth - active.offsetWidth) / 2;
-  }, [activeId]);
-  return (
-    <nav
-      ref={navRef}
-      className="payroll-calculator__tabs"
-      aria-label="Payroll calculator sections"
-      data-overflow={overflow}
-    >
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className="btn btn--sm"
-          aria-pressed={activeId === item.id}
-          onClick={() => onSelect(item.id)}
-        >
-          {favorites.includes(item.id) && <span aria-hidden="true">★ </span>}
-          {item.label}
-        </button>
-      ))}
-    </nav>
-  );
-}
+/** What the calculator covers, behind the header's ⓘ. */
+const COVERAGE_INFO = (
+  <>
+    <p>
+      <strong>Native coverage: ordinary British Columbia employment, 2026.</strong>
+    </p>
+    <p>
+      Earnings use work-date rules; deductions use the payment-year and
+      January/July CRA edition. Unsupported dates, provinces, missing history,
+      or unreviewed assumptions block approval. Preview and finalization do not
+      initiate deposits or external filings.
+    </p>
+  </>
+);
 
 export function PayrollCalculatorWorkspace({
   societyId,
@@ -154,8 +102,7 @@ export function PayrollCalculatorWorkspace({
 }) {
   const permissions = usePermissions(),
     canWrite = permissions.can("financials:write"),
-    [params, setParams] = useSearchParams(),
-    isMobile = useIsMobile();
+    [params, setParams] = useSearchParams();
   const view = payrollView(params.get("tab")),
     canAccess = view.permissions.every(permissions.can),
     presentation = usePayrollViewPreferences(societyId);
@@ -266,32 +213,93 @@ export function PayrollCalculatorWorkspace({
   };
   const Core = core[view.renderer as keyof typeof core],
     Panel = PANELS[view.renderer as PanelRenderer];
+  const sourceError =
+    metadata.error || employees.error || codes.error || records.error;
+  const missingPermissions = view.permissions.filter(
+    (permission) => !permissions.can(permission),
+  );
+  const tabs = visiblePayrollViews(presentation.preferences, permissions.can).map(
+    (item) => ({
+      id: item.id,
+      label: item.label,
+      icon: presentation.preferences.favorites.includes(item.id) ? (
+        <Star size={12} aria-hidden="true" />
+      ) : undefined,
+    }),
+  );
+  const organizationName = metadata.metadata?.organization.name ?? "Organization";
+
+  function changeYear(value: number) {
+    if (!Number.isInteger(value) || value < 2024 || value > 2100) return;
+    setYear(value);
+    setParams((previous) => {
+      const copy = new URLSearchParams(previous);
+      copy.delete("calculation");
+      return copy;
+    });
+  }
+
+  function showInNavigation() {
+    presentation.update((previous) => ({
+      ...previous,
+      hidden: previous.hidden.filter((id) => id !== view.id),
+    }));
+  }
+
+  function toggleSection(expanded: boolean) {
+    if (expanded === presentation.preferences.expanded[view.id]) return;
+    presentation.update((previous) => ({
+      ...previous,
+      expanded: { ...previous.expanded, [view.id]: expanded },
+    }));
+  }
+
+  function renderView() {
+    if (Core) return Core();
+    if (!Panel)
+      return (
+        <Banner tone="danger" title="Payroll module unavailable">
+          This registered payroll module is unavailable. Reload after its
+          application update.
+        </Banner>
+      );
+    return (
+      <Suspense fallback={<SkeletonRows rows={4} columns={3} />}>
+        <Panel societyId={societyId} />
+      </Suspense>
+    );
+  }
+
   return (
     <div className="page payroll-calculator">
-      <header className="payroll-calculator__heading">
-        <div>
-          <h1>Payroll calculator</h1>
-          <p>
-            {metadata.metadata?.organization.name ?? "Organization"} · Reviewed
-            earnings, source-backed deductions, and retained payroll records.
-          </p>
-        </div>
-        <div className="payroll-calculator__actions">
-          <a className="btn" href="/app/payroll">
-            Payroll register
-          </a>
-          <a className="btn" href="/app/financials/planning">
-            Semester cost planner
-          </a>
-        </div>
-      </header>
-      <PayrollCoverageNotice folded={isMobile} />
+      <PageHeader
+        title="Payroll calculator"
+        subtitle={`${organizationName} · Reviewed earnings, source-backed deductions, and retained payroll records.`}
+        info={COVERAGE_INFO}
+        actions={
+          <>
+            <Link className="btn-action" to="/app/payroll">
+              Payroll register
+            </Link>
+            <Link className="btn-action" to="/app/financials/planning">
+              Semester cost planner
+            </Link>
+          </>
+        }
+      />
       {!canWrite && (
-        <p className="payroll-calculator__notice">
-          Read-only access. Finance write permission is required to change
-          sources or approve payroll.
-        </p>
+        <Banner tone="info" title="Read-only access">
+          Finance write permission is required to change sources or approve
+          payroll.
+        </Banner>
       )}
+      <Tabs<PayrollViewId>
+        value={view.id}
+        onChange={(id) => navigate(id)}
+        tabRoles
+        ariaLabel="Payroll calculator sections"
+        items={tabs}
+      />
       <div className="payroll-calculator__toolbar">
         {view.paymentYear && (
           <Field
@@ -304,30 +312,14 @@ export function PayrollCalculatorWorkspace({
               min="2024"
               max="2100"
               value={year}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (Number.isInteger(value) && value >= 2024 && value <= 2100) {
-                  setYear(value);
-                  setParams((previous) => {
-                    const copy = new URLSearchParams(previous);
-                    copy.delete("calculation");
-                    return copy;
-                  });
-                }
-              }}
+              onChange={(event) => changeYear(Number(event.target.value))}
             />
           </Field>
         )}
-        <a href="/app/payroll?setup=1">
+        <Link to="/app/payroll?setup=1">
           Registered payroll account and provider settings
-        </a>
+        </Link>
       </div>
-      <PayrollSectionNav
-        items={visiblePayrollViews(presentation.preferences, permissions.can)}
-        activeId={view.id}
-        favorites={presentation.preferences.favorites}
-        onSelect={(id) => navigate(id)}
-      />
       <PayrollViewSettings
         preferences={presentation.preferences}
         onChange={presentation.update}
@@ -335,42 +327,24 @@ export function PayrollCalculatorWorkspace({
         error={presentation.error}
       />
       {presentation.preferences.hidden.includes(view.id) && (
-        <p className="payroll-calculator__notice">
+        <Banner tone="info">
           {view.label} is hidden from your navigation; this direct link remains
           available.{" "}
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() =>
-              presentation.update((previous) => ({
-                ...previous,
-                hidden: previous.hidden.filter((id) => id !== view.id),
-              }))
-            }
-          >
+          <button type="button" className="btn btn--sm" onClick={showInNavigation}>
             Show {view.label} in navigation
           </button>
-        </p>
+        </Banner>
       )}
       {metadata.loader}
       {employees.loader}
       {codes.loader}
       {records.loader}
-      {!ready &&
-        !metadata.error &&
-        !employees.error &&
-        !codes.error &&
-        !records.error && (
-          <p role="status">Loading all payroll source pages…</p>
-        )}
+      {!ready && !sourceError && <SkeletonRows rows={6} columns={4} />}
       {!canAccess ? (
-        <p role="alert">
-          This payroll view requires{" "}
-          {view.permissions
-            .filter((permission) => !permissions.can(permission))
-            .join(" and ")}
-          . Authorized supporting calculators remain available under Tools.
-        </p>
+        <Banner tone="info" title={`${view.label} needs more access`}>
+          This payroll view requires {missingPermissions.join(" and ")}.
+          Authorized supporting calculators remain available under Tools.
+        </Banner>
       ) : (
         ready && (
           <PayrollQueryBoundary
@@ -379,36 +353,12 @@ export function PayrollCalculatorWorkspace({
             onRetry={() => setAttempt((old) => old + 1)}
           >
             <details
-              className="payroll-calculator__view-section"
+              className="disclosure payroll-calculator__view-section"
               open={presentation.preferences.expanded[view.id]}
-              onToggle={(event) => {
-                const expanded = event.currentTarget.open;
-                if (expanded !== presentation.preferences.expanded[view.id])
-                  presentation.update((previous) => ({
-                    ...previous,
-                    expanded: { ...previous.expanded, [view.id]: expanded },
-                  }));
-              }}
+              onToggle={(event) => toggleSection(event.currentTarget.open)}
             >
               <summary>{view.label} section</summary>
-              <div>
-                {Core ? (
-                  Core()
-                ) : Panel ? (
-                  <Suspense
-                    fallback={
-                      <p role="status">Loading {view.label.toLowerCase()}…</p>
-                    }
-                  >
-                    <Panel societyId={societyId} />
-                  </Suspense>
-                ) : (
-                  <p role="alert">
-                    This registered payroll module is unavailable. Reload after
-                    its application update.
-                  </p>
-                )}
-              </div>
+              <div>{renderView()}</div>
             </details>
           </PayrollQueryBoundary>
         )

@@ -118,17 +118,6 @@
     border: 1px solid token(border);
     border-radius: 8px;
   }
-  &__tabs {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-block: 16px;
-  }
-  &__tabs button[aria-pressed="true"] {
-    border-color: token(accent);
-    color: token(accent-text);
-    background: token(accent-soft);
-  }
   &__fieldset {
     border: 1px solid token(border);
     border-radius: 8px;
@@ -140,13 +129,11 @@
     padding-inline: 6px;
     font-weight: 600;
   }
+  // The open view, under the app's disclosure row (_disclosure.scss).
   &__view-section {
     min-width: 0;
+    margin-top: 12px;
     > summary {
-      cursor: pointer;
-      padding: 12px 14px;
-      border: 1px solid token(border);
-      border-radius: 8px;
       font-weight: 600;
       margin-bottom: 12px;
     }
@@ -181,27 +168,8 @@
       max-width: none;
     }
   }
-  // Phones: one swiping section row, and the year beside its settings link.
+  // Phones: the year beside its settings link.
   @media (max-width: 760px) {
-    &__tabs {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      overscroll-behavior-x: contain;
-      scrollbar-width: none;
-      margin-inline: -16px;
-      padding-inline: 16px;
-      > button { flex: none; }
-      &::-webkit-scrollbar { display: none; }
-      &[data-overflow='end'] {
-        mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
-      }
-      &[data-overflow='start'] {
-        mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
-      }
-      &[data-overflow='both'] {
-        mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
-      }
-    }
     &__toolbar {
       flex-wrap: nowrap;
       align-items: flex-end;

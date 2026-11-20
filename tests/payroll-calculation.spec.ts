@@ -52,7 +52,7 @@ test("reviewed employer and employee setup produces a persisted, approved, froze
     return { societyId, employeeId, accounts };
   });
   await page.reload();
-  const tab = (name: string) => page.getByRole("navigation", { name: "Payroll calculator sections", exact: true }).getByRole("button", { name, exact: true });
+  const tab = (name: string) => page.getByRole("tablist", { name: "Payroll calculator sections", exact: true }).getByRole("tab", { name, exact: true });
   await tab("Employer setup").click();
   await page.getByRole("button", { name: "Configure employer year", exact: true }).click();
   let form = page.getByRole("form", { name: "Employer setup", exact: true });
