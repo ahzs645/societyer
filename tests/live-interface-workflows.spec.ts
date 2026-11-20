@@ -3,6 +3,8 @@ import { assertLiveFits, liveFixture, livePath, signInLive } from "./helpers/liv
 import { INTERFACE_ROUTES } from "./helpers/interfaceRoutes";
 import { interfaceRouteReadPermission } from "../shared/interfaceRouteAccess";
 import { hasPermission } from "../shared/functions/permissions";
+import { recordRows, runRowAction } from "./helpers/rowActions";
+import { searchRecords } from "./helpers/recordTableToolbar";
 
 test("production login rejects an incorrect password", async ({ page }) => {
   await page.goto("/login");
@@ -44,14 +46,16 @@ test("live people directory validates and persists a created person and edit", a
   await assertLiveFits(page);
   await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(form).toHaveCount(0);
-  await page.getByLabel("Search people", { exact: true }).fill(title);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  // The directory is a record table: search from its toolbar (phones: the
+  // View options sheet), then Edit is a row action.
+  await searchRecords(page, title);
+  await runRowAction(recordRows(page).filter({ hasText: title }), "Edit");
   form = page.getByRole("dialog", { name: "Edit person", exact: true });
   await form.getByLabel("Full name", { exact: true }).fill(`${title} edited`);
   await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(form).toHaveCount(0);
   await page.reload();
-  await page.getByLabel("Search people", { exact: true }).fill(title);
+  await searchRecords(page, title);
   await expect(page.getByText(`${title} edited`, { exact: true }).first()).toBeVisible();
   await assertLiveFits(page);
   expect(errors).toEqual([]);
