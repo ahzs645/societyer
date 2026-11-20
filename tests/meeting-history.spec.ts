@@ -29,7 +29,9 @@ test("meeting history persists form edits, preserves source observations and pro
   });
   await page.goto(`/app/meetings/${fixture.target.meetingId}?tab=minutes`);
   // Evidence, history and person links sit in one closed "Records & evidence" fold.
-  const recordsFold = page.getByTestId("meeting-records-fold").locator("summary");
+  // Its body holds nested <details> (quorum rows, carried actions), so take only the
+  // fold's own summary; the fold's open state is not kept, so it is closed after a reload.
+  const recordsFold = page.getByTestId("meeting-records-fold").locator(":scope > summary");
   await recordsFold.click({ timeout: 30_000 });
   const panel = page.getByRole("region", { name: "Meeting history", exact: true });
   await expect(panel).toBeVisible({ timeout: 30_000 });
