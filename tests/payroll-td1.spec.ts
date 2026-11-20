@@ -429,6 +429,16 @@ test("registered views keep old deep links and persist user-scoped visibility, f
   await expect(nav.getByRole("tab").nth(0)).toHaveText("Calculate");
   await expect(nav.getByRole("tab").nth(1)).toContainText("TD1 import");
   await page.getByText("TD1 import section", { exact: true }).click();
+  // The toggle event saves the preference after the click returns; reload once it is stored.
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Object.keys(localStorage).some((key) =>
+          /"td1":false/.test(localStorage.getItem(key) ?? ""),
+        ),
+      ),
+    )
+    .toBe(true);
   await page.reload();
   await expect(
     page.locator("details.payroll-calculator__view-section"),
