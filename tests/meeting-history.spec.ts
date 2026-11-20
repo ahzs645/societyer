@@ -55,16 +55,19 @@ test("meeting history persists form edits, preserves source observations and pro
   await evidence.getByText('Quorum at each vote (0)', { exact: true }).click();
   const checkpoints = evidence.locator('details').filter({ hasText: 'Quorum at each vote' });
   await checkpoints.getByRole('button', { name: 'Add row', exact: true }).click();
-  await checkpoints.getByLabel('Scope', { exact: true }).selectOption('session');
+  await checkpoints.getByLabel('Scope', { exact: true }).click();
+  await page.getByRole('option', { name: 'session', exact: true }).click();
   await checkpoints.getByLabel('Session or agenda item', { exact: true }).fill('Board session');
   await checkpoints.getByLabel('Source time or agenda boundary', { exact: true }).fill('Board session, 14:35');
-  await checkpoints.getByLabel('Source assertion', { exact: true }).selectOption('confirmed');
+  await checkpoints.getByLabel('Source assertion', { exact: true }).click();
+  await page.getByRole('option', { name: 'confirmed', exact: true }).click();
   await checkpoints.getByLabel('Time as recorded', { exact: true }).fill('14:35');
   await checkpoints.getByLabel('Present eligible count', { exact: true }).fill('0');
   await checkpoints.getByLabel('Source evidence', { exact: true }).fill('Chair recorded quorum; count requires review.');
   await checkpoints.getByLabel('External source IDs', { exact: true }).fill('source:fixture');
   await checkpoints.getByLabel('Page / section citation', { exact: true }).fill('Opening paragraph');
-  await checkpoints.getByLabel('Review', { exact: true }).selectOption('pending');
+  await checkpoints.getByLabel('Review', { exact: true }).click();
+  await page.getByRole('option', { name: 'pending', exact: true }).click();
   await evidence.getByRole('button', { name: 'Save evidence', exact: true }).click();
 
   await panel.getByRole("tab", { name: /^Imported source versions/ }).click();
