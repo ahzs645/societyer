@@ -25,10 +25,13 @@ test("Confirmed Member submits a nomination and a single anonymous ballot", asyn
   await expect(page.getByRole("button", { name: "Publish results", exact: true })).toHaveCount(0);
   await assertLiveFits(page);
 
+  // Nominations have their own tab; the ballot is the page's first tab.
   const nominee = `Browser candidate ${testInfo.project.name}`;
+  await page.getByRole("tab", { name: /^Nominations/ }).click();
   await page.getByLabel("Nominee name", { exact: true }).fill(nominee);
   await page.getByRole("button", { name: "Submit nomination", exact: true }).click();
   await expect(page.getByText(nominee, { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: /^Ballot/ }).click();
   await page.getByRole("radio", { name: "Candidate Alpha", exact: true }).check();
   await page.getByRole("button", { name: "Submit anonymous ballot", exact: true }).click();
   await expect(page.getByText("You can review the ballot, but your vote is already recorded.", { exact: true })).toBeVisible();
@@ -36,6 +39,7 @@ test("Confirmed Member submits a nomination and a single anonymous ballot", asyn
   await expect(page.getByRole("radio", { name: "Candidate Alpha", exact: true })).toBeDisabled();
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByText("You can review the ballot, but your vote is already recorded.", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: /^Nominations/ }).click();
   await expect(page.getByText(nominee, { exact: true })).toBeVisible();
   await assertLiveFits(page);
   expect(pageErrors).toEqual([]);

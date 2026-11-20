@@ -330,7 +330,7 @@ export function ElectionsPage() {
             if (!canManage) return null;
             return (
               <>
-                {election.status === "Draft" && vocab.isCorporation && <Link to={`/app/elections/${election._id}`} className="btn btn--ghost btn--sm">Review electorate</Link>}
+                {election.status === "Draft" && vocab.isCorporation && <Link to={`/app/elections/${election._id}?tab=electorate`} className="btn btn--ghost btn--sm">Review electorate</Link>}
                 {election.status === "Draft" && !vocab.isCorporation && (
                   <button
                     type="button"

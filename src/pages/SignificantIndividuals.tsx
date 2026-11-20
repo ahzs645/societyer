@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -10,7 +10,7 @@ import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { formatDate } from "../lib/format";
 import type { ReactNode } from "react";
-import { Info, ShieldCheck, Plus, Trash2 } from "lucide-react";
+import { ClipboardCheck, Info, ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
 import { isCorporation } from "../../shared/organizationDomain";
@@ -25,8 +25,19 @@ import {
   candidateFactsFromRegister,
   candidateSignificantIndividuals,
   displayDateOfBirth,
+  type CandidateHolderInput,
+  type SignificanceStatus,
   type TransparencyDeadline,
 } from "../../shared/significantIndividuals";
+import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  RecordTablePhoneCard,
+  staticRecordTable,
+  type FieldMetadata,
+  type RecordTableCardHelpers,
+} from "@/platform/record-engine";
 
 type StepRow = {
   _id: string;
@@ -40,7 +51,129 @@ type StepRow = {
   notifiedOn?: string;
 };
 
+type StepForm = {
+  individualName: string;
+  roleHolderId: string;
+  stepKind: string;
+  stepDate: string;
+  stepsNarrative: string;
+  nextReviewDate: string;
+  awareOn: string;
+  recordedOn: string;
+  notifiedOn: string;
+};
+
+/** A register entry as registerHistory:significantIndividualsAsOf returns it. */
+type IndividualRow = {
+  name: string;
+  dateOfBirth?: string;
+  becameSignificantOn: string;
+  ceasedSignificantOn?: string;
+  reason: string;
+  status?: SignificanceStatus;
+  roleHolderId?: string;
+  canadianStatus?: string;
+  citizenshipCountries?: string[];
+  significanceBases?: string[];
+};
+
+type IndividualRecord = {
+  _id: string;
+  name: string;
+  status: SignificanceStatus | null;
+  reason: string;
+  bases: string;
+  becameSignificantOn: string | null;
+  ceasedSignificantOn: string | null;
+  canadianStatus: string | null;
+  citizenship: string;
+  /** Masked ("Restricted") until the reader chooses to show dates of birth, so search never reveals them. */
+  dateOfBirth: string;
+};
+
+type StepRecord = {
+  _id: string;
+  individualName: string;
+  stepKind: string | null;
+  stepDate: string;
+  stepsNarrative: string;
+  awareOn: string | null;
+  recordedOn: string | null;
+  notifiedOn: string | null;
+  nextReviewDate: string | null;
+  step: StepRow;
+};
+
 const stepKindLabel = (kind?: string) => TRANSPARENCY_STEP_KINDS.find((option) => option.value === kind)?.label;
+const canadianStatusLabel = (status: string) => CANADIAN_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
+const isRegisterEntryStep = (kind?: string) => kind === "became_significant" || kind === "ceased_significant";
+const SIGNIFICANCE_STATUS_LABELS: Record<SignificanceStatus, string> = { current: "Current", upcoming: "Upcoming", former: "Former" };
+
+const INDIVIDUALS_TABLE = staticRecordTable({
+  id: "significant-individuals",
+  nameSingular: "significantIndividual",
+  namePlural: "significantIndividuals",
+  labelSingular: "Significant individual",
+  labelPlural: "Significant individuals",
+  labelIdentifierFieldName: "name",
+  density: "comfortable",
+  fields: [
+    { name: "name", label: "Individual", fieldType: FIELD_TYPES.TEXT, size: 220, config: { groupable: false } },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 120,
+      config: {
+        options: [
+          { value: "current", label: SIGNIFICANCE_STATUS_LABELS.current, color: "green" },
+          { value: "upcoming", label: SIGNIFICANCE_STATUS_LABELS.upcoming, color: "blue" },
+          { value: "former", label: SIGNIFICANCE_STATUS_LABELS.former, color: "gray" },
+        ],
+      },
+    },
+    { name: "reason", label: "Reason", fieldType: FIELD_TYPES.TEXT, size: 260, config: { groupable: false } },
+    { name: "bases", label: "How significant", fieldType: FIELD_TYPES.TEXT, size: 280, config: { groupable: false } },
+    { name: "becameSignificantOn", label: "Became significant", fieldType: FIELD_TYPES.DATE, size: 160 },
+    { name: "ceasedSignificantOn", label: "Ceased", fieldType: FIELD_TYPES.DATE, size: 130 },
+    {
+      name: "canadianStatus",
+      label: "Canadian status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 200,
+      config: { options: CANADIAN_STATUS_OPTIONS.map((option) => ({ value: option.value, label: option.label, color: "gray" })) },
+    },
+    { name: "citizenship", label: "Citizenship", fieldType: FIELD_TYPES.TEXT, size: 160 },
+    { name: "dateOfBirth", label: "Date of birth", fieldType: FIELD_TYPES.TEXT, size: 140, config: { groupable: false } },
+  ],
+});
+
+const STEPS_TABLE = staticRecordTable({
+  id: "significant-individual-steps",
+  nameSingular: "diligenceStep",
+  namePlural: "diligenceSteps",
+  labelSingular: "Diligence step",
+  labelPlural: "Diligence steps",
+  labelIdentifierFieldName: "individualName",
+  density: "comfortable",
+  sorts: [{ field: "stepDate", direction: "desc" }],
+  fields: [
+    { name: "individualName", label: "Individual", fieldType: FIELD_TYPES.TEXT, size: 200 },
+    {
+      name: "stepKind",
+      label: "Step",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 220,
+      config: { options: TRANSPARENCY_STEP_KINDS.map((kind) => ({ value: kind.value, label: kind.label, color: "gray" })) },
+    },
+    { name: "stepDate", label: "Date", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "stepsNarrative", label: "Steps taken", fieldType: FIELD_TYPES.TEXT, size: 300, config: { groupable: false } },
+    { name: "awareOn", label: "Aware", fieldType: FIELD_TYPES.DATE, size: 120 },
+    { name: "recordedOn", label: "Recorded in register", fieldType: FIELD_TYPES.DATE, size: 170 },
+    { name: "notifiedOn", label: "Individual notified", fieldType: FIELD_TYPES.DATE, size: 160 },
+    { name: "nextReviewDate", label: "Next review", fieldType: FIELD_TYPES.DATE, size: 130 },
+  ],
+});
 
 /**
  * BC Transparency Register of Significant Individuals (Business Corporations
@@ -55,7 +188,7 @@ export function SignificantIndividualsPage() {
   const canReadLedger = loaded && can("documents:read");
   const [asOf, setAsOf] = useState(todayDateOnly());
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<StepForm | null>(null);
   const [revealDob, setRevealDob] = useState(false);
   const [dateEdit, setDateEdit] = useState<{ step: StepRow; field: "recordedOn" | "notifiedOn"; value: string } | null>(null);
   const toast = useToast();
@@ -65,20 +198,7 @@ export function SignificantIndividualsPage() {
   const individuals = useQuery(
     api.registerHistory.significantIndividualsAsOf,
     society ? { societyId: society._id, asOf } : "skip",
-  ) as
-    | Array<{
-        name: string;
-        dateOfBirth?: string;
-        becameSignificantOn: string;
-        ceasedSignificantOn?: string;
-        reason: string;
-        status?: string;
-        roleHolderId?: string;
-        canadianStatus?: string;
-        citizenshipCountries?: string[];
-        significanceBases?: string[];
-      }>
-    | undefined;
+  ) as IndividualRow[] | undefined;
 
   const steps = useQuery(
     api.significantIndividualSteps.list,
@@ -99,15 +219,49 @@ export function SignificantIndividualsPage() {
   const voting = useQuery(
     api.legalOperations.votingPower,
     society && corporation && canReadLedger ? { societyId: society._id, asOf } : "skip",
-  ) as { voting: any[]; nonVoting: any[] } | undefined;
+  ) as { voting: CandidateHolderInput[]; nonVoting: CandidateHolderInput[] } | undefined;
   const ledger = useQuery(
     api.legalOperations.rightsLedger,
     society && corporation && canReadLedger ? { societyId: society._id, asOf } : "skip",
-  ) as { roleHolders: any[] } | undefined;
+  ) as { roleHolders: Record<string, unknown>[] } | undefined;
 
   const createStep = usePermissionedMutation(api.significantIndividualSteps.create, canWrite);
   const removeStep = usePermissionedMutation(api.significantIndividualSteps.remove, canWrite);
   const updateDates = usePermissionedMutation(api.significantIndividualSteps.updateDates, canWrite);
+
+  const individualRecords = useMemo<IndividualRecord[]>(
+    () => (individuals ?? []).map((ind, index) => ({
+      _id: ind.roleHolderId ?? `${ind.name}-${ind.becameSignificantOn}-${index}`,
+      name: ind.name,
+      status: ind.status ?? null,
+      reason: ind.reason,
+      bases: (ind.significanceBases ?? []).map((basis) => {
+        const option = SIGNIFICANCE_BASIS_OPTIONS.find((item) => item.value === basis);
+        return option ? (bcCompany ? `${option.label} (${option.section})` : option.label) : basis;
+      }).join("; "),
+      becameSignificantOn: ind.becameSignificantOn || null,
+      ceasedSignificantOn: ind.ceasedSignificantOn ?? null,
+      canadianStatus: ind.canadianStatus ?? null,
+      citizenship: ind.canadianStatus === "neither" ? (ind.citizenshipCountries ?? []).join(", ") : "",
+      dateOfBirth: ind.dateOfBirth ? (revealDob ? formatDate(ind.dateOfBirth) : displayDateOfBirth(ind.dateOfBirth, false)) : "",
+    })),
+    [individuals, bcCompany, revealDob],
+  );
+  const stepRecords = useMemo<StepRecord[]>(
+    () => (steps ?? []).map((step) => ({
+      _id: step._id,
+      individualName: step.individualName,
+      stepKind: step.stepKind || null,
+      stepDate: step.stepDate,
+      stepsNarrative: step.stepsNarrative,
+      awareOn: step.awareOn ?? null,
+      recordedOn: step.recordedOn ?? null,
+      notifiedOn: step.notifiedOn ?? null,
+      nextReviewDate: step.nextReviewDate ?? null,
+      step,
+    })),
+    [steps],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -133,11 +287,11 @@ export function SignificantIndividualsPage() {
     setOpen(true);
   };
 
-  const notifiable = form?.stepKind === "became_significant" || form?.stepKind === "ceased_significant";
+  const notifiable = isRegisterEntryStep(form?.stepKind);
   const formProblems = form
     ? [
-        !String(form.individualName ?? "").trim() ? "the individual's name" : "",
-        !String(form.stepsNarrative ?? "").trim() ? "the steps taken" : "",
+        !form.individualName.trim() ? "the individual's name" : "",
+        !form.stepsNarrative.trim() ? "the steps taken" : "",
         !form.stepDate ? "the step date" : "",
       ].filter(Boolean)
     : [];
@@ -180,6 +334,64 @@ export function SignificantIndividualsPage() {
 
   const dueCount = reviewsDue?.length ?? 0;
   const controllerOptions = (individuals ?? []).filter((ind) => ind.roleHolderId);
+  const hasDatesOfBirth = individuals?.some((ind) => ind.dateOfBirth) ?? false;
+
+  const renderIndividualCell = ({ record, field }: { record: IndividualRecord; field: FieldMetadata }) => {
+    if (field.name === "name") return <strong>{record.name}</strong>;
+    return undefined;
+  };
+  const renderIndividualCard = (record: IndividualRecord, { selecting }: RecordTableCardHelpers) => (
+    <RecordTablePhoneCard
+      title={record.name}
+      badge={record.status ? <Badge tone={record.status === "current" ? "success" : "neutral"}>{SIGNIFICANCE_STATUS_LABELS[record.status]}</Badge> : undefined}
+      meta={[
+        record.becameSignificantOn ? `Became significant ${formatDate(record.becameSignificantOn)}` : "",
+        record.ceasedSignificantOn ? `Ceased ${formatDate(record.ceasedSignificantOn)}` : "",
+      ]}
+      detail={[
+        record.reason,
+        record.canadianStatus ? canadianStatusLabel(record.canadianStatus) : "",
+        record.dateOfBirth ? `Date of birth: ${record.dateOfBirth}` : "",
+      ]}
+      selecting={selecting}
+    />
+  );
+
+  const renderStepCell = ({ record, field }: { record: StepRecord; field: FieldMetadata }) => {
+    if (field.name === "individualName") return <strong>{record.individualName}</strong>;
+    return undefined;
+  };
+  const renderStepActions = ({ step }: StepRecord) => (
+    <>
+      {step.awareOn && !step.recordedOn && (
+        <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDateEdit({ step, field: "recordedOn", value: todayDateOnly() })}>
+          Record entry
+        </button>
+      )}
+      {isRegisterEntryStep(step.stepKind) && step.recordedOn && !step.notifiedOn && (
+        <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDateEdit({ step, field: "notifiedOn", value: todayDateOnly() })}>
+          Record notice
+        </button>
+      )}
+      <button
+        className="btn btn--ghost btn--sm btn--icon"
+        aria-label={`Remove step for ${step.individualName}`}
+        disabled={!canWrite}
+        onClick={() => { if (canWrite) void removeStep({ id: step._id }); }}
+      >
+        <Trash2 size={12} />
+      </button>
+    </>
+  );
+  const renderStepCard = ({ step }: StepRecord, { selecting }: RecordTableCardHelpers) => (
+    <RecordTablePhoneCard
+      title={step.individualName}
+      badge={stepKindLabel(step.stepKind) ? <Badge tone="neutral">{stepKindLabel(step.stepKind)}</Badge> : undefined}
+      meta={[formatDate(step.stepDate), step.nextReviewDate ? `Next review ${formatDate(step.nextReviewDate)}` : ""]}
+      detail={[step.stepsNarrative]}
+      selecting={selecting}
+    />
+  );
 
   return (
     <div className="page">
@@ -208,164 +420,112 @@ export function SignificantIndividualsPage() {
         </NotRequiredNote>
       )}
 
+      {/* The date drives every card below: the register, its deadlines and the share-register candidates. */}
+      <div className="register-asof">
+        <label className="register-asof__date">
+          <span>As of</span>
+          <DatePicker value={asOf} onChange={(value) => setAsOf(value)} />
+        </label>
+      </div>
+
       {bcCompany && deadlines && deadlines.length > 0 && (
-        <section style={{ marginBottom: 24 }}>
-          <h2 className="page__section-title">Transparency register deadlines</h2>
-          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {deadlines.map((deadline) => (
-              <div key={deadline.key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <strong>{deadline.title}</strong>
-                  <Badge tone={deadline.status === "overdue" ? "danger" : deadline.status === "due" ? "warn" : "neutral"}>
-                    {deadline.status === "overdue" ? "Overdue" : deadline.status === "due" ? "Due today" : "Upcoming"}
-                  </Badge>
-                  <span className="muted">{deadline.opensOn ? `${formatDate(deadline.opensOn)} to ${formatDate(deadline.dueDate)}` : `Due ${formatDate(deadline.dueDate)}`}</span>
-                </div>
-                <div className="muted">{deadline.basis}</div>
-              </div>
-            ))}
+        <section className="card" aria-labelledby="si-deadlines">
+          <div className="card__head">
+            <h2 className="card__title" id="si-deadlines">Transparency register deadlines</h2>
+            <Badge>{deadlines.length}</Badge>
+          </div>
+          <div className="card__body">
+            <ul className="significant-individuals__list">
+              {deadlines.map((deadline) => (
+                <li key={deadline.key} className="significant-individuals__item">
+                  <div className="significant-individuals__item-head">
+                    <strong>{deadline.title}</strong>
+                    <Badge tone={deadline.status === "overdue" ? "danger" : deadline.status === "due" ? "warn" : "neutral"}>
+                      {deadline.status === "overdue" ? "Overdue" : deadline.status === "due" ? "Due today" : "Upcoming"}
+                    </Badge>
+                    <span className="muted">{deadline.opensOn ? `${formatDate(deadline.opensOn)} to ${formatDate(deadline.dueDate)}` : `Due ${formatDate(deadline.dueDate)}`}</span>
+                  </div>
+                  <div className="muted">{deadline.basis}</div>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       )}
 
       {corporation && canReadLedger && candidates.length > 0 && (
-        <section style={{ marginBottom: 24 }}>
-          <h2 className="page__section-title">Candidates to review</h2>
-          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {candidates.map((candidate) => (
-              <div key={candidate.holderKey} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <strong>{candidate.holderName}</strong>
-                  <Badge tone={candidate.action === "look_through" ? "warn" : candidate.recorded ? "success" : "info"}>
-                    {candidate.action === "look_through" ? "Look through" : candidate.recorded ? "On the register" : "Review"}
-                  </Badge>
-                  <span className="muted">
-                    {candidate.percentOfShares.toFixed(1)}% of issued shares · {candidate.percentOfVotes.toFixed(1)}% of votes
-                  </span>
-                </div>
-                <div className="muted">{candidate.prompt}</div>
-              </div>
-            ))}
-            <div className="muted" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {(bcCompany ? CANDIDATE_REVIEW_REMINDERS : CANDIDATE_REVIEW_REMINDERS.slice(0, 1)).map((line) => <span key={line}>{line}</span>)}
-            </div>
+        <section className="card" aria-labelledby="si-candidates">
+          <div className="card__head">
+            <h2 className="card__title" id="si-candidates">Candidates to review</h2>
+            <Badge>{candidates.length}</Badge>
+          </div>
+          <div className="card__body">
+            <ul className="significant-individuals__list">
+              {candidates.map((candidate) => (
+                <li key={candidate.holderKey} className="significant-individuals__item">
+                  <div className="significant-individuals__item-head">
+                    <strong>{candidate.holderName}</strong>
+                    <Badge tone={candidate.action === "look_through" ? "warn" : candidate.recorded ? "success" : "info"}>
+                      {candidate.action === "look_through" ? "Look through" : candidate.recorded ? "On the register" : "Review"}
+                    </Badge>
+                    <span className="muted">
+                      {candidate.percentOfShares.toFixed(1)}% of issued shares · {candidate.percentOfVotes.toFixed(1)}% of votes
+                    </span>
+                  </div>
+                  <div className="muted">{candidate.prompt}</div>
+                </li>
+              ))}
+            </ul>
+            <ul className="significant-individuals__reminders muted">
+              {(bcCompany ? CANDIDATE_REVIEW_REMINDERS : CANDIDATE_REVIEW_REMINDERS.slice(0, 1)).map((line) => <li key={line}>{line}</li>)}
+            </ul>
           </div>
         </section>
       )}
 
-      <section style={{ marginBottom: 24 }}>
-        <div className="register-asof">
-          <label className="register-asof__date">
-            <span>As of</span>
-            <DatePicker value={asOf} onChange={(value) => setAsOf(value)} />
-          </label>
-          {!!individuals?.length && (
-            <span className="register-asof__totals">
-              {individuals.length} significant individual{individuals.length === 1 ? "" : "s"}
-            </span>
-          )}
-          {individuals?.some((ind) => ind.dateOfBirth) && (
-            <button className="btn btn--ghost btn--sm" onClick={() => setRevealDob(!revealDob)}>
+      <section className="card" aria-labelledby="si-register">
+        <div className="card__head">
+          <h2 className="card__title" id="si-register">Register</h2>
+          {individuals && <Badge>{individuals.length}</Badge>}
+          {hasDatesOfBirth && (
+            <button className="btn btn--ghost btn--sm significant-individuals__head-action" onClick={() => setRevealDob(!revealDob)}>
               {revealDob ? "Hide dates of birth" : "Show dates of birth"}
             </button>
           )}
         </div>
-        {individuals === undefined ? (
-          <div className="card">Loading…</div>
-        ) : individuals.length === 0 ? (
-          <div className="card">No significant individuals as of this date.</div>
-        ) : (
-          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {individuals.map((ind, i) => (
-              <div
-                key={ind.roleHolderId ?? i}
-                style={{ display: "flex", flexDirection: "column", gap: 4 }}
-              >
-                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                  <strong>{ind.name}</strong>
-                  {ind.status && <span className="muted">{ind.status}</span>}
-                </div>
-                <div className="muted">{ind.reason}</div>
-                {!!ind.significanceBases?.length && (
-                  <div className="muted">
-                    {ind.significanceBases.map((basis) => {
-                      const option = SIGNIFICANCE_BASIS_OPTIONS.find((item) => item.value === basis);
-                      return option ? (bcCompany ? `${option.label} (${option.section})` : option.label) : basis;
-                    }).join("; ")}
-                  </div>
-                )}
-                <div className="muted" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  <span>Became significant: {formatDate(ind.becameSignificantOn)}</span>
-                  {ind.ceasedSignificantOn && (
-                    <span>Ceased: {formatDate(ind.ceasedSignificantOn)}</span>
-                  )}
-                  {ind.canadianStatus && <span>{CANADIAN_STATUS_OPTIONS.find((option) => option.value === ind.canadianStatus)?.label ?? ind.canadianStatus}</span>}
-                  {ind.canadianStatus === "neither" && !!ind.citizenshipCountries?.length && <span>Citizenship: {ind.citizenshipCountries.join(", ")}</span>}
-                  {ind.dateOfBirth && <span>Date of birth: {revealDob ? formatDate(ind.dateOfBirth) : displayDateOfBirth(ind.dateOfBirth, false)}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <RecordListTable<IndividualRecord>
+          variant="card"
+          table={INDIVIDUALS_TABLE}
+          tableId="significant-individuals"
+          label="Significant individuals"
+          icon={<ShieldCheck size={14} />}
+          records={individualRecords}
+          loading={individuals === undefined}
+          renderCell={renderIndividualCell}
+          renderPhoneCard={renderIndividualCard}
+          emptyState={<RecordTableEmpty title="No significant individuals as of this date" />}
+        />
       </section>
 
-      <section>
-        <h2 className="page__section-title">Diligence steps taken</h2>
-        {dueCount > 0 && (
-          <div className="card" style={{ marginBottom: 12 }}>
-            {dueCount} review{dueCount === 1 ? "" : "s"} due
-          </div>
-        )}
-        {steps === undefined ? (
-          <div className="card">Loading…</div>
-        ) : steps.length === 0 ? (
-          <div className="card">No diligence steps recorded.</div>
-        ) : (
-          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {steps.map((s) => {
-              const entry = s.stepKind === "became_significant" || s.stepKind === "ceased_significant";
-              return (
-                <div
-                  key={s._id}
-                  style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
-                >
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                      <strong>{s.individualName}</strong>
-                      <span className="muted">{formatDate(s.stepDate)}</span>
-                      {stepKindLabel(s.stepKind) && <Badge tone="neutral">{stepKindLabel(s.stepKind)}</Badge>}
-                    </div>
-                    <div className="muted">{s.stepsNarrative}</div>
-                    <div className="muted" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                      {s.awareOn && <span>Aware: {formatDate(s.awareOn)}</span>}
-                      {s.recordedOn && <span>Recorded in register: {formatDate(s.recordedOn)}</span>}
-                      {s.notifiedOn && <span>Individual notified: {formatDate(s.notifiedOn)}</span>}
-                      {s.nextReviewDate && <span>Next review: {formatDate(s.nextReviewDate)}</span>}
-                    </div>
-                  </div>
-                  {s.awareOn && !s.recordedOn && (
-                    <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDateEdit({ step: s, field: "recordedOn", value: todayDateOnly() })}>
-                      Record entry
-                    </button>
-                  )}
-                  {entry && s.recordedOn && !s.notifiedOn && (
-                    <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDateEdit({ step: s, field: "notifiedOn", value: todayDateOnly() })}>
-                      Record notice
-                    </button>
-                  )}
-                  <button
-                    className="btn btn--ghost btn--sm btn--icon"
-                    aria-label={`Remove step for ${s.individualName}`}
-                    disabled={!canWrite}
-                    onClick={() => { if (canWrite) void removeStep({ id: s._id }); }}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
+      <section className="card" aria-labelledby="si-steps">
+        <div className="card__head">
+          <h2 className="card__title" id="si-steps">Diligence steps taken</h2>
+          {steps && <Badge>{steps.length}</Badge>}
+          {dueCount > 0 && <Badge tone="warn">{dueCount} review{dueCount === 1 ? "" : "s"} due</Badge>}
+        </div>
+        <RecordListTable<StepRecord>
+          variant="card"
+          table={STEPS_TABLE}
+          tableId="significant-individual-steps"
+          label="Diligence steps"
+          icon={<ClipboardCheck size={14} />}
+          records={stepRecords}
+          loading={steps === undefined}
+          renderCell={renderStepCell}
+          renderRowActions={renderStepActions}
+          renderPhoneCard={renderStepCard}
+          emptyState={<RecordTableEmpty title="No diligence steps recorded" />}
+        />
       </section>
 
       <Drawer

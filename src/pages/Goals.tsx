@@ -1,59 +1,163 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import type { Doc } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, EmptyState, Field } from "../components/ui";
-import { Progress, Segmented } from "../components/primitives";
-import { RecordBoard } from "../components/RecordBoard";
+import { Badge, Drawer, Field } from "../components/ui";
+import { Progress } from "../components/primitives";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
+import { useToast } from "../components/Toast";
 import { ListTodo, Plus, Target } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { effectiveGoalStatus, goalTone, labelStatus } from "../lib/goalStatus";
+import {
+  FIELD_TYPES,
+  RecordListTable,
+  RecordTableEmpty,
+  RecordTablePhoneCard,
+  staticRecordTable,
+  type FieldMetadata,
+  type RecordTableCardHelpers,
+} from "@/platform/record-engine";
 
 const STATUSES = ["NotStarted", "OnTrack", "AtRisk", "OffTrack", "Completed"];
 const CATEGORIES = ["Strategic", "Operational", "Program", "Fundraising", "Governance"];
 
+const STATUS_COLORS: Record<string, string> = {
+  NotStarted: "gray",
+  OnTrack: "blue",
+  AtRisk: "amber",
+  OffTrack: "red",
+  Completed: "green",
+};
+
+type Goal = Doc<"goals">;
+type GoalForm = {
+  title: string;
+  description?: string;
+  category: string;
+  status: string;
+  startDate: string;
+  targetDate: string;
+  progressPercent: number;
+  milestones: Goal["milestones"];
+  keyResults: Goal["keyResults"];
+  committeeId?: string;
+  ownerName?: string;
+};
+
+/**
+ * A goal as the list reads it. `status` is the status the goal shows
+ * everywhere (a goal past its target date reads "At risk"), so the status
+ * filter and the board match the badges; moving a card saves the stored status.
+ */
+type GoalRecord = {
+  _id: string;
+  title: string;
+  status: string;
+  category: string;
+  committee: string | null;
+  progressPercent: number;
+  milestones: string;
+  openTasks: number;
+  targetDate: string;
+  startDate: string;
+  ownerName: string | null;
+  description: string | null;
+  doneTasks: number;
+  goal: Goal;
+};
+
+const GOALS_TABLE = staticRecordTable({
+  id: "goals",
+  nameSingular: "goal",
+  namePlural: "goals",
+  labelSingular: "Goal",
+  labelPlural: "Goals",
+  labelIdentifierFieldName: "title",
+  routePath: "/app/goals",
+  sorts: [{ field: "targetDate", direction: "asc" }],
+  fields: [
+    { name: "title", label: "Goal", fieldType: FIELD_TYPES.TEXT, size: 280, config: { groupable: false } },
+    {
+      name: "status",
+      label: "Status",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 130,
+      // Editable so the board can move cards between status columns.
+      isReadOnly: false,
+      config: { options: STATUSES.map((status) => ({ value: status, label: labelStatus(status), color: STATUS_COLORS[status] })) },
+    },
+    {
+      name: "category",
+      label: "Category",
+      fieldType: FIELD_TYPES.SELECT,
+      size: 140,
+      config: { options: CATEGORIES.map((category) => ({ value: category, label: category, color: "gray" })) },
+    },
+    // Board cards show the first few columns after the status: category, progress, target.
+    { name: "progressPercent", label: "Progress", fieldType: FIELD_TYPES.NUMBER, size: 170, config: { groupable: false, suffix: "%" } },
+    { name: "targetDate", label: "Target", fieldType: FIELD_TYPES.DATE, size: 130 },
+    { name: "committee", label: "Committee", fieldType: FIELD_TYPES.TEXT, size: 170 },
+    { name: "milestones", label: "Milestones", fieldType: FIELD_TYPES.TEXT, size: 120, config: { groupable: false } },
+    { name: "openTasks", label: "Open tasks", fieldType: FIELD_TYPES.NUMBER, size: 150, config: { groupable: false } },
+    { name: "startDate", label: "Start", fieldType: FIELD_TYPES.DATE, size: 130, isVisible: false },
+    { name: "ownerName", label: "Owner", fieldType: FIELD_TYPES.TEXT, size: 150, isVisible: false },
+    { name: "description", label: "Description", fieldType: FIELD_TYPES.TEXT, size: 260, isVisible: false, config: { groupable: false } },
+  ],
+});
+
 export function GoalsPage() {
+  const navigate = useNavigate();
+  const toast = useToast();
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("commitments:write");
-  const goals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip");
-  const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
-  const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
+  const goals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip") as Goal[] | undefined;
+  const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip") as Doc<"tasks">[] | undefined;
+  const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip") as Doc<"committees">[] | undefined;
   const create = useMutation(api.goals.create);
   const update = useMutation(api.goals.update).withOptimisticUpdate(
     (store, args) => {
       patchInList(store, api.goals.list, String(args.id), args.patch);
     },
   );
-  const [filter, setFilter] = useState<"all" | "active" | "atrisk" | "done">("all");
-  const [view, setView] = useState<"grid" | "board">("grid");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<GoalForm | null>(null);
+
+  const records = useMemo<GoalRecord[]>(() => {
+    const committeeNames = new Map((committees ?? []).map((committee) => [String(committee._id), committee.name]));
+    return (goals ?? []).map((goal) => {
+      const linkedTasks = (tasks ?? []).filter((task) => task.goalId === goal._id);
+      const openTasks = linkedTasks.filter((task) => task.status !== "Done").length;
+      return {
+        _id: goal._id,
+        title: goal.title,
+        status: effectiveGoalStatus(goal),
+        category: goal.category,
+        committee: goal.committeeId ? committeeNames.get(String(goal.committeeId)) ?? null : null,
+        progressPercent: goal.progressPercent,
+        milestones: `${goal.milestones.filter((milestone) => milestone.done).length}/${goal.milestones.length}`,
+        openTasks,
+        targetDate: goal.targetDate,
+        startDate: goal.startDate,
+        ownerName: goal.ownerName ?? null,
+        description: goal.description ?? null,
+        doneTasks: linkedTasks.length - openTasks,
+        goal,
+      };
+    });
+  }, [goals, tasks, committees]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-
-  const all = goals ?? [];
-  const filtered = all.filter((g: any) => {
-    if (filter === "active") return g.status !== "Completed";
-    if (filter === "atrisk") {
-      // Match the status the UI actually shows (cards/board badge), which
-      // promotes past-target-date goals to "AtRisk" — otherwise the At-risk
-      // filter hides exactly the overdue goals it exists to surface.
-      const s = effectiveGoalStatus(g);
-      return s === "AtRisk" || s === "OffTrack";
-    }
-    if (filter === "done") return g.status === "Completed";
-    return true;
-  });
 
   const openNew = () => {
     if (!canWrite) return;
@@ -70,10 +174,56 @@ export function GoalsPage() {
     setOpen(true);
   };
   const save = async () => {
-    if (!canWrite) return;
+    if (!canWrite || !form) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
+
+  // The board moves a card to another status column; inline edits arrive the same way.
+  const saveStatus = async ({ recordId, fieldName, value }: { recordId: string; fieldName: string; value: unknown }) => {
+    const goal = goals?.find((row) => row._id === recordId);
+    if (!canWrite || !goal || fieldName !== "status" || typeof value !== "string") return;
+    await update({ id: goal._id, patch: { status: value } });
+    const shown = effectiveGoalStatus({ ...goal, status: value });
+    if (shown !== value) toast.info(`Saved as ${labelStatus(value)}`, `It still shows ${labelStatus(shown)} because its target date has passed.`);
+  };
+
+  const renderCell = ({ record, field }: { record: GoalRecord; field: FieldMetadata }) => {
+    switch (field.name) {
+      case "title":
+        return <strong>{record.title}</strong>;
+      case "status":
+        return <Badge tone={goalTone(record.status)}>{labelStatus(record.status)}</Badge>;
+      case "progressPercent":
+        return (
+          <span className="goals-progress">
+            <Progress value={record.progressPercent} tone={record.status === "AtRisk" || record.status === "OffTrack" ? "warn" : undefined} />
+            <span className="goals-progress__value">{record.progressPercent}%</span>
+          </span>
+        );
+      case "openTasks":
+        return (
+          <Link to={`/app/tasks?goalId=${encodeURIComponent(record._id)}`} className="badge badge--info goals-tasks-link">
+            <ListTodo size={12} />
+            {record.openTasks} open task{record.openTasks === 1 ? "" : "s"}
+            {record.doneTasks > 0 && <span className="muted"> · {record.doneTasks} done</span>}
+          </Link>
+        );
+      default:
+        return undefined;
+    }
+  };
+
+  const renderPhoneCard = (record: GoalRecord, { selecting, open: openGoal }: RecordTableCardHelpers) => (
+    <RecordTablePhoneCard
+      title={record.title}
+      badge={<Badge tone={goalTone(record.status)}>{labelStatus(record.status)}</Badge>}
+      meta={[record.category, `${record.progressPercent}%`, `Target ${formatDate(record.targetDate)}`]}
+      detail={[record.committee ?? "", `${record.milestones} milestones`, `${record.openTasks} open task${record.openTasks === 1 ? "" : "s"}`]}
+      onOpen={openGoal}
+      selecting={selecting}
+    />
+  );
 
   return (
     <div className="page">
@@ -89,143 +239,25 @@ export function GoalsPage() {
         }
       />
 
-      <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <Select<"all" | "active" | "atrisk" | "done">
-          size="sm"
-          aria-label="Show goals"
-          value={filter}
-          onChange={setFilter}
-          style={{ width: 150 }}
-          options={[
-            { value: "all", label: "All goals" },
-            { value: "active", label: "Active" },
-            { value: "atrisk", label: "At risk" },
-            { value: "done", label: "Completed" },
-          ]}
-        />
-        <span style={{ marginLeft: "auto" }}>
-          <Segmented<"grid" | "board">
-            value={view}
-            onChange={setView}
-            items={[
-              { id: "grid", label: "Grid" },
-              { id: "board", label: "Board" },
-            ]}
+      <RecordListTable<GoalRecord>
+        table={GOALS_TABLE}
+        tableId="goals"
+        label="Goals"
+        icon={<Target size={14} />}
+        records={records}
+        loading={goals === undefined}
+        onOpen={(record) => navigate(`/app/goals/${record._id}`)}
+        onUpdate={canWrite ? saveStatus : undefined}
+        renderCell={renderCell}
+        renderPhoneCard={renderPhoneCard}
+        showTotals={false}
+        emptyState={
+          <RecordTableEmpty
+            title="No goals yet"
+            description={canWrite ? "Set a goal with a target date, then track its milestones and key results." : undefined}
           />
-        </span>
-      </div>
-
-      {view === "board" && (
-        <RecordBoard<any>
-          items={filtered}
-          getItemId={(g) => g._id}
-          getColumnId={(g) => g.status}
-          canMove={canWrite}
-          onMove={(g, toColumnId) => update({ id: g._id, patch: { status: toColumnId } })}
-          columns={STATUSES.map((s) => ({
-            id: s,
-            label: labelStatus(s),
-            tone:
-              s === "Completed" ? ("success" as const)
-              : s === "OnTrack" ? ("info" as const)
-              : s === "AtRisk" ? ("warn" as const)
-              : s === "OffTrack" ? ("danger" as const)
-              : ("gray" as const),
-          }))}
-          renderCard={(g) => (
-            <Link to={`/app/goals/${g._id}`} className="record-table__board-card">
-              <strong className="record-table__board-card-title record-table__identifier-primary">
-                {g.title}
-              </strong>
-              <div className="record-table__board-card-fields">
-                <div className="record-table__board-card-field record-table__identifier-secondary">
-                  <Badge>{g.category}</Badge>
-                </div>
-                <div className="record-table__board-card-field record-table__identifier-secondary row" style={{ gap: 6, alignItems: "center" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}><Progress value={g.progressPercent} /></div>
-                  <span style={{ minWidth: 36, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{g.progressPercent}%</span>
-                </div>
-                <div className="record-table__board-card-field record-table__identifier-secondary">
-                  Target {formatDate(g.targetDate)}
-                </div>
-              </div>
-            </Link>
-          )}
-        />
-      )}
-
-      {view === "grid" && (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: 16 }}>
-        {filtered.map((g: any) => {
-          const committee = (committees ?? []).find((c: any) => c._id === g.committeeId);
-          const linkedTasks = (tasks ?? []).filter((t: any) => t.goalId === g._id);
-          const openTasks = linkedTasks.filter((t: any) => t.status !== "Done");
-          const total = g.milestones.length;
-          const done = g.milestones.filter((m: any) => m.done).length;
-          return (
-            <div key={g._id} className="card">
-              <div className="card__head">
-                <Target size={14} className="muted" />
-                <h2 className="card__title" style={{ marginRight: "auto" }}>
-                  <Link to={`/app/goals/${g._id}`}>{g.title}</Link>
-                </h2>
-                <Badge tone={goalTone(effectiveGoalStatus(g))}>{labelStatus(effectiveGoalStatus(g))}</Badge>
-              </div>
-              <div className="card__body col" style={{ gap: 10 }}>
-                <div className="row" style={{ gap: 6 }}>
-                  <Badge>{g.category}</Badge>
-                  {committee && (
-                    <Badge>
-                      <span className="color-chip" style={{ background: committee.color, marginRight: 4 }} />
-                      {committee.name}
-                    </Badge>
-                  )}
-                </div>
-                {g.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{g.description}</div>}
-                <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Progress value={g.progressPercent} tone={effectiveGoalStatus(g) === "AtRisk" || effectiveGoalStatus(g) === "OffTrack" ? "warn" : undefined} />
-                  </div>
-                  <span style={{ minWidth: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{g.progressPercent}%</span>
-                </div>
-                <div className="row" style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}>
-                  <span>{done}/{total} milestones</span>
-                  <span style={{ marginLeft: "auto" }}>Target {formatDate(g.targetDate)}</span>
-                </div>
-                <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                  <Link
-                    to={`/app/tasks?goalId=${encodeURIComponent(String(g._id))}`}
-                    className="badge badge--info row"
-                    style={{ gap: 4 }}
-                  >
-                    <ListTodo size={12} />
-                    {openTasks.length} open task{openTasks.length === 1 ? "" : "s"}
-                  </Link>
-                  {linkedTasks.length > openTasks.length && (
-                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                      {linkedTasks.length - openTasks.length} done
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && (
-          <div className="card">
-            {all.length > 0 && filter !== "all" ? (
-              filter === "atrisk" ? (
-                <EmptyState variant="caught-up" title="No goals at risk" description="Every goal is on track or complete." />
-              ) : (
-                <EmptyState variant="filtered" onClearFilters={() => setFilter("all")} />
-              )
-            ) : (
-              <div className="card__body muted">No goals yet.</div>
-            )}
-          </div>
-        )}
-      </div>
-      )}
+        }
+      />
 
       <Drawer
         open={open && canWrite}
@@ -272,7 +304,7 @@ export function GoalsPage() {
                 onChange={(v) => setForm({ ...form, committeeId: v || undefined })}
                 clearable
                 searchable
-                options={(committees ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
+                options={(committees ?? []).map((c) => ({ value: c._id, label: c.name }))}
               />
             </Field>
             <Field label="Owner"><input className="input" value={form.ownerName ?? ""} onChange={(e) => setForm({ ...form, ownerName: e.target.value })} /></Field>

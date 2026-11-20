@@ -384,6 +384,8 @@
 }
 
 // ---- Grant sources --------------------------------------------------------------------
+// The queue card sits above the source library section, which is not a card.
+.grant-queue { margin-bottom: token('s-4'); }
 .grant-queue__head {
   flex-wrap: wrap;
   gap: token('s-2');

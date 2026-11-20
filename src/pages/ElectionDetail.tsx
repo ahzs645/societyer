@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { useRecordQuery } from "../hooks/useRecordQuery";
@@ -11,11 +11,14 @@ import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { Tabs } from "../components/primitives";
+import { DatePicker } from "../components/DatePicker";
+import { useUrlTab } from "../hooks/useUrlTab";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { InfoPopover } from "../components/InfoPopover";
-import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock, Plus, Users } from "lucide-react";
+import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock, Plus, Users, UserPlus, BarChart3, Settings2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isAuthenticatedAuthMode } from "../lib/authMode";
 import { formatDate, formatDateTime, pluralize, toDateTimeLocalValue } from "../lib/format";
@@ -26,8 +29,25 @@ import { resolutionCalendarDate, resolutionTimeZone } from "../../shared/written
 /** Matches the 12-hour clock of the nomination window pickers ("4:00 PM"). */
 const NOMINATION_TIME_FORMAT = "MMM d, yyyy · h:mm a";
 
+/**
+ * The page's sections, kept in `?tab=` (Ballot when absent). Electorate
+ * review shows only for a corporation's draft and Settings only for election
+ * managers; a link to a tab the reader cannot see opens the ballot.
+ */
+const ELECTION_TABS = ["ballot", "nominations", "electorate", "results", "settings", "audit"] as const;
+type ElectionTab = (typeof ELECTION_TABS)[number];
+const ELECTION_TAB_LABELS: Record<ElectionTab, string> = {
+  ballot: "Ballot",
+  nominations: "Nominations",
+  electorate: "Electorate review",
+  results: "Results",
+  settings: "Settings",
+  audit: "Audit log",
+};
+
 export function ElectionDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [tab, setTab] = useUrlTab(ELECTION_TABS, "ballot");
   const currentUser = useCurrentUser();
   const society = useSociety();
   const { loaded, can } = usePermissions();
@@ -277,10 +297,23 @@ export function ElectionDetailPage() {
     } finally { setOpeningElection(false); }
   };
 
+  const showElectorate = canManage && isCorporation && !!reviewDraft && election.status === "Draft";
+  const showSettings = canManage && !!adminDraft;
+  const tabVisible: Record<ElectionTab, boolean> = { ballot: true, nominations: true, electorate: showElectorate, results: true, settings: showSettings, audit: true };
+  const tabItems = ([
+    { id: "ballot", label: ELECTION_TAB_LABELS.ballot, icon: <Vote size={12} /> },
+    { id: "nominations", label: ELECTION_TAB_LABELS.nominations, count: nominations ? nominationRows.length : null, icon: <UserPlus size={12} /> },
+    { id: "electorate", label: ELECTION_TAB_LABELS.electorate, icon: <Users size={12} /> },
+    { id: "results", label: ELECTION_TAB_LABELS.results, icon: <BarChart3 size={12} /> },
+    { id: "settings", label: ELECTION_TAB_LABELS.settings, icon: <Settings2 size={12} /> },
+    { id: "audit", label: ELECTION_TAB_LABELS.audit, icon: <ShieldCheck size={12} /> },
+  ] satisfies { id: ElectionTab; label: string; count?: number | null; icon: ReactNode }[]).filter((item) => tabVisible[item.id]);
+  const activeTab: ElectionTab = tabItems.some((item) => item.id === tab) ? tab : "ballot";
+
   return (
     <div className="page">
-      <Link to="/app/elections" className="row muted" style={{ marginBottom: 12, fontSize: 12 }}>
-        <ArrowLeft size={12} /> Back to elections
+      <Link to="/app/elections" className="row muted page__back-link">
+        <ArrowLeft size={12} /> All elections
       </Link>
       <PageHeader
         title={election.title}
@@ -289,7 +322,7 @@ export function ElectionDetailPage() {
         subtitle={`${formatDateTime(election.opensAtISO)} → ${formatDateTime(election.closesAtISO)} · ${electionBundle.ballotCount} ballot${electionBundle.ballotCount === 1 ? "" : "s"} recorded`}
         actions={
           canManage ? (
-            <div className="row" style={{ gap: 8 }}>
+            <>
               {election.status === "Open" && (
                 <button
                   className="btn-action"
@@ -342,130 +375,182 @@ export function ElectionDetailPage() {
                   <CheckCircle2 size={12} /> Publish results
                 </button>
               )}
-            </div>
+            </>
           ) : null
         }
       />
 
-      <div className="two-col">
-        <div className="col" style={{ gap: 16 }}>
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">Ballot</h2>
-            </div>
-            <div className="card__body" style={{ display: "grid", gap: 16 }}>
-              {!isAuthenticatedAuthMode() && (
-                <div className="muted">
-                  Members vote by signing in to their own account.
-                </div>
-              )}
-              {myEligibilities.length > 0 && (
-                <Field label={isCorporation ? "Voting for shareholder" : "Voting as"} hint={isCorporation ? "The account acts only for the selected holder. Each holder's voting weight was frozen when this election opened." : undefined}>
-                  <Select value={myEligibility?._id ?? ""} onChange={(value) => { setSelectedEligibilityId(value); setSelected({}); setAllocations({}); }} options={myEligibilities.map((row: any) => ({ value: row._id, label: `${row.fullName} · ${pluralize(row.voteWeight ?? 1, "vote")} · ${row.status}` }))} />
-                </Field>
-              )}
-              {electionBundle.questions.length === 0 && <p className="muted">No ballot questions yet. A director or administrator must add a question before opening voting.</p>}
-              {electionBundle.questions.map((question: any) => (
-                <div key={question._id}>
-                  <div className="row" style={{ justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-                    <strong>{question.title}</strong>
-                    {canManage && election.status === "Draft" && (
-                      <button
-                        className="btn btn--ghost btn--sm"
-                        aria-label={`Remove ballot question ${question.title}`}
-                        onClick={async () => {
-                          const ok = await confirm({
-                            title: "Remove ballot question?",
-                            message: `"${question.title}" and its ${pluralize(question.options?.length ?? 0, "option")} will be removed from this draft ballot.`,
-                            confirmLabel: "Remove question",
-                            tone: "danger",
-                          });
-                          if (!ok) return;
-                          try {
-                            await removeQuestion({ questionId: question._id });
-                            toast.success("Ballot question removed");
-                          } catch (error) {
-                            toast.error(error instanceof Error ? error.message : "Could not remove the question.");
-                          }
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
+      <Tabs<ElectionTab>
+        tabRoles
+        ariaLabel="Election sections"
+        value={activeTab}
+        onChange={setTab}
+        items={tabItems}
+      />
+
+      <div role="tabpanel" aria-label={ELECTION_TAB_LABELS[activeTab]}>
+        {activeTab === "ballot" && (
+          <div className="two-col">
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">Ballot</h2>
+              </div>
+              <div className="card__body election-detail__stack election-detail__stack--loose">
+                {!isAuthenticatedAuthMode() && (
+                  <div className="muted">
+                    Members vote by signing in to their own account.
                   </div>
-                  {question.description && (
-                    <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                      {question.description}
-                    </div>
-                  )}
-                  {cumulative && <p className="muted">Allocate up to {(myEligibility?.voteWeight ?? 0) * question.maxSelections} votes across candidates ({question.maxSelections} seats × {myEligibility?.voteWeight ?? 0} base votes).</p>}
-                  <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
-                    {question.options.map((option: any) => {
-                      const values = selected[question._id] ?? [];
-                      const checked = values.includes(option.id);
-                      if (cumulative) return <Field key={option.id} label={option.label}>
-                        <input className="input" type="number" min={0} step="any" value={allocations[question._id]?.[option.id] ?? 0} disabled={!canVote || participantSaving}
-                          onChange={(event) => setAllocations((current) => ({ ...current, [question._id]: { ...current[question._id], [option.id]: Number(event.target.value) } }))} />
-                      </Field>;
-                      return (
-                        <label
-                          key={option.id}
-                          className="checkbox"
-                          // Read-only ballots look read-only, not like live choices.
-                          style={!canVote ? { opacity: 0.55, cursor: "not-allowed" } : undefined}
-                          aria-disabled={!canVote || undefined}
+                )}
+                {myEligibilities.length > 0 && (
+                  <Field label={isCorporation ? "Voting for shareholder" : "Voting as"} hint={isCorporation ? "The account acts only for the selected holder. Each holder's voting weight was frozen when this election opened." : undefined}>
+                    <Select value={myEligibility?._id ?? ""} onChange={(value) => { setSelectedEligibilityId(value); setSelected({}); setAllocations({}); }} options={myEligibilities.map((row: any) => ({ value: row._id, label: `${row.fullName} · ${pluralize(row.voteWeight ?? 1, "vote")} · ${row.status}` }))} />
+                  </Field>
+                )}
+                {electionBundle.questions.length === 0 && <p className="muted">No ballot questions yet. A director or administrator must add a question before opening voting.</p>}
+                {electionBundle.questions.map((question: any) => (
+                  <div key={question._id}>
+                    <div className="election-detail__item-head">
+                      <strong>{question.title}</strong>
+                      {canManage && election.status === "Draft" && (
+                        <button
+                          className="btn btn--ghost btn--sm"
+                          aria-label={`Remove ballot question ${question.title}`}
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: "Remove ballot question?",
+                              message: `"${question.title}" and its ${pluralize(question.options?.length ?? 0, "option")} will be removed from this draft ballot.`,
+                              confirmLabel: "Remove question",
+                              tone: "danger",
+                            });
+                            if (!ok) return;
+                            try {
+                              await removeQuestion({ questionId: question._id });
+                              toast.success("Ballot question removed");
+                            } catch (error) {
+                              toast.error(error instanceof Error ? error.message : "Could not remove the question.");
+                            }
+                          }}
                         >
-                          <input
-                            type={question.maxSelections > 1 ? "checkbox" : "radio"}
-                            checked={checked}
-                            name={question._id}
-                            onChange={() => {
-                              setSelected((current) => {
-                                if (question.maxSelections > 1) {
-                                  const next = checked
-                                    ? values.filter((value) => value !== option.id)
-                                    : [...values, option.id].slice(0, question.maxSelections);
-                                  return { ...current, [question._id]: next };
-                                }
-                                return { ...current, [question._id]: [option.id] };
-                              });
-                            }}
-                            disabled={!canVote || participantSaving}
-                          />
-                          {option.label}
-                        </label>
-                      );
-                    })}
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    {question.description && (
+                      <div className="muted election-detail__item-note">
+                        {question.description}
+                      </div>
+                    )}
+                    {cumulative && <p className="muted">Allocate up to {(myEligibility?.voteWeight ?? 0) * question.maxSelections} votes across candidates ({question.maxSelections} seats × {myEligibility?.voteWeight ?? 0} base votes).</p>}
+                    <div className="election-detail__options">
+                      {question.options.map((option: any) => {
+                        const values = selected[question._id] ?? [];
+                        const checked = values.includes(option.id);
+                        if (cumulative) return <Field key={option.id} label={option.label}>
+                          <input className="input" type="number" min={0} step="any" value={allocations[question._id]?.[option.id] ?? 0} disabled={!canVote || participantSaving}
+                            onChange={(event) => setAllocations((current) => ({ ...current, [question._id]: { ...current[question._id], [option.id]: Number(event.target.value) } }))} />
+                        </Field>;
+                        return (
+                          <label
+                            key={option.id}
+                            // Read-only ballots look read-only, not like live choices.
+                            className={canVote ? "checkbox" : "checkbox election-detail__option--readonly"}
+                            aria-disabled={!canVote || undefined}
+                          >
+                            <input
+                              type={question.maxSelections > 1 ? "checkbox" : "radio"}
+                              checked={checked}
+                              name={question._id}
+                              onChange={() => {
+                                setSelected((current) => {
+                                  if (question.maxSelections > 1) {
+                                    const next = checked
+                                      ? values.filter((value) => value !== option.id)
+                                      : [...values, option.id].slice(0, question.maxSelections);
+                                    return { ...current, [question._id]: next };
+                                  }
+                                  return { ...current, [question._id]: [option.id] };
+                                });
+                              }}
+                              disabled={!canVote || participantSaving}
+                            />
+                            {option.label}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              {canManage && election.status === "Draft" && (
-                <fieldset disabled={savingQuestion || openingElection} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gap: 10 }}>
-                  <Field label="New ballot question"><input className="input" value={questionDraft.title} onChange={(event) => setQuestionDraft({ ...questionDraft, title: event.target.value })} /></Field>
-                  <Field label="Ballot options" hint="One candidate or choice per line."><textarea className="input" rows={4} value={questionDraft.options} onChange={(event) => setQuestionDraft({ ...questionDraft, options: event.target.value })} /></Field>
-                  <Field label={reviewDraft?.votingMethod === "cumulative" ? "Seats to fill (cumulative multiplier)" : "Maximum selections"}><input className="input" type="number" min={1} step={1} value={questionDraft.maxSelections} onChange={(event) => setQuestionDraft({ ...questionDraft, maxSelections: Number(event.target.value) })} /></Field>
-                  <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                    <button className="btn" onClick={saveQuestion} disabled={!questionDraft.title.trim() || !questionDraft.options.trim()}><Plus size={12} /> {savingQuestion ? "Adding…" : "Add ballot question"}</button>
-                    <button className="btn btn--accent" onClick={openElection} disabled={electionBundle.questions.length === 0}><Users size={12} /> {openingElection ? "Opening…" : "Lock voter list and open"}</button>
+                {canManage && election.status === "Draft" && (
+                  <fieldset disabled={savingQuestion || openingElection} className="election-detail__fieldset">
+                    <Field label="New ballot question"><input className="input" value={questionDraft.title} onChange={(event) => setQuestionDraft({ ...questionDraft, title: event.target.value })} /></Field>
+                    <Field label="Ballot options" hint="One candidate or choice per line."><textarea className="input" rows={4} value={questionDraft.options} onChange={(event) => setQuestionDraft({ ...questionDraft, options: event.target.value })} /></Field>
+                    <Field label={reviewDraft?.votingMethod === "cumulative" ? "Seats to fill (cumulative multiplier)" : "Maximum selections"}><input className="input" type="number" min={1} step={1} value={questionDraft.maxSelections} onChange={(event) => setQuestionDraft({ ...questionDraft, maxSelections: Number(event.target.value) })} /></Field>
+                    <div className="row">
+                      <button className="btn" onClick={saveQuestion} disabled={!questionDraft.title.trim() || !questionDraft.options.trim()}><Plus size={12} /> {savingQuestion ? "Adding…" : "Add ballot question"}</button>
+                      <button className="btn btn--accent" onClick={openElection} disabled={electionBundle.questions.length === 0}><Users size={12} /> {openingElection ? "Opening…" : "Lock voter list and open"}</button>
+                    </div>
+                    <p className="muted">Finish the questions and accepted nominations before opening. The ballot and the list of who can vote are locked when voting opens.</p>
+                  </fieldset>
+                )}
+
+                {canVote && (
+                  <button className="btn btn--accent" onClick={saveBallot} disabled={participantSaving || !electionBundle.questions.length || electionBundle.questions.some((question: any) => cumulative ? !Object.values(allocations[question._id] ?? {}).some((votes) => votes > 0) : !(selected[question._id]?.length))}>
+                    Submit ballot
+                  </button>
+                )}
+                {!canVote && election.status === "Open" && (
+                  <div className="muted">
+                    {votingUnavailableReason}
                   </div>
-                  <p className="muted">Finish the questions and accepted nominations before opening. The ballot and the list of who can vote are locked when voting opens.</p>
-                </fieldset>
-              )}
+                )}
+              </div>
+            </div>
 
-              {canVote && (
-                <button className="btn btn--accent" onClick={saveBallot} disabled={participantSaving || !electionBundle.questions.length || electionBundle.questions.some((question: any) => cumulative ? !Object.values(allocations[question._id] ?? {}).some((votes) => votes > 0) : !(selected[question._id]?.length))}>
-                  Submit ballot
-                </button>
-              )}
-              {!canVote && election.status === "Open" && (
-                <div className="muted" style={{ fontSize: 13 }}>
-                  {votingUnavailableReason}
-                </div>
-              )}
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">Eligibility</h2>
+                <InfoPopover label="About eligibility">
+                  <p>{isCorporation ? "Eligibility follows the reviewed share register, class rights, record date and authorized representative. Unique voting weights can reveal identity even when ballots are stored separately." : "Eligibility follows the member register. Ballots do not contain the member identifier; administrative audit data is retained separately."}</p>
+                </InfoPopover>
+              </div>
+              <div className="card__body election-detail__stack election-detail__stack--tight">
+                <Row
+                  label="Election status"
+                  value={<Badge tone={election.status === "Open" ? "success" : "warn"}>{election.status}</Badge>}
+                />
+                <Row
+                  label="Secret ballot"
+                  value={<Badge tone="info">Votes not linked to names</Badge>}
+                />
+                <Row
+                  label="Results visibility"
+                  value={
+                    election.status === "Open" && !electionBundle.canSeeSensitive ? (
+                      <Badge tone="warn">Hidden while open</Badge>
+                    ) : (
+                      <Badge tone="success">Visible</Badge>
+                    )
+                  }
+                />
+                <Row
+                  label="My status"
+                  value={
+                    myEligibility ? (
+                      <Badge tone={myEligibility.status === "Voted" ? "success" : "info"}>
+                        {myEligibility.status}
+                      </Badge>
+                    ) : (
+                      <Badge tone="danger">Not eligible</Badge>
+                    )
+                  }
+                />
+              </div>
             </div>
           </div>
+        )}
 
+        {activeTab === "nominations" && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Nominations</h2>
@@ -478,9 +563,9 @@ export function ElectionDetailPage() {
                   : "No nomination window configured"}
               </span>
             </div>
-            <div className="card__body" style={{ display: "grid", gap: 12 }}>
+            <div className="card__body election-detail__stack">
               {canNominate && (
-                <fieldset disabled={participantSaving} className="panel" style={{ padding: 12, margin: 0, minWidth: 0, display: "grid", gap: 10 }}>
+                <fieldset disabled={participantSaving} className="panel election-detail__fieldset election-detail__panel-item">
                   <Field label="Nominee name">
                     <input
                       className="input"
@@ -530,8 +615,8 @@ export function ElectionDetailPage() {
               )}
               {nominationRows.length > 0 ? (
                 nominationRows.map((nomination: any) => (
-                  <div key={nomination._id} className="panel" style={{ padding: 12 }}>
-                    <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                  <div key={nomination._id} className="panel election-detail__panel-item">
+                    <div className="election-detail__item-head">
                       <strong>{nomination.nomineeName}</strong>
                       <Badge
                         tone={
@@ -546,12 +631,12 @@ export function ElectionDetailPage() {
                       </Badge>
                     </div>
                     {nomination.statement && (
-                      <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+                      <div className="muted election-detail__item-note">
                         {nomination.statement}
                       </div>
                     )}
                     {canManage && (
-                      <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                      <div className="row election-detail__item-actions">
                         {nomination.status !== "Accepted" && nomination.status !== "OnBallot" && (
                           <button
                             className="btn btn--ghost btn--sm"
@@ -601,176 +686,54 @@ export function ElectionDetailPage() {
                   </div>
                 ))
               ) : (
-                <div className="muted" style={{ fontSize: 13 }}>
+                <div className="muted">
                   No nominations yet.
                 </div>
               )}
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="col" style={{ gap: 16 }}>
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">Eligibility</h2>
-              <InfoPopover label="About eligibility">
-                <p>{isCorporation ? "Eligibility follows the reviewed share register, class rights, record date and authorized representative. Unique voting weights can reveal identity even when ballots are stored separately." : "Eligibility follows the member register. Ballots do not contain the member identifier; administrative audit data is retained separately."}</p>
-              </InfoPopover>
-            </div>
-            <div className="card__body" style={{ display: "grid", gap: 8 }}>
-              <Row
-                label="Election status"
-                value={<Badge tone={election.status === "Open" ? "success" : "warn"}>{election.status}</Badge>}
-              />
-              <Row
-                label="Secret ballot"
-                value={<Badge tone="info">Votes not linked to names</Badge>}
-              />
-              <Row
-                label="Results visibility"
-                value={
-                  election.status === "Open" && !electionBundle.canSeeSensitive ? (
-                    <Badge tone="warn">Hidden while open</Badge>
-                  ) : (
-                    <Badge tone="success">Visible</Badge>
-                  )
-                }
-              />
-              <Row
-                label="My status"
-                value={
-                  myEligibility ? (
-                    <Badge tone={myEligibility.status === "Voted" ? "success" : "info"}>
-                      {myEligibility.status}
-                    </Badge>
-                  ) : (
-                    <Badge tone="danger">Not eligible</Badge>
-                  )
-                }
-              />
-            </div>
-          </div>
-
-          {canManage && isCorporation && reviewDraft && election.status === "Draft" && (
-            <section className="card">
-              <div className="card__head"><h2 className="card__title">Shareholder electorate review</h2></div>
-              <div className="card__body" style={{ display: "grid", gap: 12 }}>
-                <p className="muted">Review the legal record date, articles, class rights and authority of the person acting for each registered holder. The server calculates votes from the share register. Historical dates require posted transactions that reconcile to the current register.</p>
-                <Field label="Record date" hint="A past date reconstructs posted share transactions through the end of that day. Today's date uses the live register at the moment voting opens, so transfers later today are not included. Verify the statutory or board-selected cutoff."><input className="input" type="date" value={reviewDraft.recordDateISO} onChange={(event) => setReviewDraft({ ...reviewDraft, recordDateISO: event.target.value })} /></Field>
-                <Field label="How the record date was set" hint="A record date fixed by the directors must meet any statutory window (for example, OBCA s. 95(2): 30 to 60 days before the meeting). The statutory default applies when the directors fixed none."><Select value={reviewDraft.recordDateSource ?? "fixed"} onChange={(value) => setReviewDraft({ ...reviewDraft, recordDateSource: value })} options={[{ value: "fixed", label: "Fixed in advance by the directors" }, { value: "statutory_default", label: "Statutory default (no record date fixed)" }]} /></Field>
-                <Field label="Record-date authority"><textarea className="input" rows={2} value={reviewDraft.recordDateBasis} placeholder="Board resolution or statutory default, notice/voting distinction and meeting date reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, recordDateBasis: event.target.value })} /></Field>
-                <Field label="Articles and voting-rights review"><textarea className="input" rows={2} value={reviewDraft.rightsBasis} placeholder="Articles/version, class or series rights, statutory class votes, cumulative voting and election terms reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, rightsBasis: event.target.value })} /></Field>
-                <Field label="Share register review"><textarea className="input" rows={2} value={reviewDraft.ledgerBasis} placeholder="Register/evidence reference, completed transactions and any transferee demands reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, ledgerBasis: event.target.value })} /></Field>
-                <Field label="Voting method"><Select value={reviewDraft.votingMethod} onChange={(value) => setReviewDraft({ ...reviewDraft, votingMethod: value })} options={[{ value: "per_share", label: "Votes per share for each selected option" }, { value: "cumulative", label: "Cumulative director election (articles require it)" }]} /></Field>
-                <Field label="Class scope" hint="Select classes only for a separate class vote, such as a class's consent to a change in its own rights. Hold a separate election for each class vote.">
-                  <label className="checkbox"><input type="checkbox" checked={!reviewDraft.classIds} onChange={(event) => setReviewDraft({ ...reviewDraft, classIds: event.target.checked ? undefined : [] })} /> All voting classes (ordinary vote, each class's votes per share)</label>
-                  {reviewDraft.classIds && <p className="muted" style={{ margin: "4px 0" }}>Separate class vote: every share of a selected class counts as one vote, including shares that do not otherwise vote.</p>}
-                  {reviewDraft.classIds && (electionBundle.corporatePreview?.classes ?? []).map((cls: any) => {
-                    const generalVotes = typeof cls.votesPerShare === "number" ? cls.votesPerShare : undefined;
-                    const generalLabel = generalVotes === undefined ? "general voting rights not recorded" : generalVotes === 0 ? "non-voting at general meetings" : `${generalVotes} vote${generalVotes === 1 ? "" : "s"} per share at general meetings`;
-                    return <label className="checkbox" key={cls._id}><input type="checkbox" checked={reviewDraft.classIds.includes(cls._id)} onChange={(event) => setReviewDraft({ ...reviewDraft, classIds: event.target.checked ? [...reviewDraft.classIds, cls._id] : reviewDraft.classIds.filter((id: string) => id !== cls._id) })} />{cls.className} <span className="muted">({generalLabel}; 1 vote per share in this class vote)</span></label>;
-                  })}
-                  {election.corporateReview?.classIds && (electionBundle.corporatePreview?.classTotals ?? []).map((row: any) => <p className="muted" style={{ margin: "4px 0" }} key={row.rightsClassId}>{row.className}: {row.holders} holder{row.holders === 1 ? "" : "s"}, {row.shares} shares, {row.votes} votes in this class vote.</p>)}
-                </Field>
-                {(electionBundle.corporatePreview?.issues ?? []).map((issue: string) => <p className="muted" key={issue}>{issue}</p>)}
-                {(electionBundle.corporatePreview?.reviewNotes ?? []).map((note: string) => <p className="muted" key={note}>{note}</p>)}
-                <p><strong>{electionBundle.corporatePreview?.votingHolders?.length ?? 0} {electionBundle.corporatePreview?.voteBasis === "class_separate_resolution" ? "holders entitled to vote in this class vote" : "registered voting holders"} · {electionBundle.corporatePreview?.totalVotes ?? 0} base votes</strong></p>
-                {(electionBundle.corporatePreview?.votingHolders ?? []).map((holder: any) => {
-                  const assignment = reviewDraft.representatives.find((row: any) => row.roleHolderId === holder.roleHolderId);
-                  return <fieldset key={holder.holderKey} style={{ display: "grid", gap: 8, border: "1px solid var(--border)", padding: 12 }}>
-                    <legend>{holder.fullName} · {holder.totalShares} shares · {holder.totalVotes} votes</legend>
-                    <Field label="Authorized voting account"><Select value={assignment?.userId ?? ""} onChange={(value) => setRepresentative(holder.roleHolderId, { userId: value })} options={[{ value: "", label: "Select a verified active account" }, ...(users ?? []).filter((row: any) => row.status === "Active").map((row: any) => ({ value: row._id, label: row.displayName }))]} /></Field>
-                    <Field label="Identity and authority evidence"><textarea className="input" rows={2} value={assignment?.authorityBasis ?? ""} placeholder="Verified personal identity, or corporate authorization / proxy instrument, scope and expiry…" onChange={(event) => setRepresentative(holder.roleHolderId, { authorityBasis: event.target.value })} /></Field>
-                    <Field label="Supporting document"><Select value={assignment?.authorityDocumentId ?? ""} onChange={(value) => setRepresentative(holder.roleHolderId, { authorityDocumentId: value })} options={[{ value: "", label: "Reference recorded above" }, ...(documents ?? []).map((row: any) => ({ value: row._id, label: row.title }))]} /></Field>
-                  </fieldset>;
+        {activeTab === "electorate" && showElectorate && (
+          <section className="card">
+            <div className="card__head"><h2 className="card__title">Shareholder electorate review</h2></div>
+            <div className="card__body election-detail__stack">
+              <p className="muted">Review the legal record date, articles, class rights and authority of the person acting for each registered holder. The server calculates votes from the share register. Historical dates require posted transactions that reconcile to the current register.</p>
+              <Field label="Record date" hint="A past date reconstructs posted share transactions through the end of that day. Today's date uses the live register at the moment voting opens, so transfers later today are not included. Verify the statutory or board-selected cutoff."><DatePicker value={reviewDraft.recordDateISO} onChange={(value) => setReviewDraft({ ...reviewDraft, recordDateISO: value })} /></Field>
+              <Field label="How the record date was set" hint="A record date fixed by the directors must meet any statutory window (for example, OBCA s. 95(2): 30 to 60 days before the meeting). The statutory default applies when the directors fixed none."><Select value={reviewDraft.recordDateSource ?? "fixed"} onChange={(value) => setReviewDraft({ ...reviewDraft, recordDateSource: value })} options={[{ value: "fixed", label: "Fixed in advance by the directors" }, { value: "statutory_default", label: "Statutory default (no record date fixed)" }]} /></Field>
+              <Field label="Record-date authority"><textarea className="input" rows={2} value={reviewDraft.recordDateBasis} placeholder="Board resolution or statutory default, notice/voting distinction and meeting date reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, recordDateBasis: event.target.value })} /></Field>
+              <Field label="Articles and voting-rights review"><textarea className="input" rows={2} value={reviewDraft.rightsBasis} placeholder="Articles/version, class or series rights, statutory class votes, cumulative voting and election terms reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, rightsBasis: event.target.value })} /></Field>
+              <Field label="Share register review"><textarea className="input" rows={2} value={reviewDraft.ledgerBasis} placeholder="Register/evidence reference, completed transactions and any transferee demands reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, ledgerBasis: event.target.value })} /></Field>
+              <Field label="Voting method"><Select value={reviewDraft.votingMethod} onChange={(value) => setReviewDraft({ ...reviewDraft, votingMethod: value })} options={[{ value: "per_share", label: "Votes per share for each selected option" }, { value: "cumulative", label: "Cumulative director election (articles require it)" }]} /></Field>
+              <Field label="Class scope" hint="Select classes only for a separate class vote, such as a class's consent to a change in its own rights. Hold a separate election for each class vote.">
+                <label className="checkbox"><input type="checkbox" checked={!reviewDraft.classIds} onChange={(event) => setReviewDraft({ ...reviewDraft, classIds: event.target.checked ? undefined : [] })} /> All voting classes (ordinary vote, each class's votes per share)</label>
+                {reviewDraft.classIds && <p className="muted election-detail__class-note">Separate class vote: every share of a selected class counts as one vote, including shares that do not otherwise vote.</p>}
+                {reviewDraft.classIds && (electionBundle.corporatePreview?.classes ?? []).map((cls: any) => {
+                  const generalVotes = typeof cls.votesPerShare === "number" ? cls.votesPerShare : undefined;
+                  const generalLabel = generalVotes === undefined ? "general voting rights not recorded" : generalVotes === 0 ? "non-voting at general meetings" : `${generalVotes} vote${generalVotes === 1 ? "" : "s"} per share at general meetings`;
+                  return <label className="checkbox" key={cls._id}><input type="checkbox" checked={reviewDraft.classIds.includes(cls._id)} onChange={(event) => setReviewDraft({ ...reviewDraft, classIds: event.target.checked ? [...reviewDraft.classIds, cls._id] : reviewDraft.classIds.filter((id: string) => id !== cls._id) })} />{cls.className} <span className="muted">({generalLabel}; 1 vote per share in this class vote)</span></label>;
                 })}
-                <button className="btn btn--accent" disabled={reviewSaving} onClick={saveElectorateReview}>{reviewSaving ? "Saving…" : "Save review and refresh electorate"}</button>
-                <p className="muted">Opening freezes the reviewed date, class scope, representative authority and voting weights. Later share transfers do not change ballots. Ties and elected terms must be determined under the applicable Act and governing documents.</p>
-              </div>
-            </section>
-          )}
-
-          {canManage && adminDraft && (
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">Administration</h2>
-              </div>
-              <div className="card__body" style={{ display: "grid", gap: 12 }}>
-                <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-                  <Field label="Nominations open">
-                    <DateTimeInput
-                      clock={12}
-                      value={adminDraft.nominationsOpenAtISO}
-                      onChange={(value) =>
-                        setAdminDraft({ ...adminDraft, nominationsOpenAtISO: value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Nominations close">
-                    <DateTimeInput
-                      clock={12}
-                      value={adminDraft.nominationsCloseAtISO}
-                      onChange={(value) =>
-                        setAdminDraft({ ...adminDraft, nominationsCloseAtISO: value })
-                      }
-                    />
-                  </Field>
-                </div>
-                <Field label="Scrutineers">
-                  <div style={{ display: "grid", gap: 6 }}>
-                    {(users ?? []).map((user) => {
-                      const checked = adminDraft.scrutineerUserIds.includes(user._id);
-                      return (
-                        <label key={user._id} className="checkbox">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() =>
-                              setAdminDraft((current: any) => ({
-                                ...current,
-                                scrutineerUserIds: checked
-                                  ? current.scrutineerUserIds.filter((id: string) => id !== user._id)
-                                  : [...current.scrutineerUserIds, user._id],
-                              }))
-                            }
-                          />
-                          {user.displayName} <span className="muted">({user.role})</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </Field>
-                <Field label="Results summary">
-                  <MarkdownEditor
-                    rows={4}
-                    value={adminDraft.resultsSummary}
-                    onChange={(markdown) =>
-                      setAdminDraft({ ...adminDraft, resultsSummary: markdown })
-                    }
-                  />
-                </Field>
-                <Field label="Evidence document">
-                  <Select
-                    value={adminDraft.evidenceDocumentId}
-                    onChange={(value) =>
-                      setAdminDraft({ ...adminDraft, evidenceDocumentId: value })
-                    }
-                    options={[
-                      { value: "", label: "No evidence document" },
-                      ...(documents ?? []).map((document) => ({
-                        value: document._id,
-                        label: document.title,
-                      })),
-                    ]}
-                  />
-                </Field>
-                <button className="btn btn--accent" onClick={saveAdminSettings} disabled={settingsSaving}>
-                  Save election settings
-                </button>
-              </div>
+                {election.corporateReview?.classIds && (electionBundle.corporatePreview?.classTotals ?? []).map((row: any) => <p className="muted election-detail__class-note" key={row.rightsClassId}>{row.className}: {row.holders} holder{row.holders === 1 ? "" : "s"}, {row.shares} shares, {row.votes} votes in this class vote.</p>)}
+              </Field>
+              {(electionBundle.corporatePreview?.issues ?? []).map((issue: string) => <p className="muted" key={issue}>{issue}</p>)}
+              {(electionBundle.corporatePreview?.reviewNotes ?? []).map((note: string) => <p className="muted" key={note}>{note}</p>)}
+              <p><strong>{electionBundle.corporatePreview?.votingHolders?.length ?? 0} {electionBundle.corporatePreview?.voteBasis === "class_separate_resolution" ? "holders entitled to vote in this class vote" : "registered voting holders"} · {electionBundle.corporatePreview?.totalVotes ?? 0} base votes</strong></p>
+              {(electionBundle.corporatePreview?.votingHolders ?? []).map((holder: any) => {
+                const assignment = reviewDraft.representatives.find((row: any) => row.roleHolderId === holder.roleHolderId);
+                return <fieldset key={holder.holderKey} className="election-detail__holder">
+                  <legend>{holder.fullName} · {holder.totalShares} shares · {holder.totalVotes} votes</legend>
+                  <Field label="Authorized voting account"><Select value={assignment?.userId ?? ""} onChange={(value) => setRepresentative(holder.roleHolderId, { userId: value })} options={[{ value: "", label: "Select a verified active account" }, ...(users ?? []).filter((row: any) => row.status === "Active").map((row: any) => ({ value: row._id, label: row.displayName }))]} /></Field>
+                  <Field label="Identity and authority evidence"><textarea className="input" rows={2} value={assignment?.authorityBasis ?? ""} placeholder="Verified personal identity, or corporate authorization / proxy instrument, scope and expiry…" onChange={(event) => setRepresentative(holder.roleHolderId, { authorityBasis: event.target.value })} /></Field>
+                  <Field label="Supporting document"><Select value={assignment?.authorityDocumentId ?? ""} onChange={(value) => setRepresentative(holder.roleHolderId, { authorityDocumentId: value })} options={[{ value: "", label: "Reference recorded above" }, ...(documents ?? []).map((row: any) => ({ value: row._id, label: row.title }))]} /></Field>
+                </fieldset>;
+              })}
+              <button className="btn btn--accent" disabled={reviewSaving} onClick={saveElectorateReview}>{reviewSaving ? "Saving…" : "Save review and refresh electorate"}</button>
+              <p className="muted">Opening freezes the reviewed date, class scope, representative authority and voting weights. Later share transfers do not change ballots. Ties and elected terms must be determined under the applicable Act and governing documents.</p>
             </div>
-          )}
+          </section>
+        )}
 
+        {activeTab === "results" && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Tally</h2>
@@ -778,12 +741,12 @@ export function ElectionDetailPage() {
                 {pluralize(electionBundle.ballotCount ?? 0, "ballot")} · {election.totalEligibleVotes != null ? `${pluralize(election.totalEligibleVotes, "eligible vote")}` : "number of eligible votes not recorded"}
               </span>
             </div>
-            <div className="card__body" style={{ display: "grid", gap: 12 }}>
+            <div className="card__body election-detail__stack">
               {tallyRows.length > 0 ? (
                 tallyRows.map((question: any) => (
                   <div key={question.questionId}>
                     <strong>{question.title}</strong>
-                    <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                    <div className="election-detail__options">
                       {question.totals.map((total: any) => (
                         <Row key={total.id} label={total.label} value={pluralize(total.votes ?? 0, "vote")} />
                       ))}
@@ -791,42 +754,125 @@ export function ElectionDetailPage() {
                   </div>
                 ))
               ) : (
-                <div className="muted" style={{ fontSize: 13 }}>
+                <div className="muted">
                   {election.status === "Open" && !electionBundle.canSeeSensitive
                     ? "Live counts stay hidden while voting is open."
                     : "No tally available yet."}
                 </div>
               )}
               {election.resultsSummary && (
-                <div className="muted" style={{ fontSize: 13 }}>
+                <div className="muted">
                   <strong>Published summary:</strong> {election.resultsSummary}
                 </div>
               )}
             </div>
           </div>
+        )}
 
+        {activeTab === "settings" && showSettings && (
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">Administration</h2>
+            </div>
+            <div className="card__body election-detail__stack">
+              <div className="row">
+                <Field label="Nominations open">
+                  <DateTimeInput
+                    clock={12}
+                    value={adminDraft.nominationsOpenAtISO}
+                    onChange={(value) =>
+                      setAdminDraft({ ...adminDraft, nominationsOpenAtISO: value })
+                    }
+                  />
+                </Field>
+                <Field label="Nominations close">
+                  <DateTimeInput
+                    clock={12}
+                    value={adminDraft.nominationsCloseAtISO}
+                    onChange={(value) =>
+                      setAdminDraft({ ...adminDraft, nominationsCloseAtISO: value })
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label="Scrutineers">
+                <div className="election-detail__options">
+                  {(users ?? []).map((user) => {
+                    const checked = adminDraft.scrutineerUserIds.includes(user._id);
+                    return (
+                      <label key={user._id} className="checkbox">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setAdminDraft((current: any) => ({
+                              ...current,
+                              scrutineerUserIds: checked
+                                ? current.scrutineerUserIds.filter((id: string) => id !== user._id)
+                                : [...current.scrutineerUserIds, user._id],
+                            }))
+                          }
+                        />
+                        {user.displayName} <span className="muted">({user.role})</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </Field>
+              <Field label="Results summary">
+                <MarkdownEditor
+                  rows={4}
+                  value={adminDraft.resultsSummary}
+                  onChange={(markdown) =>
+                    setAdminDraft({ ...adminDraft, resultsSummary: markdown })
+                  }
+                />
+              </Field>
+              <Field label="Evidence document">
+                <Select
+                  value={adminDraft.evidenceDocumentId}
+                  onChange={(value) =>
+                    setAdminDraft({ ...adminDraft, evidenceDocumentId: value })
+                  }
+                  options={[
+                    { value: "", label: "No evidence document" },
+                    ...(documents ?? []).map((document) => ({
+                      value: document._id,
+                      label: document.title,
+                    })),
+                  ]}
+                />
+              </Field>
+              <button className="btn btn--accent" onClick={saveAdminSettings} disabled={settingsSaving}>
+                Save election settings
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "audit" && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Audit log</h2>
             </div>
-            <div className="card__body" style={{ display: "grid", gap: 8 }}>
+            <div className="card__body election-detail__stack election-detail__stack--tight">
               {electionBundle.audit.length > 0 ? (
                 electionBundle.audit.map((event: any) => (
-                  <div key={event._id} className="muted" style={{ fontSize: 13 }}>
+                  <div key={event._id} className="muted">
                     <strong>{event.actorName}</strong> {event.action}
                     {event.detail ? ` — ${event.detail}` : ""} ·{" "}
                     {formatDateTime(event.createdAtISO)}
                   </div>
                 ))
               ) : (
-                <div className="muted" style={{ fontSize: 13 }}>
-                  <ShieldCheck size={12} style={{ verticalAlign: "text-bottom", marginRight: 4 }} />
+                <div className="muted row election-detail__restricted">
+                  <ShieldCheck size={12} aria-hidden="true" />
                   Audit details are reserved for directors and admins.
                 </div>
               )}
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -834,7 +880,7 @@ export function ElectionDetailPage() {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+    <div className="election-detail__item-head">
       <span className="muted">{label}</span>
       <span>{value}</span>
     </div>

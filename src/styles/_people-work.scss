@@ -2,17 +2,11 @@
 
 /* People & Work pages — release QA fixes. */
 
-/* Point-in-time register: the "As of" date filter row under the header. */
-.pit-register__asof {
-  display: flex;
-  align-items: center;
-  gap: token('s-2');
-  margin: 0 0 token('s-4');
-}
-.pit-register__asof-label {
-  color: token('text-secondary');
+/* Point-in-time register: the date on each board change in the timeline card.
+ * (The "As of" row under the header is the shared `.register-asof`.) */
+.pit-register__date {
+  color: token('text-tertiary');
   font-size: token('fs-sm');
-  white-space: nowrap;
 }
 
 /* Commitments: "Most overdue" callout. One line on wide screens; on phones
@@ -76,4 +70,25 @@
 // primary column (Period larger than Kind).
 .dashboard-page .table .table__cell--muted {
   font-size: inherit;
+}
+
+/* Goals list: the progress bar and its percentage share the Progress cell;
+ * the open-tasks badge links to the goal's tasks. */
+.goals-progress {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  width: 100%;
+  min-width: 0;
+  > .progress { flex: 1 1 auto; min-width: 0; }
+}
+.goals-progress__value {
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.goals-tasks-link {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
 }

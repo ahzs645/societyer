@@ -8,7 +8,9 @@ type Surface = { path: string; actions: { name: RegExp; permission: Permission; 
 const surfaces: Surface[] = [
   // Delete lives in the header ⋯ menu, which is only rendered for writers.
   { path: "/app/committees/static_committee_finance", actions: [{ name: /^More actions$/, permission: "committees:write" }] },
-  { path: "/app/elections/static_election", actions: [{ name: /^Save election settings$/, permission: "elections:write" }], rows: [{ name: /^(?:Close election|Publish results|Add to ballot|Approve nomination|Reject nomination)$/, permission: "elections:write" }] },
+  // Election settings and nomination reviews each sit on their own tab; Close and Publish stay in the header.
+  { path: "/app/elections/static_election?tab=settings", actions: [{ name: /^Save election settings$/, permission: "elections:write" }], rows: [{ name: /^(?:Close election|Publish results)$/, permission: "elections:write" }] },
+  { path: "/app/elections/static_election?tab=nominations", actions: [], rows: [{ name: /^(?:Add to ballot|Approve nomination|Reject nomination)$/, permission: "elections:write" }] },
   { path: "/app/bylaws-history", actions: [{ name: /^New amendment$/, permission: "documents:write" }] },
   { path: "/app/ai-agents", actions: [], rows: [{ name: /^(?:Send chat message|Run this agent|Save skill)$/, permission: "tasks:write" }, { name: /^Save AI provider$/, permission: "settings:write" }] },
   { path: "/app/meeting-templates", actions: [{ name: /^New template$/, permission: "meetings:write" }], rows: [{ name: /^(?:Schedule meeting|Edit |Duplicate |Delete )/, permission: "meetings:write" }] },
@@ -69,7 +71,7 @@ for (const role of ["Owner", "Admin", "Director", "Member", "Viewer"]) {
       await signInLive(page, role);
       const checks = [];
       for (const surface of group) {
-        const path = surface.path.replace(/static_[^/]+/g, (alias) => {
+        const path = surface.path.replace(/static_[^/?]+/g, (alias) => {
           const id = liveFixture().ids[alias];
           if (!id) throw new Error(`Missing native write-gate fixture: ${alias}`);
           return id;
