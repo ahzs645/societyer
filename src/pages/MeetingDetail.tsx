@@ -410,6 +410,19 @@ function MeetingDetailWorkspace() {
   const recordKind = meetingRecordKind(meeting);
   const visibleTabs = visibleMeetingTabs(recordKind);
   const activeTab: MeetingDetailTab = resolveMeetingTab(searchParams.get("tab"), recordKind);
+  // Notes meetings keep the transcript in the Notes view switch: an old
+  // `?tab=transcript` link (Sources, Teams imports, task back-links) opens
+  // Notes → Transcript, keeping its `t=` range and `intent=`.
+  const transcriptTabOnNotes = recordKind === "notes" && searchParams.get("tab") === "transcript";
+  useEffect(() => {
+    if (!transcriptTabOnNotes) return;
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.delete("tab");
+      params.set("view", "transcript");
+      return params;
+    }, { replace: true });
+  }, [transcriptTabOnNotes, setSearchParams]);
   const setActiveTab = (next: MeetingDetailTab) => {
     setSearchParams(
       (prev) => {

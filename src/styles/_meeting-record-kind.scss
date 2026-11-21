@@ -358,11 +358,33 @@
   font-size: token("fs-xs");
   color: token("text-tertiary");
 }
-.notes-roster {
+.notes-roster__trigger {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: token("s-1");
+  padding: 2px token("s-1");
+  margin-left: calc(-1 * #{token("s-1")});
+  border: 0;
+  border-radius: token("r-sm");
+  background: transparent;
+  color: token("text-secondary");
+  font: inherit;
   font-size: token("fs-sm");
-  summary {
-    cursor: pointer;
-    color: token("text-secondary");
+  cursor: pointer;
+  &:hover,
+  &[aria-expanded="true"] {
+    background: token("bg-hover-alpha");
+    color: token("text-primary");
+  }
+}
+/* The popover panel (ViewportPopover, styled as an info popover). */
+.notes-roster {
+  width: min(380px, calc(100vw - 16px));
+  .notes-roster__title {
+    margin: 0 0 token("s-1");
+    font-weight: 600;
+    color: token("text-primary");
   }
   .muted {
     margin: token("s-1") 0;
@@ -371,10 +393,11 @@
 }
 .notes-roster__list {
   list-style: none;
-  margin: token("s-1") 0 0;
+  margin: token("s-2") 0 0;
   padding: 0;
-  max-height: 240px;
+  max-height: 260px;
   overflow-y: auto;
+  color: token("text-primary");
   li {
     padding: 2px 0;
     overflow-wrap: anywhere;
@@ -821,6 +844,9 @@ a.notes-meta-item {
 /* ---------- Notes surface: one screen, three views ---------- */
 .notes-surface {
   padding-bottom: token("s-2");
+  /* Where things pin under the view bar. NotesSurfaceBar measures the page's
+   * top padding (--notes-sticky-inset) and its own height (--notes-bar-h). */
+  --notes-sticky-offset: calc(var(--notes-bar-h, 0px) - var(--notes-sticky-inset, 0px));
 }
 .notes-surface__bar {
   display: flex;
@@ -829,10 +855,96 @@ a.notes-meta-item {
   justify-content: space-between;
   gap: token("s-2");
   position: sticky;
-  top: 0;
-  z-index: 2;
-  padding: token("s-1") 0;
-  background: token("bg-app");
+  /* Flush with the top of the scroll area, over the page's top padding, so
+   * nothing scrolls past above it. */
+  top: calc(-1 * var(--notes-sticky-inset, 0px));
+  z-index: 4;
+  padding: token("s-2") 0;
+  background: token("bg-panel");
+  &.is-stuck {
+    box-shadow: 0 1px 0 token("border");
+  }
+}
+/* The formatting toolbar docks under the view bar while you write further down. */
+.notes-surface .markdown-editor__toolbar {
+  position: sticky;
+  top: var(--notes-sticky-offset);
+  z-index: 3;
+}
+/* The transcript's player pins under the bar too, not over it. The bar already
+ * covers the strip above, so the player's own mask is not needed. */
+.notes-surface .transcript-player {
+  top: var(--notes-sticky-offset);
+  &.is-stuck::before {
+    display: none;
+  }
+}
+.notes-surface .transcript-speakers {
+  top: calc(var(--notes-sticky-offset) + #{token("s-3")} + var(--transcript-player-height, 128px));
+}
+
+/* The notes read as one document: the card is the page, the editor drops its
+ * own box, and the toolbar is a strip across the card under its head. */
+.meeting-notes-doc {
+  /* The card body's padding (tighter on phones, see _chrome-tables). */
+  --notes-doc-pad: #{token("s-4")};
+  @media (max-width: 760px) {
+    --notes-doc-pad: #{token("s-3")};
+  }
+}
+.meeting-notes-doc__body {
+  padding-top: 0;
+  > :first-child:not(.markdown-editor-rich, .markdown-editor-loading) {
+    margin-top: var(--notes-doc-pad);
+  }
+}
+.meeting-notes-doc .markdown-editor {
+  width: auto;
+  margin-inline: calc(-1 * var(--notes-doc-pad));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  &:focus-within {
+    box-shadow: none;
+  }
+  &[aria-invalid="true"] {
+    box-shadow: inset 3px 0 0 token("danger");
+  }
+  .markdown-editor__toolbar {
+    padding-inline: calc(var(--notes-doc-pad) - 4px);
+    border-radius: 0;
+  }
+  .markdown-editor__body {
+    overflow: visible;
+    resize: none;
+  }
+  .milkdown .ProseMirror {
+    padding: token("s-3") var(--notes-doc-pad);
+  }
+  .markdown-editor__source {
+    padding: token("s-3") var(--notes-doc-pad);
+  }
+}
+/* Room on the left for the drag grip (mouse only; see MarkdownEditor.scss). */
+@media (hover: hover) and (pointer: fine) {
+  .meeting-notes-doc .markdown-editor:not(.is-fullscreen) .milkdown .ProseMirror {
+    padding-left: calc(var(--notes-doc-pad) + 22px);
+  }
+}
+/* Under something else (a template picker, a flag), the strip needs its top edge. */
+.meeting-notes-doc .markdown-editor-rich:not(:first-child) .markdown-editor__toolbar {
+  border-top: 1px solid token("border");
+}
+/* Someone else's notes: nothing to format. */
+.meeting-notes-doc .markdown-editor--readonly {
+  color: inherit;
+  .markdown-editor__toolbar {
+    display: none;
+  }
+}
+/* The plain field shown while the editor loads keeps its box, inside the card's padding. */
+.meeting-notes-doc .markdown-editor-loading {
+  margin-top: var(--notes-doc-pad);
 }
 .notes-surface__tools {
   display: inline-flex;
@@ -872,17 +984,6 @@ a.notes-meta-item {
   background: token("bg-primary");
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
 }
-.notes-ask--off {
-  /* A one-line pointer, not the floating bar. */
-  position: static;
-  display: block;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  font-size: token("fs-sm");
-  svg { vertical-align: -2px; }
-}
 .notes-ask__row {
   display: flex;
   align-items: center;
@@ -896,8 +997,14 @@ a.notes-meta-item {
   background: transparent;
   font: inherit;
   color: token("text-primary");
-  outline: none;
   padding: token("s-1") 0;
+  /* The pill shows focus, not a box drawn inside it. */
+  &:focus-visible {
+    outline: none;
+  }
+}
+.notes-ask:has(.notes-ask__input:focus-visible) {
+  border-color: token("border-focus");
 }
 .notes-ask__prompts {
   display: flex;
@@ -905,6 +1012,12 @@ a.notes-meta-item {
   overflow-x: auto;
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
+}
+/* While you write, the Ask bar keeps to one line so it covers less of the notes.
+ * The link popover (on <body>) counts as writing. */
+.notes-surface:has(.meeting-notes-doc .markdown-editor:focus-within) .notes-ask__prompts,
+html:has(.markdown-link-popover) .notes-ask__prompts {
+  display: none;
 }
 .notes-ask__chip {
   flex: 0 0 auto;
@@ -922,6 +1035,15 @@ a.notes-meta-item {
   .notes-surface__bar {
     flex-wrap: nowrap;
     gap: token("s-1");
+  }
+  /* One line until you tap into it; hidden while you write, when the keyboard
+   * leaves little room. */
+  .notes-ask:not(.is-open) .notes-ask__prompts {
+    display: none;
+  }
+  .notes-surface:has(.meeting-notes-doc .markdown-editor:focus-within) .notes-ask,
+  html:has(.markdown-link-popover) .notes-ask {
+    display: none;
   }
   .notes-surface__views {
     flex: 1 1 auto;
@@ -942,6 +1064,13 @@ a.notes-meta-item {
     .notes-surface__views .segmented__btn {
       padding-inline: 4px;
       font-size: token("fs-xs");
+    }
+  }
+  /* Cards run to the screen edges on phones (see _layout-workbench), so the bar does too. */
+  @media (max-width: 560px) {
+    .app-shell.is-mobile .notes-surface__bar {
+      margin-inline: calc(-1 * var(--page-gutter));
+      padding-inline: var(--page-gutter);
     }
   }
   .notes-ask {
@@ -1310,4 +1439,56 @@ a.notes-meta-item {
   align-items: center;
   justify-content: space-between;
   gap: token("s-2");
+}
+
+/* ---------- Editor save status (EditorSaveStatus, in an editor's toolbar) ---------- */
+.editor-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: token("s-1");
+  font-size: token("fs-xs");
+  color: token("text-tertiary");
+  white-space: nowrap;
+  > [role="status"] {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  &.is-error {
+    color: token("danger");
+  }
+}
+.editor-save-status__spin {
+  animation: editor-save-spin 1s linear infinite;
+}
+@keyframes editor-save-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor-save-status__spin { animation: none; }
+}
+@media (max-width: 760px) {
+  .editor-save-status:not(.is-error) .editor-save-status__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+.editor-save-status__retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid token("border");
+  border-radius: token("r-sm");
+  background: token("bg-primary");
+  color: token("text-primary");
+  font: inherit;
+  cursor: pointer;
+  &:hover {
+    background: token("bg-hover-alpha");
+  }
 }

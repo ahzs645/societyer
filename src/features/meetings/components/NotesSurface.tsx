@@ -3,9 +3,8 @@
  * Record and ••• beside it, the template starter for empty notes, and the
  * Ask bar that hands the meeting to the assistant.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ChevronDown, Copy, Download, Info, Mic, MonitorUp, MoreHorizontal, Printer, Send, Sparkles, Square, Video } from "lucide-react";
-import { Link } from "react-router-dom";
 import { Menu, type MenuItem } from "@/components/Menu";
 import { useAiChatVisibility } from "@/hooks/useAiChatVisibility";
 import { Segmented } from "@/components/primitives";
@@ -54,6 +53,8 @@ export function NotesSurfaceBar({
   record: ReactNode;
   more: ReactNode;
 }) {
+  const bar = useRef<HTMLDivElement>(null);
+  const stuck = useStickyBar(bar);
   const items = [
     { id: "notes" as const, label: "Notes" },
     { id: "ai" as const, label: "AI notes", ...(hasDraft ? {} : { ariaLabel: "AI notes (not drafted yet)" }) },
@@ -61,7 +62,7 @@ export function NotesSurfaceBar({
     ...(phone ? [{ id: "actions" as const, label: "Actions", count: actionCount }] : []),
   ];
   return (
-    <div className="notes-surface__bar">
+    <div ref={bar} className={`notes-surface__bar${stuck ? " is-stuck" : ""}`}>
       <Segmented<NotesView> aria-label="Notes view" className="notes-surface__views" value={view} onChange={onView} items={items} />
       <div className="notes-surface__tools">
         {record}
@@ -69,6 +70,48 @@ export function NotesSurfaceBar({
       </div>
     </div>
   );
+}
+
+/**
+ * Pins the view bar flush with the top of the page's scroll area. The page pads
+ * its top, and `top: 0` would pin the bar below that padding with notes
+ * scrolling past in the gap, so the bar pins at minus the padding
+ * (`--notes-sticky-inset`). `--notes-bar-h` lets the formatting toolbar and the
+ * transcript player pin just under it. `stuck` adds the bar's bottom hairline.
+ */
+function useStickyBar(bar: RefObject<HTMLDivElement>) {
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const node = bar.current;
+    const surface = node?.closest<HTMLElement>(".notes-surface");
+    let scroller = node?.parentElement ?? null;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+    if (!node || !surface || !scroller) return;
+    const container = scroller;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      surface.style.setProperty("--notes-sticky-inset", `${parseFloat(getComputedStyle(container).paddingTop) || 0}px`);
+      surface.style.setProperty("--notes-bar-h", `${node.offsetHeight}px`);
+      const scrollportTop = container.getBoundingClientRect().top + container.clientTop;
+      setStuck(container.scrollTop > 0 && node.getBoundingClientRect().top <= scrollportTop + 1);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    // The bar rewraps and the page's padding changes with the window size.
+    const resize = new ResizeObserver(schedule);
+    resize.observe(node);
+    resize.observe(container);
+    container.addEventListener("scroll", schedule, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      container.removeEventListener("scroll", schedule);
+    };
+  }, [bar]);
+  return stuck;
 }
 
 /** Record, Join & record, or the running recording's timer and Stop. `compact` (phones): a mic icon. */
@@ -209,20 +252,15 @@ const QUICK_PROMPTS = [
   "What's still open or unresolved?",
 ];
 
-/** "Ask anything" about this meeting: opens the assistant with the meeting attached and sends. */
+/** "Ask anything" about this meeting: opens the assistant with the meeting attached and sends. Shown only while the assistant is. */
 export function MeetingAskBar({ context }: { context: () => NotesExportInput & { people?: string[] } }) {
   const [question, setQuestion] = useState("");
+  // Phones show the suggested questions only while you are asking (see the styles).
+  const [open, setOpen] = useState(false);
   const assistant = useAiChatVisibility();
-  if (assistant.hidden) {
-    return (
-      <p className="notes-ask notes-ask--off muted">
-        <Sparkles size={14} aria-hidden="true" />{" "}
-        {assistant.moduleEnabled
-          ? "The AI assistant is hidden for you. Show it again from your profile menu to ask about this meeting."
-          : <>Ask questions about this meeting with the AI assistant: <Link to="/app/settings?tab=modules">turn on AI agents in Settings</Link>.</>}
-      </p>
-    );
-  }
+  // The workspace's AI assistant is the one way in: with AI agents off, or the
+  // assistant hidden by this person, there is nothing to ask, so no bar.
+  if (assistant.hidden) return null;
   const ask = (prompt: string) => {
     const text = prompt.trim();
     if (!text) return;
@@ -230,7 +268,12 @@ export function MeetingAskBar({ context }: { context: () => NotesExportInput & {
     setQuestion("");
   };
   return (
-    <form className="notes-ask" onSubmit={(event) => { event.preventDefault(); ask(question); }}>
+    <form
+      className={`notes-ask${open ? " is-open" : ""}`}
+      onSubmit={(event) => { event.preventDefault(); ask(question); }}
+      onFocus={() => setOpen(true)}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false); }}
+    >
       <div className="notes-ask__row">
         <Sparkles size={14} aria-hidden="true" />
         <input
@@ -240,13 +283,14 @@ export function MeetingAskBar({ context }: { context: () => NotesExportInput & {
           placeholder="Ask anything about this meeting…"
           aria-label="Ask about this meeting"
         />
-        <button type="submit" className="btn-action btn-action--icon" aria-label="Ask" disabled={!question.trim()}>
+        {/* Pressing a button keeps the field focused, so the suggestions stay put until the click lands. */}
+        <button type="submit" className="btn-action btn-action--icon" aria-label="Ask" disabled={!question.trim()} onMouseDown={(event) => event.preventDefault()}>
           <Send size={14} aria-hidden="true" />
         </button>
       </div>
       <div className="notes-ask__prompts" aria-label="Suggested questions">
         {QUICK_PROMPTS.map((prompt) => (
-          <button key={prompt} type="button" className="notes-ask__chip" onClick={() => ask(prompt)}>{prompt}</button>
+          <button key={prompt} type="button" className="notes-ask__chip" onMouseDown={(event) => event.preventDefault()} onClick={() => ask(prompt)}>{prompt}</button>
         ))}
       </div>
     </form>

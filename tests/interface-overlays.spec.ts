@@ -267,7 +267,7 @@ test("a modal keeps the focused field and its footer above the on-screen keyboar
   }).toBeLessThanOrEqual(visible + 1);
 });
 
-test("a prompt opened from a modal focuses its input and Esc closes only the prompt", async ({ page }) => {
+test("the link popover opened from a modal focuses its input and Esc closes only the popover", async ({ page }) => {
   await page.goto("/demo/app/filings");
   await runRowAction(unfiledRow(page), "Mark filed");
   const modal = page.getByRole("dialog", { name: "Mark filing as filed" });
@@ -277,12 +277,34 @@ test("a prompt opened from a modal focuses its input and Esc closes only the pro
   await link.click();
   const prompt = page.getByRole("dialog", { name: "Add link" });
   await expect(prompt).toBeVisible();
-  await expect(prompt.getByPlaceholder("https://example.com")).toBeFocused();
+  await expect(prompt.getByLabel("Link address")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(prompt).toBeHidden();
   await expect(modal).toBeVisible();
   // Focus is back inside the modal, not dropped on <body>.
   await expect.poll(() => modal.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+});
+
+test("the slash menu in a dialog's editor shows whole, above the dialog and its scroll area", async ({ page }) => {
+  test.skip(isTouch(page), "Slash commands are for keyboards; touch screens use the toolbar.");
+  await page.goto("/demo/app/filings");
+  await runRowAction(unfiledRow(page), "Mark filed");
+  const modal = page.getByRole("dialog", { name: "Mark filing as filed" });
+  const editor = modal.locator(".ProseMirror").first();
+  await expect(editor).toBeVisible();
+  await editor.scrollIntoViewIfNeeded();
+  await editor.click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/");
+  const menu = page.locator(".milkdown-slash-menu[data-show='true']");
+  await expect(menu).toBeVisible();
+  const box = await menu.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box && viewport && box.y >= 0 && box.y + box.height <= viewport.height).toBe(true);
+  // Its tabs and its list (which scrolls inside the menu) are on top of everything.
+  await expect.poll(() => isOnTop(menu.locator(".tab-group"))).toBe(true);
+  await expect.poll(() => isOnTop(menu.locator(".menu-groups"))).toBe(true);
 });
 
 test("the minimised dock stays under the AI assistant, whose composer rides above the keyboard", async ({ page }) => {

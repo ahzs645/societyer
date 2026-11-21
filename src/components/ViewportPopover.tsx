@@ -4,8 +4,10 @@ import { useFloatingLayerStack } from "../lib/overlayStack";
 import { isOutsidePointerEvent } from "../lib/floatingLayer";
 
 /** Anchor mixed form controls to their trigger without clipping narrow screens. */
-export function ViewportPopover({ open, onClose, anchorRef, label, className, children }: {
+export function ViewportPopover({ open, onClose, anchorRef, label, className, align = "end", children }: {
   open: boolean;
+  /** Which trigger edge the panel lines up with: its right ("end", the default) or its left ("start"). */
+  align?: "start" | "end";
   onClose: () => void;
   anchorRef: RefObject<HTMLElement | null>;
   label: string;
@@ -19,10 +21,15 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, ch
     if (!open) return;
     const place = () => {
       const anchor = anchorRef.current?.getBoundingClientRect();
-      const panel = ref.current?.getBoundingClientRect();
-      if (!anchor || !panel) return;
+      const node = ref.current;
+      if (!anchor || !node) return;
+      // Layout size, not getBoundingClientRect: the entrance animation scales the
+      // panel down for its first frames, which under-measured it and let a
+      // full-width panel run off the edge on phones.
+      const panel = { width: node.offsetWidth, height: node.offsetHeight };
       const margin = 8;
-      const left = Math.max(margin, Math.min(anchor.right - panel.width, window.innerWidth - panel.width - margin));
+      const preferred = align === "start" ? anchor.left : anchor.right - panel.width;
+      const left = Math.max(margin, Math.min(preferred, window.innerWidth - panel.width - margin));
       // The fixed phone bottom navigation covers the end of the viewport and sits
       // above page popovers, so it is the effective bottom edge when shown.
       const bottomNav = document.querySelector<HTMLElement>(".bottom-nav");
@@ -60,7 +67,7 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, ch
       window.removeEventListener("scroll", place, true);
       document.removeEventListener("pointerdown", onDown);
     };
-  }, [open, anchorRef, onClose, ref]);
+  }, [open, anchorRef, onClose, ref, align]);
   if (!open) return null;
   return <div ref={ref} className={className} role="dialog" aria-label={label} tabIndex={-1}
     style={{ maxHeight: "calc(100dvh - 16px)", ...placement, ...layer.panel, position: "fixed", right: "auto", maxWidth: "calc(100vw - 16px)", minWidth: "min(240px, calc(100vw - 16px))", overflowY: "auto" }}>{children}</div>;

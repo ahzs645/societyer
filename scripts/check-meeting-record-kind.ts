@@ -34,11 +34,12 @@ assert.deepEqual(
   ["overview", "minutes", "transcript", "motions", "package", "export", "sources"],
   "absent kind shows exactly the tabs every meeting had before",
 );
-assert.deepEqual([...visibleMeetingTabs("notes")], ["overview", "notes", "transcript", "package", "sources"], "notes hide Motions and Export");
+assert.deepEqual([...visibleMeetingTabs("notes")], ["overview", "notes", "package", "sources"], "notes hide Motions and Export, and keep the transcript inside Notes");
 assert.deepEqual([...visibleMeetingTabs("meeting")], ["overview", "transcript", "package", "sources"]);
-for (const kind of ["meeting", "notes", "minutes"] as const) {
+for (const kind of ["meeting", "minutes"] as const) {
   assert.ok(visibleMeetingTabs(kind).includes("transcript"), `${kind} keeps the Transcript tab`);
 }
+assert.equal(resolveMeetingTab("transcript", "notes"), "notes", "?tab=transcript on a notes meeting opens Notes (its Transcript view)");
 
 assert.equal(resolveMeetingTab("minutes", "notes"), "notes", "?tab=minutes on a notes meeting lands on Notes");
 assert.equal(resolveMeetingTab("notes", "minutes"), "minutes", "?tab=notes on a minutes meeting lands on minutes");

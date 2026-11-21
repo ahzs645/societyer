@@ -8,13 +8,15 @@ import { useLocation, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
+import { EditorSaveStatus } from "@/components/EditorSaveStatus";
+import { MentionPeopleContext, type MentionPerson } from "@/components/MarkdownMentions";
 import { useConfirm } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { MEETING_WORKING_NOTES_MAX_LENGTH } from "../../../../shared/meetingRecordKind";
 import { MeetingDraftRecovery, useMeetingDraft } from "../useMeetingDraft";
 import type { AutosaveDraft } from "../lib/meetingDraftStore";
-import { createNotesAutosave, type NotesSaveState } from "../lib/notesAutosave";
+import { createNotesAutosave } from "../lib/notesAutosave";
 import { MeetingNotesDraftCard, type StoredNotesDraft } from "./MeetingNotesDraftCard";
 import { MeetingNoteActionsCard } from "./MeetingNoteActionsCard";
 import type { NotesDraftMeeting } from "../useNotesDraft";
@@ -31,13 +33,6 @@ import { sharedNotesForDraft, type PersonalNotes } from "../../../../shared/func
 
 /** Typing must pause this long before the notes save. */
 const NOTES_SAVE_DELAY_MS = 800;
-
-const SAVE_STATE_LABELS: Record<NotesSaveState, string> = {
-  saved: "Saved",
-  pending: "Unsaved changes",
-  saving: "Saving…",
-  error: "Not saved. Your changes are still here.",
-};
 
 /**
  * Local copy of the notes with a debounced save. Typing waits for a pause,
@@ -193,6 +188,11 @@ export function MeetingNotesTab({
     surface.current?.querySelectorAll<HTMLMediaElement>(".notes-surface__view[hidden] audio, .notes-surface__view[hidden] video").forEach((media) => media.pause());
   }, [view]);
   const [preferredTemplate, setPreferredTemplate] = useState<NotesDraftTemplateId | undefined>();
+  // "@" in the notes mentions people from the directory (a link to their profile).
+  const mentionPeople = useMemo<MentionPerson[]>(
+    () => (people ?? []).filter((person) => person.fullName).map((person) => ({ id: String(person._id), name: person.fullName })),
+    [people],
+  );
   const actionItems = meeting.noteActionItems ?? [];
 
   // Team notes, plus your own (once you add them) and notes others shared.
@@ -258,6 +258,7 @@ export function MeetingNotesTab({
   );
 
   return (
+    <MentionPeopleContext.Provider value={mentionPeople}>
     <div className="meeting-notes-tab notes-surface" ref={surface}>
       <NotesSurfaceBar
         view={view}
@@ -315,6 +316,7 @@ export function MeetingNotesTab({
       {canStartMinutes && view !== "transcript" && <TurnIntoMinutesBar converting={converting} disabled={tooLong} onTurn={() => { void turnIntoMinutes(); }} />}
       <MeetingAskBar context={() => ({ ...exportInput(), people: meeting.attendeeIds })} />
     </div>
+    </MentionPeopleContext.Provider>
   );
 }
 
@@ -333,11 +335,6 @@ function NotesDocCard({ title, notes, canWrite, converting, tooLong, onPickTempl
     <section className="card meeting-notes-doc" aria-label="Team notes">
       <div className="card__head meeting-notes-doc__head">
         {title}
-        {canWrite && (
-          <span className={`meeting-notes-doc__status is-${notes.saveState}`} role="status" aria-live="polite">
-            {SAVE_STATE_LABELS[notes.saveState]}
-          </span>
-        )}
       </div>
       <div className="card__body meeting-notes-doc__body" onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) notes.flushInBackground();
@@ -350,6 +347,7 @@ function NotesDocCard({ title, notes, canWrite, converting, tooLong, onPickTempl
         </div>}
         {canWrite && !notes.value.trim() && <NotesTemplateStarter onPick={onPickTemplate} />}
         <MarkdownEditor
+          className="markdown-editor--document"
           value={notes.value}
           onChange={notes.onChange}
           readOnly={!canWrite || converting}
@@ -357,6 +355,10 @@ function NotesDocCard({ title, notes, canWrite, converting, tooLong, onPickTempl
           aria-label="Meeting notes"
           placeholder="Who came, what was discussed, what was decided, who is following up."
           aria-invalid={tooLong || undefined}
+          // In the toolbar, which stays pinned while you write further down.
+          toolbarEnd={canWrite && (
+            <EditorSaveStatus state={notes.saveState} onRetry={notes.conflict ? undefined : notes.flushInBackground} />
+          )}
         />
         {tooLong && (
           <p className="flag flag--warn" role="alert">

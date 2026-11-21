@@ -129,6 +129,8 @@ export default defineConfig({
       "@milkdown/kit/utils",
       "@milkdown/kit/prose/commands",
       "@milkdown/kit/prose/state",
+      "@milkdown/kit/prose/history",
+      "@milkdown/kit/plugin/upload",
       // AI intake worker and review viewer: a late re-optimization reloads the
       // page in the middle of an extraction run.
       "pdfjs-dist/legacy/build/pdf.mjs",

@@ -53,8 +53,8 @@ test("working meeting notes: AI notes, action items and a task", async ({ page }
   const views = page.getByRole("group", { name: "Notes view" });
   await expect(views.getByRole("button", { name: "Notes", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("heading", { name: "Action items" })).toBeVisible();
-  // AI agents are off in this workspace, so the Ask bar says how to turn them on.
-  await expect(page.getByRole("link", { name: "turn on AI agents in Settings" })).toBeVisible();
+  // AI agents are off in this workspace, so there is no Ask bar.
+  await expect(page.getByLabel("Ask about this meeting")).toHaveCount(0);
 
   const notesEditor = page.locator(".meeting-notes-doc [contenteditable=\"true\"]");
   await notesEditor.click();
@@ -254,8 +254,8 @@ test("templates, export, Ask bar and recording on the notes surface", async ({ p
   expect(markdown).toContain("**Attendees:** Sam Rivera");
   expect(markdown).toContain("### Progress since last time");
 
-  // Without the AI agents module the Ask bar says how to turn it on.
-  await expect(page.getByRole("link", { name: "turn on AI agents in Settings" })).toBeVisible();
+  // Without the AI agents module there is no Ask bar; turning the module on brings it.
+  await expect(page.getByLabel("Ask about this meeting")).toHaveCount(0);
   await page.evaluate(async () => {
     const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
     const { getStoredSocietyId } = await import("/src/hooks/useSociety.ts");
@@ -667,5 +667,45 @@ test("team notes and my own notes: add, keep private, share, delete", async ({ p
   await page.getByRole("dialog", { name: "Delete your notes?" }).getByRole("button", { name: "Delete" }).click();
   await expect(team.getByRole("heading", { name: "Team notes" })).toBeVisible();
   await expect(team.getByRole("button", { name: "My notes" })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("notes editor: @mentions link to the directory, typed addresses link, find and replace", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await seed(page);
+  await page.goto("/app/meetings");
+  await page.getByRole("button", { name: "Meeting notes", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Title" }).fill("Editor check-in");
+  await dialog.locator("button.btn--accent").click();
+  await expect(page.getByRole("heading", { name: /Editor check-in/ })).toBeVisible({ timeout: 60_000 });
+
+  const editor = page.locator(".meeting-notes-doc [contenteditable=\"true\"]");
+  await editor.click();
+  // "@Sa" offers Sam Rivera from the People directory; Enter links the name to their profile.
+  await page.keyboard.type("Budget goes to @Sa");
+  const list = page.getByRole("listbox", { name: "People" });
+  await expect(list.getByRole("option", { name: "Sam Rivera" })).toBeVisible();
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("today. Details at example.org/budget then the budget.");
+  const mention = editor.getByRole("link", { name: "@Sam Rivera" });
+  await expect(mention).toHaveAttribute("href", /^\/app\/people-directory\//);
+  await expect(list).toHaveCount(0);
+  // A typed address becomes a link once a space follows it.
+  await expect(editor.getByRole("link", { name: "example.org/budget" })).toHaveAttribute("href", "https://example.org/budget");
+
+  // Ctrl/Cmd+F: find counts matches and replace all swaps them.
+  await page.keyboard.press("ControlOrMeta+f");
+  const find = page.getByRole("search", { name: "Find in text" });
+  await find.getByLabel("Find", { exact: true }).fill("budget");
+  await expect(find.getByText(/of 3$/)).toBeVisible();
+  await find.getByLabel("Replace with").fill("plan");
+  await find.getByRole("button", { name: "Replace all" }).click();
+  await expect(find.getByText("No results")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(find).toHaveCount(0);
+  await expect(editor).toContainText("plan goes to @Sam Rivera today.");
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible({ timeout: 15_000 });
   expect(errors).toEqual([]);
 });

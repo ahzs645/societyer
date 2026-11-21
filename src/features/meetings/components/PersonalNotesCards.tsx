@@ -11,22 +11,16 @@ import { useMutation } from "convex/react";
 import { FileText, Plus, Trash2, Users } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
+import { EditorSaveStatus } from "@/components/EditorSaveStatus";
 import { Select } from "@/components/Select";
 import { Toggle } from "@/components/Controls";
 import { useConfirm } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { formatDateTime } from "@/lib/format";
-import { createNotesAutosave, type NotesSaveState } from "../lib/notesAutosave";
+import { createNotesAutosave } from "../lib/notesAutosave";
 import type { PersonalNotes } from "../../../../shared/functions/meetingPersonalNotes";
 
 export type NotesDocId = "team" | "mine" | `shared:${string}`;
-
-const SAVE_LABELS: Record<NotesSaveState, string> = {
-  saved: "Saved",
-  pending: "Unsaved changes",
-  saving: "Saving…",
-  error: "Not saved. Your changes are still here.",
-};
 
 export function NotesDocSwitcher({
   doc,
@@ -118,10 +112,17 @@ export function MyNotesCard({ meetingId, row, title, onDeleted }: { meetingId: s
     <section className="card meeting-notes-doc" aria-label="My notes">
       <div className="card__head meeting-notes-doc__head">
         {title}
-        <span className={`meeting-notes-doc__status is-${state.saveState}`} role="status" aria-live="polite">{SAVE_LABELS[state.saveState]}</span>
       </div>
       <div className="card__body meeting-notes-doc__body" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) flush(); }}>
-        <MarkdownEditor value={state.value} onChange={onChange} rows={10} aria-label="My notes" placeholder="Your own notes: only you see them unless you share them." />
+        <MarkdownEditor
+          className="markdown-editor--document"
+          value={state.value}
+          onChange={onChange}
+          rows={10}
+          aria-label="My notes"
+          placeholder="Your own notes: only you see them unless you share them."
+          toolbarEnd={<EditorSaveStatus state={state.saveState} onRetry={flush} />}
+        />
         {state.saveState === "error" && <p className="flag flag--warn" role="alert">{state.error || "Your notes could not be saved."} They're still in the editor.</p>}
         <div className="personal-notes__footer">
           <Toggle

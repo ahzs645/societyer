@@ -75,8 +75,8 @@ test("keep a recording on this computer, play it in the Transcript tab, switch t
   await card.getByRole("button", { name: "Open" }).click();
   await expect.poll(() => page.evaluate(() => (window as any).__opened ?? 0)).toBe(1);
 
-  // Play in Transcript tab opens Attached recordings, which reads the file back.
-  await card.getByRole("button", { name: "Play in Transcript tab" }).click();
+  // Play in transcript opens Attached recordings (Notes → Transcript on a notes meeting), which reads the file back.
+  await card.getByRole("button", { name: "Play in transcript" }).click();
   const attached = page.getByRole("region", { name: "Attached recordings" });
   await expect(attached).toBeVisible();
   await expect(attached.getByText(/Recordings kept for this meeting/)).toBeVisible();

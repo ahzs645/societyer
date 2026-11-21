@@ -1,4 +1,5 @@
 import { Component, forwardRef, lazy, Suspense, useCallback, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import type { MentionPerson } from "./MarkdownMentions";
 
 const Editor = lazy(() => import("./MarkdownEditorImpl").then((module) => ({ default: module.MarkdownEditor })));
 
@@ -16,6 +17,10 @@ export interface MarkdownEditorProps {
   "aria-invalid"?: boolean;
   "aria-label"?: string;
   className?: string;
+  /** Shown at the end of the formatting toolbar, such as a save status. */
+  toolbarEnd?: ReactNode;
+  /** People "@" can mention; defaults to the page's MentionPeopleContext. */
+  mentionPeople?: readonly MentionPerson[];
   /** Internal: the rich editor calls this once it can take input. */
   onReady?: () => void;
 }

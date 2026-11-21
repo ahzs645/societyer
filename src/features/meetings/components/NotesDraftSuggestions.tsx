@@ -3,11 +3,12 @@
  * speaker is, with the words that show it. Nothing is applied until someone
  * chooses to, through transcripts:assignSpeaker.
  */
-import { useState } from "react";
-import { Check, UserCheck } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { Check, ChevronDown, UserCheck, Users } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useToast } from "@/components/Toast";
+import { ViewportPopover } from "@/components/ViewportPopover";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
@@ -109,39 +110,57 @@ export function NotesDraftSuggestions({
 /**
  * "People the AI knows": the roster the notes skill gets (meetings:notesSkillContext),
  * so people can see who it can assign work to and what it knows about them.
- * Loaded only when opened.
+ * A popover off a quiet button; loaded the first time it opens, then kept so the
+ * button can show the count.
  */
 export function SkillRosterDisclosure({ meetingId }: { meetingId: Id<"meetings"> }) {
   const [open, setOpen] = useState(false);
-  const context = useQuery(api.meetings.notesSkillContext, open ? { id: meetingId } : "skip") as
+  const [requested, setRequested] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  const context = useQuery(api.meetings.notesSkillContext, requested ? { id: meetingId } : "skip") as
     | { people: Array<{ id?: string; name: string; roles: string[]; attendee?: boolean }>; peopleOmitted?: number; goals: unknown[]; committees: unknown[]; speakers: unknown[] }
     | undefined;
   return (
-    <details className="notes-roster" onToggle={(event) => setOpen((event.target as HTMLDetailsElement).open)}>
-      <summary>People the AI knows{context ? ` (${context.people.length})` : ""}</summary>
-      {open && !context && <p className="muted">Loading…</p>}
-      {context && (
-        <>
-          <p className="muted">
-            The AI can assign action items to these people and recognise them in the transcript. It also knows {context.goals.length} open goal{context.goals.length === 1 ? "" : "s"} and {context.committees.length} committee{context.committees.length === 1 ? "" : "s"}. You only see, and the AI only gets, the registers you can read.
-          </p>
-          {context.people.length ? (
-            <ul className="notes-roster__list">
-              {context.people.map((person) => (
-                <li key={person.id ?? person.name}>
-                  <strong>{person.name}</strong>
-                  {person.attendee && <span className="notes-roster__tag">attending</span>}
-                  {!person.id && <span className="notes-roster__tag">not in People</span>}
-                  {person.roles.length > 0 && <span className="muted"> · {person.roles.join("; ")}</span>}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">No people yet. Add directors, staff, volunteers or members, or list attendees on the meeting.</p>
-          )}
-          {Boolean(context.peopleOmitted) && <p className="muted">{context.peopleOmitted} more aren't sent, to keep the request small; attendees and committee members come first.</p>}
-        </>
-      )}
-    </details>
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        className="notes-roster__trigger"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => { setRequested(true); setOpen((value) => !value); }}
+      >
+        <Users size={13} aria-hidden="true" />
+        People the AI knows{context ? ` (${context.people.length})` : ""}
+        <ChevronDown size={12} aria-hidden="true" />
+      </button>
+      <ViewportPopover open={open} onClose={close} anchorRef={anchor} align="start" label="People the AI knows" className="info-popover notes-roster">
+        <p className="notes-roster__title">People the AI knows</p>
+        {!context && <p className="muted">Loading…</p>}
+        {context && (
+          <>
+            <p className="muted">
+              The AI can assign action items to these people and recognise them in the transcript. It also knows {context.goals.length} open goal{context.goals.length === 1 ? "" : "s"} and {context.committees.length} committee{context.committees.length === 1 ? "" : "s"}. You only see, and the AI only gets, the registers you can read.
+            </p>
+            {context.people.length ? (
+              <ul className="notes-roster__list">
+                {context.people.map((person) => (
+                  <li key={person.id ?? person.name}>
+                    <strong>{person.name}</strong>
+                    {person.attendee && <span className="notes-roster__tag">attending</span>}
+                    {!person.id && <span className="notes-roster__tag">not in People</span>}
+                    {person.roles.length > 0 && <span className="muted"> · {person.roles.join("; ")}</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">No people yet. Add directors, staff, volunteers or members, or list attendees on the meeting.</p>
+            )}
+            {Boolean(context.peopleOmitted) && <p className="muted">{context.peopleOmitted} more aren't sent, to keep the request small; attendees and committee members come first.</p>}
+          </>
+        )}
+      </ViewportPopover>
+    </>
   );
 }

@@ -46,6 +46,58 @@
     border-radius: var(--r-sm) var(--r-sm) 0 0;
   }
 
+  // Right end of the toolbar: the caller's status (e.g. "Saved"), then full screen.
+  &__toolbar-trailing {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    margin-left: auto;
+  }
+  &__toolbar-end {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding-inline: 4px;
+  }
+  // A hairline between Undo/Redo and the formatting buttons.
+  &__toolbar-sep {
+    align-self: center;
+    width: 1px;
+    height: 16px;
+    margin-inline: 3px;
+    background: var(--border);
+  }
+  // Word count (full screen).
+  &__count {
+    padding-inline: 4px;
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  // Markdown source: a plain field in place of the rich text.
+  &__source {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font: 13px/1.6 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    resize: vertical;
+    outline: none;
+  }
+  &.is-source .markdown-editor__body {
+    display: none;
+  }
+  // Phones: "More formatting" starts a new row under the first.
+  &__toolbar-break {
+    flex-basis: 100%;
+    height: 0;
+  }
+
   &__toolbar-button {
     display: inline-flex;
     align-items: center;
@@ -143,6 +195,8 @@
   // This is the host element Crepe mounts the .milkdown root inside. Make
   // it the resizable region so users can drag the bottom edge to grow.
   &__body {
+    // Holds the link popover's anchor (MarkdownLinkPopover), which scrolls with the text.
+    position: relative;
     flex: 1 1 auto;
     overflow: auto;
     resize: vertical;
@@ -440,4 +494,217 @@
     height: max(100%, var(--tap-target));
     transform: translate(-50%, -50%);
   }
+}
+
+// ----- Crepe's slash menu, block handle and selection toolbar -----
+// The slash menu is pinned to the window so a scrolling editor body, card or
+// dialog can't clip it (floating-ui still places it at the caret).
+.markdown-editor .milkdown .milkdown-slash-menu {
+  position: fixed;
+  z-index: var(--z-dropdown, 1500);
+}
+// Crepe lets the list run to 420px, more than the room above or below a caret
+// mid-screen, so the menu ran off the window. Short enough to fit one side.
+.markdown-editor .milkdown .milkdown-slash-menu .menu-groups {
+  max-height: min(300px, 40vh);
+}
+// The selection toolbar sits over the pinned formatting toolbar when the
+// selection is near the top. Touch devices keep the system's own selection
+// menu, which this toolbar would fight on iOS.
+.markdown-editor .milkdown .milkdown-toolbar {
+  z-index: 5;
+  // Crepe draws these icons in its outline colour, which is our faint border
+  // colour elsewhere; here they would read as disabled.
+  --crepe-color-outline: var(--text-secondary);
+}
+// Drag handles only where there's room for them (document-sized editors and
+// full screen) and a mouse to drag with. Only the grip: "+" does what typing
+// "/" does.
+.markdown-editor .milkdown .milkdown-block-handle {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .markdown-editor.markdown-editor--document .milkdown .milkdown-block-handle,
+  .markdown-editor.is-fullscreen .milkdown .milkdown-block-handle {
+    display: flex;
+  }
+  .markdown-editor .milkdown .milkdown-block-handle .operation-item:first-child {
+    display: none;
+  }
+}
+@media (pointer: coarse) {
+  .markdown-editor .milkdown .milkdown-toolbar {
+    display: none !important;
+  }
+}
+
+// ----- Full screen -----
+// The editor fills the window where it sits (see MarkdownEditorImpl). `html`
+// in the selectors outranks callers that restyle the editor in place (the
+// meeting notes' document style and pinned toolbar). Above the app chrome and
+// drawers, under dialogs (z-index 1000+) such as the link prompt.
+html .markdown-editor.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  width: auto;
+  margin: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  // Phones: the text ends above the on-screen keyboard (useKeyboardInsetTracking).
+  padding-bottom: var(--keyboard-inset, 0px);
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-panel, var(--bg-base));
+  box-shadow: none;
+  color: var(--text-primary);
+  font-size: var(--fs-md, 15px);
+
+  .markdown-editor__toolbar {
+    position: static;
+    flex: none;
+    justify-content: center;
+    // Line the buttons up with the text column below.
+    padding-inline: max(12px, calc((100% - 860px) / 2));
+    border-top: 0;
+    border-radius: 0;
+  }
+  .markdown-editor__body {
+    flex: 1 1 auto;
+    min-height: 0 !important; // the inline rows-based height is for the field in place
+    overflow: auto;
+    overscroll-behavior: contain;
+    resize: none;
+  }
+  .markdown-editor__source {
+    flex: 1 1 auto;
+    max-width: 860px;
+    margin-inline: auto;
+    padding: 28px 16px 35vh;
+    resize: none;
+  }
+  .milkdown .ProseMirror {
+    max-width: 860px;
+    margin-inline: auto;
+    // Room to keep writing mid-screen instead of on the bottom edge.
+    padding: 28px max(16px, env(safe-area-inset-right, 0px)) 35vh max(16px, env(safe-area-inset-left, 0px));
+  }
+}
+// Nothing behind the full-screen editor scrolls, and the main column gives up
+// its z-index (_layout-sidebar), which would otherwise keep the editor under
+// the phone top bar and bottom navigation.
+html.has-fullscreen-editor .page {
+  overflow: hidden;
+}
+html.has-fullscreen-editor .main {
+  z-index: auto;
+}
+
+// ----- Link popover (MarkdownLinkPopover) -----
+// Portalled to <body>, so these sit outside the .markdown-editor block.
+.markdown-link-popover {
+  width: min(380px, calc(100vw - 16px));
+  padding: 8px;
+}
+.markdown-link-popover__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  .input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .btn-action {
+    flex: none;
+  }
+}
+.markdown-link-popover__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+// ----- Find and replace (MarkdownFindBar, inside the toolbar) -----
+.markdown-find {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+.markdown-find__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.markdown-find__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding-block: 2px;
+}
+.markdown-find__count {
+  flex: none;
+  min-width: 64px;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.markdown-find__case {
+  width: auto;
+  padding-inline: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+// Matches, and the one the selection is on.
+.markdown-editor .ProseMirror-search-match {
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+  border-radius: 2px;
+}
+.markdown-editor .ProseMirror-active-search-match {
+  background: color-mix(in srgb, var(--warn) 45%, transparent);
+}
+
+// ----- @mention list (MarkdownMentions, on <body>) -----
+.markdown-mention {
+  position: fixed;
+  z-index: var(--z-dropdown, 1500);
+  width: min(280px, calc(100vw - 16px));
+  max-height: min(280px, 45vh);
+  overflow: auto;
+  padding: 4px;
+  background: var(--bg-panel, var(--bg-base));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-strong, 0 8px 24px rgba(0, 0, 0, 0.16));
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px 8px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+  }
+  li.is-active {
+    background: var(--accent-soft);
+  }
+}
+.markdown-mention__name {
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+}
+.markdown-mention__detail {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
 }

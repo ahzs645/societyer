@@ -3,15 +3,19 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useContext,
+  useId,
   useRef,
   useState,
 } from "react";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import { editorViewCtx } from "@milkdown/kit/core";
-import { callCommand, replaceAll } from "@milkdown/kit/utils";
+import { $prose, callCommand, replaceAll } from "@milkdown/kit/utils";
 import { lift } from "@milkdown/kit/prose/commands";
 import { TextSelection } from "@milkdown/kit/prose/state";
-import type { MarkType, ResolvedPos } from "@milkdown/kit/prose/model";
+import { redoDepth, undoDepth } from "@milkdown/kit/prose/history";
+import { uploadConfig } from "@milkdown/kit/plugin/upload";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import {
   Bold,
   Braces,
@@ -20,32 +24,35 @@ import {
   Heading2,
   Heading3,
   Italic,
+  Maximize2,
+  Minimize2,
   Link2,
   List,
   ListChecks,
   ListOrdered,
   Minus,
   MoreHorizontal,
+  FileCode2,
   Quote,
+  Redo2,
+  Search,
   Strikethrough,
   Table as TableIcon,
+  Undo2,
 } from "lucide-react";
-import { usePrompt } from "./Modal";
+import { getMarkRange, LinkPopover, linkTargetAt, normalizeHref, type LinkTarget } from "./MarkdownLinkPopover";
+import { MarkdownFindBar, searchPlugin } from "./MarkdownFindBar";
+import { linkifyPlugin } from "./markdownLinkify";
+import { insertMention, matchPeople, MentionMenu, MentionPeopleContext, mentionQueryAt, type MentionQuery } from "./MarkdownMentions";
 import { Tooltip } from "./Tooltip";
+import { useToast } from "./Toast";
 import { useIsMobile } from "../lib/useIsMobile";
+import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "./MarkdownEditor.scss";
 
-/** Modal URL prompt — the app's `usePrompt`, narrowed to what the link
- * toolbar button needs. */
-type LinkPrompt = (opts: {
-  title: string;
-  placeholder?: string;
-  confirmLabel?: string;
-  required?: boolean;
-}) => Promise<string | null>;
 
 import type { MarkdownEditorHandle, MarkdownEditorProps } from "./MarkdownEditor";
 
@@ -61,6 +68,9 @@ import type { MarkdownEditorHandle, MarkdownEditorProps } from "./MarkdownEditor
 interface ActiveState {
   marks: ReadonlySet<string>;
   blocks: ReadonlySet<string>;
+  /** Whether Undo / Redo have anything to do. */
+  canUndo: boolean;
+  canRedo: boolean;
 }
 type ActiveCheck = (state: ActiveState) => boolean;
 
@@ -72,16 +82,17 @@ interface ToolbarItem {
   shortcut?: string;
   icon: typeof Bold;
   isActive: ActiveCheck;
+  /** Greys the button out (Undo with nothing to undo). */
+  isDisabled?: ActiveCheck;
   /** Invoked on click. `isActive` reflects state at click time so the button
    *  can choose between, e.g., "wrap in blockquote" and "lift out of it".
-   *  `prompt` opens the app's modal text prompt (used by the link button). */
+   *  `openLink` opens the link popover (used by the link button). */
   // Returns `unknown` so the simple items can keep returning the command's
-  // boolean directly, while the link item can return a Promise (awaited in
-  // runItem). The result is never consumed beyond `await`.
+  // boolean directly. The result is never consumed.
   run: (args: {
     editor: Crepe["editor"];
     isActive: boolean;
-    prompt: LinkPrompt;
+    openLink: () => void;
   }) => unknown;
 }
 
@@ -91,54 +102,29 @@ interface ToolbarItem {
 // those plugins — the Slice Symbols differ between our import and the copy
 // Crepe registers, but the names are stable.
 
-/**
- * Finds the contiguous range of `markType` (a link) around a collapsed cursor.
- * Checks the node on both sides of the caret so it works whether the cursor is
- * inside the link or sitting right at its trailing edge. Returns null if there
- * is no such mark adjacent to the position.
- */
-function getMarkRange(
-  $pos: ResolvedPos,
-  markType: MarkType,
-): { from: number; to: number } | null {
-  const parent = $pos.parent;
-  const offset = $pos.parentOffset;
-  const after = parent.childAfter(offset);
-  let index: number;
-  let startPos: number;
-  if (after.node && markType.isInSet(after.node.marks)) {
-    index = after.index;
-    startPos = $pos.start() + after.offset;
-  } else {
-    const before = parent.childBefore(offset);
-    if (!before.node || !markType.isInSet(before.node.marks)) return null;
-    index = before.index;
-    startPos = $pos.start() + before.offset;
-  }
-  // Match the exact mark (type + href) so two adjacent but different links
-  // aren't merged into one range.
-  const mark = markType.isInSet(parent.child(index).marks);
-  if (!mark) return null;
-
-  let from = startPos;
-  let startIndex = index;
-  while (startIndex > 0 && mark.isInSet(parent.child(startIndex - 1).marks)) {
-    startIndex -= 1;
-    from -= parent.child(startIndex).nodeSize;
-  }
-  let to = startPos + parent.child(index).nodeSize;
-  let endIndex = index;
-  while (endIndex + 1 < parent.childCount && mark.isInSet(parent.child(endIndex + 1).marks)) {
-    endIndex += 1;
-    to += parent.child(endIndex).nodeSize;
-  }
-  return { from, to };
-}
 
 /** The buttons a phone shows before "More formatting". */
-const PHONE_TOOLBAR_IDS = new Set(["bold", "italic", "link", "bullet", "ordered"]);
+const PHONE_TOOLBAR_IDS = new Set(["undo", "redo", "bold", "italic", "link", "bullet"]);
 
 const TOOLBAR_ITEMS: ToolbarItem[] = [
+  {
+    id: "undo",
+    label: "Undo",
+    shortcut: "Ctrl+Z",
+    icon: Undo2,
+    isActive: () => false,
+    isDisabled: ({ canUndo }) => !canUndo,
+    run: ({ editor }) => editor.action(callCommand("Undo")),
+  },
+  {
+    id: "redo",
+    label: "Redo",
+    shortcut: "Ctrl+Shift+Z",
+    icon: Redo2,
+    isActive: () => false,
+    isDisabled: ({ canRedo }) => !canRedo,
+    run: ({ editor }) => editor.action(callCommand("Redo")),
+  },
   {
     id: "bold",
     label: "Bold",
@@ -181,65 +167,11 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
   {
     id: "link",
     label: "Link",
-    hint: "Click again on a link to remove it",
+    hint: "Select text to link it, or click in a link to change or remove it",
+    shortcut: "Ctrl+K",
     icon: Link2,
     isActive: ({ marks }) => marks.has("link"),
-    run: async ({ editor, isActive, prompt }) => {
-      // Clicking while the cursor is in a link removes the whole link: expand a
-      // collapsed cursor to the full link range first, then strip the mark and
-      // leave that text selected.
-      if (isActive) {
-        editor.action((ctx) => {
-          const view = ctx.get(editorViewCtx);
-          if (!view) return;
-          const { state } = view;
-          const linkType = state.schema.marks.link;
-          if (!linkType) return;
-          const { selection } = state;
-          let from = selection.from;
-          let to = selection.to;
-          if (selection.empty) {
-            const range = getMarkRange(selection.$from, linkType);
-            if (!range) return;
-            from = range.from;
-            to = range.to;
-          }
-          const tr = state.tr.removeMark(from, to, linkType);
-          tr.setSelection(TextSelection.create(tr.doc, from, to));
-          view.dispatch(tr);
-          view.focus();
-        });
-        return;
-      }
-      const input = await prompt({
-        title: "Add link",
-        placeholder: "https://example.com",
-        confirmLabel: "Add link",
-        required: true,
-      });
-      const raw = input?.trim();
-      if (!raw) return;
-      // Bare domains get https://; leave schemes (mailto:, https:), absolute
-      // paths, and anchors as-is.
-      const href = /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(raw) ? raw : `https://${raw}`;
-      editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx);
-        if (!view) return;
-        const { state } = view;
-        const linkType = state.schema.marks.link;
-        if (!linkType) return;
-        const { from, to, empty } = state.selection;
-        if (empty) {
-          // No selection — drop the URL in as its own linked text.
-          const tr = state.tr.insertText(raw, from);
-          tr.addMark(from, from + raw.length, linkType.create({ href }));
-          view.dispatch(tr);
-        } else {
-          view.dispatch(state.tr.addMark(from, to, linkType.create({ href })));
-        }
-        view.focus();
-      });
-    },
+    run: ({ openLink }) => openLink(),
   },
   {
     id: "h1",
@@ -375,9 +307,20 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
   },
 ];
 
+/** Words in Markdown: link targets, images and syntax characters don't count. */
+function countWords(markdown: string) {
+  const text = markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\]\([^)]*\)/g, "]")
+    .replace(/<[^>]+>/g, " ");
+  return text.match(/[\p{L}\p{N}][\p{L}\p{N}'’.-]*/gu)?.length ?? 0;
+}
+
 const EMPTY_ACTIVE: ActiveState = {
   marks: new Set<string>(),
   blocks: new Set<string>(),
+  canUndo: false,
+  canRedo: false,
 };
 
 // Grid starts compact and grows as the user hovers toward the bottom-right
@@ -571,11 +514,23 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       "aria-invalid": ariaInvalid,
       "aria-label": ariaLabel,
       className,
+      toolbarEnd,
+      mentionPeople,
       onReady,
     },
     ref,
   ) {
     const editorHostRef = useRef<HTMLDivElement | null>(null);
+    // Full screen: the editor fills the window where it sits (moving it would
+    // restart Milkdown and lose undo). Escape or the button leaves.
+    const [fullscreen, setFullscreen] = useState(false);
+    useKeyboardInsetTracking(fullscreen);
+    useEffect(() => {
+      if (!fullscreen) return;
+      const root = document.documentElement;
+      root.classList.add("has-fullscreen-editor");
+      return () => root.classList.remove("has-fullscreen-editor");
+    }, [fullscreen]);
     // Phones show the everyday buttons; the rest open on a second row.
     const isMobile = useIsMobile();
     const [moreOpen, setMoreOpen] = useState(false);
@@ -600,7 +555,100 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     // A failed mount is re-thrown here so MarkdownEditor's error boundary
     // renders the plain-textarea fallback.
     if (failure) throw failure;
-    const prompt = usePrompt();
+    // The link popover: the range it edits, and the view it edits it in.
+    const [link, setLink] = useState<{ view: EditorView; target: LinkTarget } | null>(null);
+    const openLinkRef = useRef<() => void>(() => undefined);
+    const viewRef = useRef<EditorView | null>(null);
+    // Find and replace: open with the text to look for; `findVersion` moves on
+    // with each edit while the bar is open so its match count stays right.
+    const [find, setFind] = useState<{ initial: string } | null>(null);
+    const [findVersion, setFindVersion] = useState(0);
+    const findOpenRef = useRef(false);
+    findOpenRef.current = find !== null;
+    const openFind = useCallback(() => {
+      const view = viewRef.current;
+      const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
+      const selected = view ? view.state.doc.textBetween(from, to, " ") : "";
+      setFind({ initial: selected.length <= 80 && !selected.includes("\n") ? selected : "" });
+    }, []);
+    // @mentions: the people offered (prop, else the page's context), the
+    // "@query" being typed, and the highlighted row.
+    const contextPeople = useContext(MentionPeopleContext);
+    const people = mentionPeople ?? contextPeople;
+    const peopleRef = useRef(people);
+    peopleRef.current = people;
+    const [mention, setMentionState] = useState<MentionQuery | null>(null);
+    const mentionRef = useRef<MentionQuery | null>(null);
+    const [mentionActive, setMentionActive] = useState(0);
+    const setMention = useCallback((next: MentionQuery | null) => {
+      const previous = mentionRef.current;
+      if (previous?.from === next?.from && previous?.to === next?.to && previous?.query === next?.query) return;
+      if (previous?.from !== next?.from || previous?.query !== next?.query) setMentionActive(0);
+      mentionRef.current = next;
+      setMentionState(next);
+    }, []);
+    // Esc closes the list for that "@" until the "@" itself is gone, so a
+    // literal "@something" can be typed on.
+    const dismissedRef = useRef<number | null>(null);
+    const mentionListId = useId();
+    const mentionResults = mention && people ? matchPeople(people, mention.query) : [];
+    const afterTransactionRef = useRef<(view: EditorView) => void>(() => undefined);
+    afterTransactionRef.current = (view) => {
+      if (findOpenRef.current) setFindVersion((value) => value + 1);
+      const next = peopleRef.current?.length && view.hasFocus() ? mentionQueryAt(view.state) : null;
+      if (dismissedRef.current !== null && next?.from !== dismissedRef.current) dismissedRef.current = null;
+      setMention(next && next.from !== dismissedRef.current ? next : null);
+    };
+    const setMentionRef = useRef(setMention);
+    setMentionRef.current = setMention;
+    const mentionKeyRef = useRef<(event: KeyboardEvent, view: EditorView) => void>(() => undefined);
+    mentionKeyRef.current = (event, view) => {
+      if (!mention || !mentionResults.length) return;
+      const pick = () => insertMention(view, mention, mentionResults[Math.min(mentionActive, mentionResults.length - 1)]);
+      const handled = ({
+        ArrowDown: () => setMentionActive((index) => (index + 1) % mentionResults.length),
+        ArrowUp: () => setMentionActive((index) => (index - 1 + mentionResults.length) % mentionResults.length),
+        Enter: pick,
+        Tab: pick,
+        Escape: () => {
+          dismissedRef.current = mention.from;
+          setMention(null);
+        },
+      } as Record<string, (() => void) | undefined>)[event.key];
+      if (!handled || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handled();
+    };
+    // The editable announces the open list to screen readers.
+    useEffect(() => {
+      const dom = viewRef.current?.dom;
+      if (!dom) return;
+      if (mention && mentionResults.length) {
+        dom.setAttribute("aria-controls", mentionListId);
+        dom.setAttribute("aria-activedescendant", `${mentionListId}-${Math.min(mentionActive, mentionResults.length - 1)}`);
+      } else {
+        dom.removeAttribute("aria-controls");
+        dom.removeAttribute("aria-activedescendant");
+      }
+    }, [mention, mentionResults.length, mentionActive, mentionListId]);
+    const toast = useToast();
+    const notifyImageRef = useRef(() => undefined as void);
+    notifyImageRef.current = () => toast.info("Images can't be added here yet", "Add the file as a document or attachment, and link to it.");
+    // Markdown source: a plain field showing the Markdown; edits go out through
+    // onChange, and the value sync below carries them into the rich editor.
+    const [source, setSource] = useState<string | null>(null);
+    const words = fullscreen ? countWords(value ?? "") : 0;
+    const openLink = useCallback(() => {
+      const crepe = crepeRef.current;
+      if (!crepe || readOnlyRef.current) return;
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const target = view && linkTargetAt(view);
+        if (view && target) setLink({ view, target });
+      });
+    }, []);
+    openLinkRef.current = openLink;
 
     useEffect(() => {
       onChangeRef.current = onChange;
@@ -652,8 +700,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           }
         }
 
+        const canUndo = undoDepth(state) > 0;
+        const canRedo = redoDepth(state) > 0;
         setActive((prev) => {
           if (
+            prev.canUndo === canUndo &&
+            prev.canRedo === canRedo &&
             prev.marks.size === marks.size &&
             prev.blocks.size === blocks.size &&
             [...marks].every((m) => prev.marks.has(m)) &&
@@ -661,7 +713,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           ) {
             return prev;
           }
-          return { marks, blocks };
+          return { marks, blocks, canUndo, canRedo };
         });
       });
     }, []);
@@ -722,15 +774,39 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             // Tables are inserted via the toolbar's grid picker; once present,
             // Crepe's in-cell handles handle add/remove rows + cols.
             [CrepeFeature.Table]: true,
-            // The slash (/) menu + block drag-handle. Disabled because the menu
-            // gets clipped by the scrollable editor body when it flips upward,
-            // and the toolbar already exposes the formatting we need here.
-            [CrepeFeature.BlockEdit]: false,
-            // The on-selection floating toolbar. Its only unique action was
-            // links, which the top toolbar's Link button now provides.
-            [CrepeFeature.Toolbar]: false,
+            // The slash (/) menu and the block handle (+ and drag). The menu is
+            // pinned to the window (position: fixed, floating-ui's fixed
+            // strategy) so a scrolling editor body or dialog can't clip it; the
+            // handle shows only in document-sized editors with a mouse.
+            [CrepeFeature.BlockEdit]: true,
+            // The floating toolbar on selected text (mouse and trackpad only;
+            // touch devices have the system's own selection menu).
+            [CrepeFeature.Toolbar]: true,
           },
           featureConfigs: {
+            [CrepeFeature.BlockEdit]: {
+              // Window coordinates (floating-ui's fixed strategy) to match the
+              // menu's position: fixed in MarkdownEditor.scss.
+              slashMenu: { floatingUIOptions: { strategy: "fixed" } },
+              // Only what this editor supports: H1–H3, no images or math.
+              textGroup: { h4: null, h5: null, h6: null },
+              advancedGroup: { image: null, math: null },
+              // The grip sits close to the text, in a narrow left gutter.
+              blockHandle: { getOffset: () => 4 },
+            },
+            [CrepeFeature.Toolbar]: {
+              // Its link button opens our link popover, not Crepe's own editor.
+              buildToolbar: (builder) => {
+                try {
+                  const link = builder.getGroup("function").group.items.find((item) => item.key === "link");
+                  // After the pointerdown that ran it: opened during that event, the
+                  // popover's outside-click check would see it and close at once.
+                  if (link) link.onRun = () => { window.setTimeout(() => openLinkRef.current(), 0); };
+                } catch {
+                  // No function group in this Crepe version; its own link editor stays.
+                }
+              },
+            },
             [CrepeFeature.Placeholder]: {
               text: placeholderRef.current ?? "",
               // "doc" shows the placeholder only when the whole document is
@@ -741,6 +817,23 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           },
         });
         crepe = instance;
+
+        // Crepe saves a pasted or dropped image as a `blob:` address, which only
+        // works in this tab and breaks once saved. Until images can be uploaded,
+        // turn image files away and say so (pasted text and image links are kept).
+        instance.editor.config((ctx) => {
+          ctx.update(uploadConfig.key, (prev) => ({
+            ...prev,
+            uploader: async (files) => {
+              if (Array.from(files).some((file) => file.type.startsWith("image/"))) notifyImageRef.current();
+              return [];
+            },
+          }));
+        });
+
+        // Find and replace (highlights; MarkdownFindBar drives it) and typed
+        // addresses turning into links (markdownLinkify).
+        instance.editor.use($prose(() => searchPlugin())).use($prose(() => linkifyPlugin()));
 
         instance.on((listener) => {
           listener.markdownUpdated((_ctx, markdown) => {
@@ -783,11 +876,32 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         instance.editor.action((ctx) => {
           const view = ctx.get(editorViewCtx);
           if (!view) return;
+          viewRef.current = view;
           const originalDispatch = view.dispatch.bind(view);
           view.dispatch = (tr) => {
             originalDispatch(tr);
             recomputeActive();
+            afterTransactionRef.current(view);
           };
+          // Mention keys come before ProseMirror's own (Enter would split the line).
+          container.addEventListener("keydown", (event: KeyboardEvent) => mentionKeyRef.current(event, view), true);
+          view.dom.addEventListener("blur", () => setMentionRef.current(null));
+
+          // Pasting a web address over selected text links that text instead
+          // of replacing it. Capture on the host runs before ProseMirror's own
+          // paste handling on the editable.
+          container.addEventListener("paste", (event: ClipboardEvent) => {
+            if (readOnlyRef.current) return;
+            const { state } = view;
+            const linkType = state.schema.marks.link;
+            const pasted = event.clipboardData?.getData("text/plain").trim() ?? "";
+            if (!linkType || state.selection.empty || !/^(https?:\/\/|mailto:|www\.)\S+$/i.test(pasted)) return;
+            if (state.doc.textBetween(state.selection.from, state.selection.to).trim() === pasted) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const { from, to } = state.selection;
+            view.dispatch(state.tr.removeMark(from, to, linkType).addMark(from, to, linkType.create({ href: normalizeHref(pasted) })));
+          }, true);
 
           // Links delete as a unit at their boundary: backspacing right after a
           // link (or forward-deleting right before one) removes the whole link
@@ -910,14 +1024,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         // selection rather than the (now-blurred) toolbar button.
         const editable = editorHostRef.current?.querySelector<HTMLElement>(".ProseMirror");
         editable?.focus();
-        // run() may be async (the link button awaits a modal prompt); recompute
-        // once it resolves. The wrapped view.dispatch also recomputes on any
-        // transaction, so synchronous commands feel instant either way.
-        void Promise.resolve(item.run({ editor: crepe.editor, isActive, prompt })).then(
-          () => recomputeActive(),
-        );
+        // The wrapped view.dispatch also recomputes on every transaction.
+        item.run({ editor: crepe.editor, isActive, openLink });
+        recomputeActive();
       },
-      [recomputeActive, prompt],
+      [recomputeActive, openLink],
     );
 
     const insertTable = useCallback((rows: number, cols: number) => {
@@ -959,8 +1070,35 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     return (
       <div
         id={id}
-        className={`markdown-editor${readOnly ? " markdown-editor--readonly" : ""}${className ? ` ${className}` : ""}`}
+        className={`markdown-editor${readOnly ? " markdown-editor--readonly" : ""}${fullscreen ? " is-fullscreen" : ""}${source !== null ? " is-source" : ""}${className ? ` ${className}` : ""}`}
         role="group"
+        onKeyDown={(event) => {
+          // Keys from the link popover reach here through its React portal.
+          if (!event.currentTarget.contains(event.target as Node)) return;
+          // Ctrl/Cmd+K links (in place of the command palette while you write).
+          if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k" && (event.target as Element).closest(".ProseMirror")) {
+            event.preventDefault();
+            event.stopPropagation();
+            openLink();
+            return;
+          }
+          // ProseMirror's own Escape ("select the parent node") marks the event
+          // handled, so leaving full screen doesn't wait on defaultPrevented.
+          // Ctrl/Cmd+F finds in this text (in place of the browser's page find).
+          if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "f" && source === null) {
+            event.preventDefault();
+            event.stopPropagation();
+            openFind();
+            return;
+          }
+          if (!fullscreen || event.key !== "Escape") return;
+          // An open table picker closes first.
+          if (event.currentTarget.querySelector(".markdown-editor__table-picker")) return;
+          // Handled here, so a dialog around the editor stays open.
+          event.preventDefault();
+          event.stopPropagation();
+          setFullscreen(false);
+        }}
         aria-label={ariaLabel}
         aria-describedby={ariaDescribedBy}
         aria-invalid={ariaInvalid || undefined}
@@ -984,7 +1122,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
                   className={`markdown-editor__toolbar-button${isActive ? " is-active" : ""}`}
                   aria-label={item.label}
                   aria-pressed={isActive}
-                  disabled={readOnly}
+                  disabled={readOnly || source !== null || Boolean(item.isDisabled?.(active))}
                   // Use onMouseDown so the editor selection isn't lost before
                   // the command fires (default button focus would blur the doc).
                   onMouseDown={(event) => {
@@ -997,8 +1135,77 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               </Tooltip>
             );
           };
-          const table = <TableButton onInsert={insertTable} disabled={readOnly} />;
-          if (!isMobile) return <>{TOOLBAR_ITEMS.map(renderItem)}{table}</>;
+          const table = <TableButton onInsert={insertTable} disabled={readOnly || source !== null} />;
+          const sourceButton = (
+            <Tooltip content={source !== null ? "Back to formatted text" : "Markdown source"}>
+              <button
+                type="button"
+                className={`markdown-editor__toolbar-button${source !== null ? " is-active" : ""}`}
+                aria-label="Markdown source"
+                aria-pressed={source !== null}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  if (source !== null) {
+                    setSource(null);
+                    window.setTimeout(() => editorHostRef.current?.querySelector<HTMLElement>(".ProseMirror")?.focus(), 0);
+                  } else {
+                    setSource(crepeRef.current?.getMarkdown() ?? value ?? "");
+                  }
+                }}
+              >
+                <FileCode2 size={14} aria-hidden="true" />
+              </button>
+            </Tooltip>
+          );
+          const findButton = (
+            <Tooltip content="Find and replace (Ctrl+F)">
+              <button
+                type="button"
+                className={`markdown-editor__toolbar-button${find ? " is-active" : ""}`}
+                aria-label="Find and replace"
+                aria-pressed={find !== null}
+                disabled={source !== null}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => (find ? setFind(null) : openFind())}
+              >
+                <Search size={14} aria-hidden="true" />
+              </button>
+            </Tooltip>
+          );
+          const trailing = (
+            <div className="markdown-editor__toolbar-trailing">
+              {fullscreen && <span className="markdown-editor__count" aria-live="off">{words.toLocaleString()} {words === 1 ? "word" : "words"}</span>}
+              {toolbarEnd && <div className="markdown-editor__toolbar-end">{toolbarEnd}</div>}
+              {!isMobile && findButton}
+              {!isMobile && sourceButton}
+              <Tooltip content={fullscreen ? "Exit full screen (Esc)" : "Full screen"}>
+                <button
+                  type="button"
+                  className={`markdown-editor__toolbar-button${fullscreen ? " is-active" : ""}`}
+                  aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+                  aria-pressed={fullscreen}
+                  // Keep the selection, like the formatting buttons.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setFullscreen((value) => !value)}
+                >
+                  {fullscreen ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
+                </button>
+              </Tooltip>
+            </div>
+          );
+          if (!isMobile) {
+            return (
+              <>
+                {TOOLBAR_ITEMS.map((item) => (
+                  item.id === "redo"
+                    ? [renderItem(item), <span key="history-sep" className="markdown-editor__toolbar-sep" aria-hidden="true" />]
+                    : renderItem(item)
+                ))}
+                {table}
+                {trailing}
+              </>
+            );
+          }
           const extras = TOOLBAR_ITEMS.filter((item) => !PHONE_TOOLBAR_IDS.has(item.id));
           return (
             <>
@@ -1016,11 +1223,20 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               >
                 <MoreHorizontal size={14} aria-hidden="true" />
               </button>
+              {/* Status and full screen stay on the first row; the extras wrap below. */}
+              {trailing}
+              {moreOpen && <span className="markdown-editor__toolbar-break" aria-hidden="true" />}
               {moreOpen && extras.map(renderItem)}
               {moreOpen && table}
+              {moreOpen && findButton}
+              {moreOpen && sourceButton}
             </>
           );
           })()}
+          {/* Inside the toolbar, so it stays pinned with it. */}
+          {find && viewRef.current && (
+            <MarkdownFindBar view={viewRef.current} initial={find.initial} readOnly={readOnly} version={findVersion} onClose={() => setFind(null)} />
+          )}
         </div>
         <div
           ref={editorHostRef}
@@ -1054,6 +1270,34 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             event.stopPropagation();
           }}
         />
+        {source !== null && (
+          <textarea
+            className="markdown-editor__source"
+            value={source}
+            readOnly={readOnly}
+            spellCheck
+            aria-label={`${ariaLabel ?? "Text"}, Markdown source`}
+            style={{ minHeight: computedMinHeight }}
+            onChange={(event) => {
+              setSource(event.target.value);
+              onChange(event.target.value);
+            }}
+          />
+        )}
+        {mention && mentionResults.length > 0 && viewRef.current && (
+          <MentionMenu
+            view={viewRef.current}
+            at={mention}
+            people={mentionResults}
+            active={Math.min(mentionActive, mentionResults.length - 1)}
+            listId={mentionListId}
+            onHover={setMentionActive}
+            onPick={(person) => { if (viewRef.current) insertMention(viewRef.current, mention, person); }}
+          />
+        )}
+        {link && editorHostRef.current && (
+          <LinkPopover view={link.view} target={link.target} body={editorHostRef.current} onClose={() => setLink(null)} />
+        )}
       </div>
     );
   },

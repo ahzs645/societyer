@@ -132,7 +132,7 @@ function KeptRecordings({ societyId, meetingId, desktop, where, serverTranscript
         sourceMimeType: recording.mimeType,
         draftMinutes: false,
       });
-      toast.success("Transcript ready", "Open the Transcript tab to read it and name the speakers.");
+      toast.success("Transcript ready", "Open the transcript to read it and name the speakers.");
     } catch (error) {
       toast.error("Could not transcribe the recording", error instanceof Error ? error.message : String(error));
     } finally {
@@ -227,7 +227,7 @@ function RecordingRow({ recording, serverTranscriptionMax, transcribing, onPlay,
           className="btn-action"
           onClick={onPlay}
         >
-          <Play size={12} aria-hidden="true" /> Play in Transcript tab
+          <Play size={12} aria-hidden="true" /> Play in transcript
         </button>
         <button type="button" className="btn-action" onClick={onDownload}>
           <Download size={12} aria-hidden="true" /> {recording.provider === "local-filesystem" ? "Open" : "Download"}
@@ -237,7 +237,7 @@ function RecordingRow({ recording, serverTranscriptionMax, transcribing, onPlay,
             type="button"
             className="btn-action"
             disabled={Boolean(transcribing) || tooLargeForServer}
-            title={tooLargeForServer ? `The server transcribes recordings up to ${formatRecordingSize(serverTranscriptionMax)}. Play it in the Transcript tab and transcribe it on this device instead.` : undefined}
+            title={tooLargeForServer ? `The server transcribes recordings up to ${formatRecordingSize(serverTranscriptionMax)}. Play it in the transcript and transcribe it on this device instead.` : undefined}
             onClick={onTranscribe}
           >
             <Wand2 size={12} aria-hidden="true" /> {transcribing === recording.id ? "Transcribing…" : "Transcribe"}

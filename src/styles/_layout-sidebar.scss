@@ -22,12 +22,14 @@
   border-radius: token('r-sm');
   background: token('bg-panel');
   color: token('text-primary');
-  box-shadow: token('shadow-md');
   transform: translateY(calc(-100% - token('s-4')));
   transition: transform token('anim-fast') token('anim-ease');
 }
 
+/* The shadow only once it is on screen: parked above the window, it bled into
+ * the top-left corner over anything that covers the top bar. */
 .skip-link:focus {
+  box-shadow: token('shadow-md');
   transform: translateY(0);
 }
 
