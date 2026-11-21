@@ -6509,6 +6509,15 @@
     ]
   },
   {
+    "key": "convex:complianceObligations:acknowledgeDecision",
+    "surface": "convex",
+    "name": "complianceObligations:acknowledgeDecision",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/complianceObligations.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:complianceObligations:dismissDecision",
     "surface": "convex",
     "name": "complianceObligations:dismissDecision",
@@ -7495,6 +7504,22 @@
     "kind": "query",
     "access": "authenticated",
     "source": "convex/dashboard.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:dashboardRemediation:acknowledgeItem",
+    "surface": "convex",
+    "name": "dashboardRemediation:acknowledgeItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dashboardRemediation.ts",
     "idArguments": [
       {
         "path": "societyId",
@@ -36092,6 +36117,15 @@
     ]
   },
   {
+    "key": "portable:complianceObligations:acknowledgeDecision",
+    "surface": "portable",
+    "name": "complianceObligations:acknowledgeDecision",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
     "key": "portable:complianceObligations:dismissDecision",
     "surface": "portable",
     "name": "complianceObligations:dismissDecision",
@@ -37076,6 +37110,22 @@
     "surface": "portable",
     "name": "dashboard:summary",
     "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:dashboardRemediation:acknowledgeItem",
+    "surface": "portable",
+    "name": "dashboardRemediation:acknowledgeItem",
+    "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
     "idArguments": [

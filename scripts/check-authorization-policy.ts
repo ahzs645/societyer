@@ -87,7 +87,9 @@ const allowedMemberId = await admin.mutation(api.members.create, writeArgs);
 assert.ok(allowedMemberId);
 const decisionArgs = { societyId: seeded.societyId, ruleId: "home:compliance.annual-return:due", flagLevel: "warning", flagText: "Annual return review", evidenceRequired: [] };
 await admin.mutation(api.complianceObligations.markReviewed, { ...decisionArgs, targetTable: "members", targetId: allowedMemberId });
-await admin.mutation(api.complianceObligations.dismissDecision, decisionArgs);
+// Obligations are requirements: dismissing is refused, acknowledging is allowed.
+await assert.rejects(() => admin.mutation(api.complianceObligations.dismissDecision, decisionArgs), /requirement/);
+await admin.mutation(api.complianceObligations.acknowledgeDecision, decisionArgs);
 await admin.mutation(api.complianceObligations.reopenDecision, decisionArgs);
 await admin.mutation(api.dashboardRemediation.createComplianceReviewTask, decisionArgs);
 const foreignTarget = await test.run(async (ctx) => {

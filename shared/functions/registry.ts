@@ -349,10 +349,13 @@ const ORGANIZATION_REGISTRY_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "organizationDetails:applyRegistryImport", handler: organizationDetailsFns.applyRegistryImportPortable }),
 ];
 
-// Dismissing dashboard recommendations (kept apart for the same reason).
+// Dismissing dashboard recommendations and acknowledging requirements, on the
+// dashboard and the obligations page (kept apart for the same reason).
 const DASHBOARD_DISMISSAL_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "dashboardRemediation:dismissItem", handler: dashboardRemediationFns.dismissItemPortable }),
+  definePortableMutation({ name: "dashboardRemediation:acknowledgeItem", handler: dashboardRemediationFns.acknowledgeItemPortable }),
   definePortableMutation({ name: "dashboardRemediation:restoreItem", handler: dashboardRemediationFns.restoreItemPortable }),
+  definePortableMutation({ name: "complianceObligations:acknowledgeDecision", handler: complianceObligationsFns.acknowledgeDecisionPortable }),
 ];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [

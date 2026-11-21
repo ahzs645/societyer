@@ -16,7 +16,8 @@ import { legalGovernanceProfile, LEGAL_GOVERNANCE_PROFILES, minimumLegalDirector
 import { resolvePrivacyProfile, hasApplicablePrivacyLaw, PRIVACY_LAWS, type PrivacyAssessmentFacts } from "./privacyRuleProfiles";
 import type { LegalEntityLike } from "./organizationDomain";
 import { audienceAppliesToOrganization, type RuleAudience } from "./entityRuleScope";
-import type { DashboardItemDismissal } from "./dashboardDismissals";
+import type { DashboardItemAcknowledgement, DashboardItemDismissal } from "./dashboardDismissals";
+import type { RequirementBasis } from "./dashboardFindingPolicy";
 
 /** `info` is a neutral status note (e.g. "isn't incorporated yet"): not a pass and not a gap. */
 export type ComplianceFlagLevel = "ok" | "info" | "warn" | "err";
@@ -39,10 +40,18 @@ export type DashboardComplianceFlag = {
   remediationStatus?: string;
   remediationTaskId?: string;
   remediationUpdatedAtISO?: string;
+  /** What the flag rests on (shared/dashboardFindingPolicy.ts); absent for an unclassified rule. */
+  requirementBasis?: RequirementBasis;
+  /** Rule version + what the flag is about; dismissals and acknowledgements hold only while it matches. */
+  subjectKey?: string;
   /** A recommendation ("warn"/"info") this workspace may dismiss; see shared/dashboardDismissals.ts. */
   dismissable?: boolean;
-  /** Set while the flag is dismissed at its current level. */
+  /** Set while the flag is dismissed at its current level and subject. */
   dismissal?: DashboardItemDismissal;
+  /** Set while an acknowledgement applies to the flag's current subject; the flag stays outstanding. */
+  acknowledgement?: DashboardItemAcknowledgement;
+  /** The open follow-up task's owner and due date, when one is assigned. */
+  followUp?: { assignee?: string; dueDate?: string };
 };
 
 export type ComplianceSociety = GovernanceOrganization & PrivacyAssessmentFacts & {

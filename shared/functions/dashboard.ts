@@ -28,7 +28,8 @@ import {
 } from "../dashboardComplianceRules";
 import { isHistoricalSourceAction } from "../taskStatus";
 import { todayDateOnly } from "../dateOnly";
-import { activeDismissal, DISMISSED_STATUS, isRecommendationLevel } from "../dashboardDismissals";
+import { ACKNOWLEDGED_STATUS, activeAcknowledgement, activeDismissal, DISMISSED_STATUS } from "../dashboardDismissals";
+import { findingPolicy, findingSubjectKey, isDismissableFinding } from "../dashboardFindingPolicy";
 import { financeControlFindingsFor } from "./expenseReports";
 import { isCorporation, isPreparingIncorporation } from "../organizationDomain";
 
@@ -393,7 +394,12 @@ export async function summaryPortable(
     if (rule.id.startsWith("MEMBER-DATA")) return readAccess.has("members:read") && readAccess.has("documents:read");
     return readAccess.has("documents:read");
   });
-  const legalFlags = evaluateDashboardComplianceRules({
+  const toComplianceDirector = (director: Record<string, any>) => ({
+    consentOnFile: director.consentOnFile,
+    isBCResident: director.isBCResident,
+    residentCanadianStatus: director.residentCanadianStatus,
+  });
+  const complianceContext = {
     society: society
       ? {
           ...society,
@@ -406,13 +412,21 @@ export async function summaryPortable(
           bylawsDocId: society.bylawsDocId,
         }
       : null,
-    activeDirectors: legalDirectors.map((director: Record<string, any>) => ({
-      consentOnFile: director.consentOnFile,
-      isBCResident: director.isBCResident,
-      residentCanadianStatus: director.residentCanadianStatus,
-    })),
+    activeDirectors: legalDirectors.map(toComplianceDirector),
     rulesConfigured: Boolean(rules?._id),
-  }, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length);
+  };
+  const legalFlags = evaluateDashboardComplianceRules(complianceContext, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length);
+  // What a flag is about, for its subject key: the directors a per-director
+  // rule flags (each director checked on their own through the same rule),
+  // otherwise the flag's text.
+  const subjectParts = (flag: DashboardComplianceFlag): string[] => {
+    const rule = visibleRules.find((candidate) => candidate.id === flag.ruleId);
+    if (!rule || findingPolicy(flag.ruleId).subject !== "directors") return [flag.text];
+    const affected = legalDirectors
+      .filter((director) => rule.passFail({ ...complianceContext, activeDirectors: [toComplianceDirector(director)] }) !== null)
+      .map((director) => `director:${String(director._id)}`);
+    return affected.length ? affected : [flag.text];
+  };
   // Before the certificate there is no legal entity yet: director minimums,
   // residency and the other statutory checks do not apply, so a preparing
   // organization gets one neutral note instead of red flags on day one.
@@ -429,23 +443,43 @@ export async function summaryPortable(
         remediationActions: [{ id: "fix-approval-rules", label: finding.fixLabel, intent: "navigate", to: finding.fixTo }],
       }))
     : [];
+  const openTasksById = new Map(tasks.map((task: Record<string, any>) => [String(task._id), task]));
   const complianceFlags = (financeFlags.length ? [...evidenceFlags.filter((flag) => flag.ruleId !== "DASHBOARD-COMPLIANCE-OK"), ...financeFlags] : evidenceFlags).map((flag) => {
     const remediation = remediationByRuleId.get(flag.ruleId);
-    // Recommendations (warn/info) may be dismissed; requirements (err) may not.
-    const dismissable = isRecommendationLevel(flag.level);
-    const dismissal = activeDismissal(remediation, { level: flag.level, dismissable });
-    const withDismissal: DashboardComplianceFlag = { ...flag, dismissable, ...(dismissal ? { dismissal } : {}) };
-    // A dismissal made at another level no longer applies; the row then
-    // says nothing about this flag beyond any review task it still holds.
-    const staleDismissal = remediation?.status === DISMISSED_STATUS && !dismissal;
-    return remediation
-      ? {
-          ...withDismissal,
-          ...(staleDismissal ? {} : { remediationStatus: remediation.status }),
-          remediationTaskId: remediation.taskId,
-          remediationUpdatedAtISO: remediation.updatedAtISO,
-        }
-      : withDismissal;
+    // Only recommendations at warn/info may be dismissed; statutory, bylaw and
+    // internal-policy findings stay outstanding whatever their level
+    // (shared/dashboardFindingPolicy.ts).
+    const policy = findingPolicy(flag.ruleId);
+    const dismissable = isDismissableFinding(policy, flag.level);
+    const subjectKey = findingSubjectKey(flag.ruleId, subjectParts(flag));
+    const dismissal = activeDismissal(remediation, { level: flag.level, dismissable, subjectKey });
+    const acknowledgement = activeAcknowledgement(remediation, { subjectKey });
+    // A requirement can always get a follow-up owner and due date.
+    const needsFollowUpAction = policy.protected && (flag.level === "warn" || flag.level === "err")
+      && !flag.remediationActions.some((action) => action.intent === "createComplianceReviewTask" || action.intent === "createPrivacyReviewTask");
+    const withPolicy: DashboardComplianceFlag = {
+      ...flag,
+      ...(policy.basis ? { requirementBasis: policy.basis } : {}),
+      subjectKey,
+      dismissable,
+      ...(dismissal ? { dismissal } : {}),
+      ...(acknowledgement ? { acknowledgement } : {}),
+      ...(needsFollowUpAction ? { remediationActions: [...flag.remediationActions, { id: "assign-follow-up", label: "Assign follow-up", intent: "createComplianceReviewTask" }] } : {}),
+    };
+    if (!remediation) return withPolicy;
+    // A dismissal that no longer applies (another level or subject, or a
+    // now-protected rule) and an acknowledgement say nothing about the
+    // workflow; the row then only reports any review task it still holds.
+    const silentStatus = (remediation.status === DISMISSED_STATUS && !dismissal) || remediation.status === ACKNOWLEDGED_STATUS;
+    const task = remediation.status === "open" && remediation.taskId ? openTasksById.get(String(remediation.taskId)) : undefined;
+    const assignee = task?.assignee ?? remediation.assignedTo;
+    return {
+      ...withPolicy,
+      ...(silentStatus ? {} : { remediationStatus: remediation.status }),
+      remediationTaskId: remediation.taskId,
+      remediationUpdatedAtISO: remediation.updatedAtISO,
+      ...(task && (assignee || task.dueDate) ? { followUp: { ...(assignee ? { assignee } : {}), ...(task.dueDate ? { dueDate: task.dueDate } : {}) } } : {}),
+    };
   });
 
   return {

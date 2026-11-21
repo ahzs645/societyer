@@ -48,7 +48,18 @@ import {
 import { agreementGaps } from "../agreements";
 import { appliesBcSocietyRules } from "../entityRuleScope";
 import { entityMeetingWording } from "../entityMeetingWording";
-import { activeDismissal, isBindingSeverity, isRecommendationLevel, type DashboardItemDismissal, type DismissalRecord } from "../dashboardDismissals";
+import { activeAcknowledgement, activeDismissal, type DashboardItemAcknowledgement, type DashboardItemDismissal, type DismissalRecord } from "../dashboardDismissals";
+import { continuityFindingPolicy, findingSubjectKey, isDismissableFinding, type RequirementBasis } from "../dashboardFindingPolicy";
+
+/** The dismissal-policy fields every dashboard continuity check carries. */
+type DashboardCheckPolicyFields = {
+  requirementBasis?: RequirementBasis;
+  subjectKey: string;
+  dismissable: boolean;
+  dismissal?: DashboardItemDismissal;
+  acknowledgement?: DashboardItemAcknowledgement;
+  followUp?: { assignee?: string; dueDate?: string };
+};
 
 const READ_PERMISSIONS = ["meetings:read", "minutes:read", "motions:read", "committees:read", "filings:read", "financials:read", "directors:read", "documents:read", "agreements:read"] as const;
 
@@ -359,18 +370,49 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       });
     }
   }
-  // Recommendations (warn/info checks not resting on a binding duty) may be
-  // dismissed for the workspace; see shared/dashboardDismissals.ts.
+  // Recommendations (warn/info checks whose policy and expectation are not
+  // binding) may be dismissed for the workspace; requirements can be
+  // acknowledged and stay. See shared/dashboardFindingPolicy.ts.
   const remediations = await ctx.db
     .query<PortableDoc & DismissalRecord & { ruleId?: string }>("complianceRemediations")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
   const remediationById = new Map(remediations.map((row) => [String(row.ruleId ?? ""), row]));
+  // An open follow-up task's owner and due date, for readers who may see tasks.
+  const canReadTasks = await requirePermissionPortable(ctx, societyId, "tasks:read").then(() => true, (error: unknown) => {
+    if (error instanceof Error && /^(?:Permission|Service scope) [a-zA-Z]+:read required\.$/.test(error.message)) return false;
+    throw error;
+  });
+  const followUps = new Map<string, { assignee?: string; dueDate?: string }>();
+  if (canReadTasks) {
+    for (const row of remediations) {
+      if (row.status !== "open" || !row.taskId) continue;
+      const task = await ctx.db.get<PortableDoc & { status?: string; assignee?: string; dueDate?: string }>(String(row.taskId), "tasks");
+      if (!task || task.status === "Done" || task.societyId !== societyId) continue;
+      const assignee = task.assignee ?? row.assignedTo;
+      followUps.set(String(row.ruleId ?? ""), { ...(assignee ? { assignee } : {}), ...(task.dueDate ? { dueDate: task.dueDate } : {}) });
+    }
+  }
   return {
-    checks: checks.map((check): (typeof checks)[number] & { dismissable: boolean; dismissal?: DashboardItemDismissal } => {
-      const dismissable = isRecommendationLevel(check.level) && !isBindingSeverity(check.requirement);
-      const dismissal = activeDismissal(remediationById.get(check.id), { level: check.level, dismissable });
-      return { ...check, dismissable, ...(dismissal ? { dismissal } : {}) };
+    checks: checks.map((check): (typeof checks)[number] & DashboardCheckPolicyFields => {
+      const policy = continuityFindingPolicy(check.id, check.requirement);
+      const dismissable = isDismissableFinding(policy, check.level);
+      // A check's text names its period and counts, so a new year or a new
+      // gap gives it a new subject.
+      const subjectKey = findingSubjectKey(check.id, [check.title, check.text]);
+      const remediation = remediationById.get(check.id);
+      const dismissal = activeDismissal(remediation, { level: check.level, dismissable, subjectKey });
+      const acknowledgement = activeAcknowledgement(remediation, { subjectKey });
+      const followUp = followUps.get(check.id);
+      return {
+        ...check,
+        ...(policy.basis ? { requirementBasis: policy.basis } : {}),
+        subjectKey,
+        dismissable,
+        ...(dismissal ? { dismissal } : {}),
+        ...(acknowledgement ? { acknowledgement } : {}),
+        ...(followUp && (followUp.assignee || followUp.dueDate) ? { followUp } : {}),
+      };
     }),
     today,
   };

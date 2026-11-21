@@ -153,7 +153,15 @@ assert.equal(decisions.length, 1);
 assert.equal(decisions[0].status, "resolved");
 assert.equal(decisions[0].targetId, filingId);
 
-await client.mutation("complianceObligations:dismissDecision", {
+// A statutory obligation is acknowledged, never dismissed (shared/dashboardFindingPolicy.ts).
+await assert.rejects(client.mutation("complianceObligations:dismissDecision", {
+  societyId: created.societyId,
+  ruleId: annualReturn.ruleId,
+  flagLevel: "info",
+  flagText: annualReturn.title,
+  evidenceRequired: annualReturn.creates?.requiredEvidence ?? [],
+}), /requirement/);
+await client.mutation("complianceObligations:acknowledgeDecision", {
   societyId: created.societyId,
   ruleId: annualReturn.ruleId,
   flagLevel: "info",
@@ -161,7 +169,8 @@ await client.mutation("complianceObligations:dismissDecision", {
   evidenceRequired: annualReturn.creates?.requiredEvidence ?? [],
 });
 decisions = await client.query("complianceObligations:listDecisions", { societyId: created.societyId });
-assert.equal(decisions[0].status, "dismissed");
+assert.equal(decisions[0].status, "resolved", "acknowledging keeps the decision's status");
+assert.ok(decisions[0].acknowledgedAtISO, "and records the acknowledgement");
 
 await client.mutation("complianceObligations:reopenDecision", {
   societyId: created.societyId,
@@ -172,5 +181,6 @@ await client.mutation("complianceObligations:reopenDecision", {
 });
 decisions = await client.query("complianceObligations:listDecisions", { societyId: created.societyId });
 assert.equal(decisions[0].status, "open");
+assert.equal(decisions[0].acknowledgedAtISO, undefined, "reopening withdraws the acknowledgement");
 
 console.log("Static corporation obligation checks passed.");

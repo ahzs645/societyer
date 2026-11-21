@@ -206,6 +206,7 @@ Research in this order. Wave 1 checks text users see today; waves 2 and 3 restor
 | --- | --- |
 | A new or corrected citation (ID, Act, section, URL) | `src/lib/regulatoryCitations.ts`; its audience decides which entities see it |
 | A dashboard compliance check for an entity | `shared/dashboardComplianceRules.ts` (each rule declares its audience) |
+| Whether a dashboard check or obligation is statutory, bylaw, internal policy or a dismissable recommendation | `shared/dashboardFindingPolicy.ts` (by rule id; an unlisted rule is treated as a requirement) |
 | Which rule families apply to which entity or jurisdiction | `shared/entityRuleScope.ts` |
 | Deadlines: annual report or return, annual meeting, director changes | `shared/functions/annualCycle.ts`, `shared/corporationSettings.ts`, `shared/continuityRules.ts` |
 | Notice windows, quorum and resolution thresholds | `shared/bylawBaselines.ts`, bylaw rule sets |

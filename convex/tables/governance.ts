@@ -12,7 +12,7 @@ export const governanceTables = {
     flagLevel: v.string(),
     flagText: v.string(),
     evidenceRequired: v.array(v.string()),
-    status: v.string(), // open | resolved | dismissed
+    status: v.string(), // open | resolved | dismissed | acknowledged
     assignedTo: v.optional(v.string()),
     taskId: v.optional(v.id("tasks")),
     sourceEvidenceIds: v.optional(v.array(v.id("sourceEvidence"))),
@@ -27,6 +27,16 @@ export const governanceTables = {
     dismissedByName: v.optional(v.string()),
     dismissalReason: v.optional(v.string()),
     statusBeforeDismissal: v.optional(v.string()),
+    // The finding's subject when it was dismissed or acknowledged
+    // (shared/dashboardFindingPolicy.ts); either holds only while it matches.
+    dismissedSubjectKey: v.optional(v.string()),
+    // Acknowledging an outstanding requirement: who, when, an optional note.
+    // The finding stays on the dashboard and in every count.
+    acknowledgedAtISO: v.optional(v.string()),
+    acknowledgedByUserId: v.optional(v.string()),
+    acknowledgedByName: v.optional(v.string()),
+    acknowledgementNote: v.optional(v.string()),
+    acknowledgedSubjectKey: v.optional(v.string()),
     snoozedUntilISO: v.optional(v.string()),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),

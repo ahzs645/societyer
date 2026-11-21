@@ -5,6 +5,7 @@ import {
   listDecisionsPortable,
   markReviewedPortable,
   dismissDecisionPortable,
+  acknowledgeDecisionPortable,
   reopenDecisionPortable,
 } from "../shared/functions/complianceObligations";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -41,6 +42,16 @@ export const dismissDecision = authorizedMutation("complianceObligations:dismiss
   },
   returns: v.any(),
   handler: async (ctx, args) => dismissDecisionPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Leaves the obligation outstanding and counted; records who has seen it.
+export const acknowledgeDecision = authorizedMutation("complianceObligations:acknowledgeDecision", mutation)({
+  args: {
+    ...decisionArgs,
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => acknowledgeDecisionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const reopenDecision = authorizedMutation("complianceObligations:reopenDecision", mutation)({

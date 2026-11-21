@@ -2,6 +2,7 @@ import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./_generated/server";
 import { v, type Validator } from "convex/values";
 import type { ComplianceFlagLevel } from "../shared/dashboardComplianceRules";
+import type { RequirementBasis } from "../shared/dashboardFindingPolicy";
 import { navCountsPortable, summaryPortable } from "../shared/functions/dashboard";
 import { toPortableQueryCtx } from "./lib/portable";
 
@@ -26,6 +27,14 @@ const complianceFlagLevels = {
   err: v.literal("err"),
 } satisfies { [Level in ComplianceFlagLevel]: Validator<Level> };
 
+// Keep the hosted validator exhaustive when the requirement bases change.
+const requirementBases = {
+  statutory: v.literal("statutory"),
+  bylaw: v.literal("bylaw"),
+  internal_policy: v.literal("internal_policy"),
+  recommendation: v.literal("recommendation"),
+} satisfies { [Basis in RequirementBasis]: Validator<Basis> };
+
 const complianceFlagValidator = validator.object({
   ruleId: validator.string(),
   level: validator.union(...Object.values(complianceFlagLevels)),
@@ -42,12 +51,23 @@ const complianceFlagValidator = validator.object({
   remediationStatus: validator.optional(validator.string()),
   remediationTaskId: validator.optional(validator.id("tasks")),
   remediationUpdatedAtISO: validator.optional(validator.string()),
+  requirementBasis: validator.optional(validator.union(...Object.values(requirementBases))),
+  subjectKey: validator.optional(validator.string()),
   dismissable: validator.optional(validator.boolean()),
   dismissal: validator.optional(validator.object({
     level: validator.union(complianceFlagLevels.warn, complianceFlagLevels.info),
     dismissedAtISO: validator.string(),
     dismissedByName: validator.optional(validator.string()),
     reason: validator.optional(validator.string()),
+  })),
+  acknowledgement: validator.optional(validator.object({
+    acknowledgedAtISO: validator.string(),
+    acknowledgedByName: validator.optional(validator.string()),
+    note: validator.optional(validator.string()),
+  })),
+  followUp: validator.optional(validator.object({
+    assignee: validator.optional(validator.string()),
+    dueDate: validator.optional(validator.string()),
   })),
 });
 

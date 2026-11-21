@@ -104,7 +104,7 @@ There are no schema changes.
 | ID | Status |
 | --- | --- |
 | G-01 | Done. A Title field shows for a new draft, the server requires a title, errors are shown. |
-| G-02 | Done. Obligations read held AGM meetings, every AGM year suppresses that year's no-AGM fallback, the garbled banner is rewritten, dismissed items are no longer counted. |
+| G-02 | Done. Obligations read held AGM meetings, every AGM year suppresses that year's no-AGM fallback, the garbled banner is rewritten, dismissed items are no longer counted. Since 2026-11-21 statute-based obligations cannot be dismissed (shared/dashboardFindingPolicy.ts): they are acknowledged and stay counted. |
 | G-03 | Done. The AGM deadline is cycle-aware, deadlines generate with register categories and a basis note. |
 | G-04 | Not mine (WP-B). The shared `voteCountProblems` in `shared/bylawGovernance.ts` can be reused. |
 | G-05 | Done (see above). |
