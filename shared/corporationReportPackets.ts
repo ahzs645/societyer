@@ -16,6 +16,7 @@
 
 import type { CorporationDocumentPacket } from "./corporationDocumentPackets";
 import { RESTRICTED_REPORT_KINDS, type MinuteBookReportKind } from "./minuteBookReports";
+import { isCorporation, type LegalEntityLike } from "./organizationDomain";
 
 const CORPORATE_JURISDICTIONS = ["federal__canada_", "CA-FED-CBCA", "CA-BC", "british_columbia", "CA-ON-OBCA"];
 const BC_ONLY = ["CA-BC", "british_columbia"];
@@ -28,6 +29,8 @@ const FALLBACK = "[Generate this output from the document catalog with an as-of 
 export const REPORT_PACKET_KINDS: Readonly<Record<string, MinuteBookReportKind>> = {
   "bc-transparency-register": "bc-transparency-register",
   "director-consent-to-act": "director-consent",
+  // The BC society form (shared/societyDocumentPackets.ts) uses the same builder.
+  "society-director-consent-to-act": "director-consent",
   "securities-register-report": "securities-register",
   "directors-register-report": "directors-register",
   "officers-register-report": "officers-register",
@@ -35,6 +38,19 @@ export const REPORT_PACKET_KINDS: Readonly<Record<string, MinuteBookReportKind>>
   "document-package-cover-letter": "cover-letter",
   "lota-interest-holder-report": "lota-report",
 };
+
+/** The consent-to-act packet for a corporation and for a BC society. */
+export const CORPORATION_DIRECTOR_CONSENT_PACKET_KEY = "director-consent-to-act";
+export const SOCIETY_DIRECTOR_CONSENT_PACKET_KEY = "society-director-consent-to-act";
+
+/** The consent-to-act packet that applies to the organization. */
+export function directorConsentPacketKey(organization: LegalEntityLike | null | undefined): string {
+  return isCorporation(organization) ? CORPORATION_DIRECTOR_CONSENT_PACKET_KEY : SOCIETY_DIRECTOR_CONSENT_PACKET_KEY;
+}
+
+export function isDirectorConsentPacketKey(packetKey: string | null | undefined): boolean {
+  return packetKey === CORPORATION_DIRECTOR_CONSENT_PACKET_KEY || packetKey === SOCIETY_DIRECTOR_CONSENT_PACKET_KEY;
+}
 
 export function reportKindForPacket(packetKey: string | null | undefined): MinuteBookReportKind | undefined {
   return packetKey ? REPORT_PACKET_KINDS[packetKey] : undefined;
@@ -65,13 +81,16 @@ function report(input: {
   signatureRequired?: boolean;
   requiredSigners?: string[];
   sourceUrls?: string[];
+  sourceIds?: string[];
+  /** Catalog folder; report outputs default to the minute-book reports card. */
+  documentTag?: string;
 }): CorporationDocumentPacket {
   return {
     key: input.key,
     templateName: input.templateName,
     packageName: input.templateName,
     summary: input.summary,
-    documentTag: REPORT_TAG,
+    documentTag: input.documentTag ?? REPORT_TAG,
     partType: "document",
     signatureRequired: input.signatureRequired ?? false,
     requiredSigners: input.requiredSigners ?? [],
@@ -80,6 +99,7 @@ function report(input: {
     reviewDataFields: input.reviewDataFields,
     jurisdictions: input.jurisdictions,
     ...(input.sourceUrls ? { sourceUrls: input.sourceUrls } : {}),
+    ...(input.sourceIds ? { sourceIds: input.sourceIds } : {}),
     timeline: "Generate as of the date the output must speak to; regenerate after the registers change.",
     deliverable: input.deliverable,
     terms: input.terms,
@@ -102,18 +122,21 @@ export const CORPORATION_REPORT_PACKETS: CorporationDocumentPacket[] = [
     sectionBody: ["The register lists each significant individual recorded on or before the as-of date, with the particulars required by section 119.2 of the Business Corporations Act (British Columbia)."],
   }),
   report({
-    key: "director-consent-to-act",
-    templateName: "Director's consent to act",
-    summary: "Written consent to act as a director for each director appointed on the chosen date, with the address particulars for the register of directors.",
+    key: CORPORATION_DIRECTOR_CONSENT_PACKET_KEY,
+    templateName: "Consent to act as director",
+    summary: "A director's written consent to act, effective from a date, with qualification statements and a signature block. Prepared for one chosen director, or for each director appointed on the chosen date.",
+    documentTag: "6___directors_register_and_consents",
     jurisdictions: CORPORATE_JURISDICTIONS,
+    sourceIds: ["BC-BCA-DIRECTOR-CONSENT", "BC-BCA-DIRECTORS-MIN", "CBCA-DIRECTOR-CONSENT", "CBCA-DIRECTORS-MIN", "OBCA-DIRECTOR-CONSENT", "OBCA-DIRECTORS-MIN"],
     signatureRequired: true,
     requiredSigners: ["directors___entering"],
     requiredDataFields: ["DirectorName", "AppointmentDate", "DirectorAddress"],
+    optionalDataFields: ["ResidentCanadianStatus"],
     reviewDataFields: ["DirectorEligibility", "ConsentRoute", "NoticeOfChangeOfDirectors"],
-    deliverable: "One consent form per director appointed on the as-of date (or a blank form), each signed by that director.",
-    terms: "Wording follows the governing Act (BC ss. 122–124 and 126; CBCA s. 106(9); OBCA s. 119(9)–(11)). A written consent is one statutory route; keep each consent received with the records. Review with a lawyer.",
+    deliverable: "One consent form per director (or a blank form), each signed by that director.",
+    terms: "Preparation draft for legal review. Wording follows the governing Act (BC ss. 122–124 and 126; CBCA ss. 105 and 106(9); OBCA ss. 118 and 119(9)–(11)). A written consent is one statutory route; keep each consent received with the records. Review the qualification statements with a lawyer before the form is signed.",
     sectionHeading: "Consent to act as a director",
-    sectionBody: ["Each director signs a separate consent. The form is prepared for every director whose appointment is recorded on the as-of date."],
+    sectionBody: ["Each director signs a separate consent. The form is prepared for the director chosen in the director register, or for every director whose appointment is recorded on the as-of date."],
   }),
   report({
     key: "securities-register-report",

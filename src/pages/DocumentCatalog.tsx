@@ -23,7 +23,7 @@ import { todayDateOnly } from "../../shared/dateOnly";
 import { humanizeKey } from "../../shared/documentProvenance";
 import { pathwayForPacket } from "../../shared/pathways/registry";
 import { MinuteBookReportsCard } from "../components/MinuteBookReportsCard";
-import { isReportPacketKey } from "../../shared/corporationReportPackets";
+import { isDirectorConsentPacketKey, isReportPacketKey } from "../../shared/corporationReportPackets";
 import { nameApprovalPacketView } from "../../shared/nameRequests";
 import { formatLongDate } from "../../shared/locale";
 
@@ -201,9 +201,13 @@ export function DocumentCatalogPage() {
   const groups = new Map<string, CatalogTemplate[]>();
   for (const t of templates ?? []) {
     // Report-style outputs are generated from the "Minute book reports" card,
-    // which asks for the as-of date.
-    if (isReportPacketKey(packetKeyOf(t))) continue;
-    const tag = t.documentTag || "other";
+    // which asks for the as-of date. The consent-to-act form is filed with the
+    // director appointment packets instead (and is also on that card for corporations).
+    const key = packetKeyOf(t);
+    if (isReportPacketKey(key) && !isDirectorConsentPacketKey(key)) continue;
+    // The catalog's folder for the packet, so a template seeded before a packet
+    // moved folders is listed where the packet now belongs.
+    const tag = ALL_PACKETS.find((packet) => packet.key === key)?.documentTag || t.documentTag || "other";
     const list = groups.get(tag);
     if (list) list.push(t);
     else groups.set(tag, [t]);

@@ -1,5 +1,6 @@
 import { businessRegisters, registerPermission, type EvidenceField, type EvidenceRegister } from "../businessEvidence";
 import { evidenceRules } from "../businessEvidenceRules";
+import { consentOnFileFromEntry, latestConsentToAct, type DirectorConsentRow } from "../directorConsentRecords";
 import { isCalendarDate } from "../invoicing";
 import type { PortableMutationCtx, PortableQueryCtx, PortableDoc } from "../portable/ctx";
 import { getOwned } from "./access";
@@ -165,9 +166,27 @@ export async function save(ctx: PortableMutationCtx, args: Scope & {
     if (existing) throw new Error("This notice number already exists.");
     particulars = await noticeParticulars(ctx, args.societyId, String(values.transactionId));
   }
-  return ctx.db.insert(register.table, {
+  const row = {
     ...values, ...(particulars && { particulars }), societyId: args.societyId, recordedAt: new Date().toISOString(), recordedBy: user._id,
     ...(args.previousId && { previousId: args.previousId }), ...(args.documentId && { documentId: args.documentId }),
     ...(args.sourcePage && { sourcePage: args.sourcePage }),
-  });
+  };
+  const id = await ctx.db.insert(register.table, row);
+  if (register.table === "directorConsents") await syncDirectorConsentFlag(ctx, args.societyId, String(values.directorId), { ...row, _id: id });
+  return id;
+}
+
+/**
+ * The director register's "consent on file" flag follows the consent register:
+ * the latest "Consent to act" entry sets it (Given/Corrected → on file,
+ * Withdrawn → not). A director with no such entry keeps the flag it has.
+ */
+async function syncDirectorConsentFlag(ctx: PortableMutationCtx, societyId: string, directorId: string, inserted: DirectorConsentRow) {
+  const rows = (await ctx.db.query("directorConsents").withIndex("by_society", q => q.eq("societyId", societyId)).collect()) as unknown as DirectorConsentRow[];
+  const all = rows.some(row => String(row._id) === String(inserted._id)) ? rows : [...rows, inserted];
+  const latest = latestConsentToAct(all.map(row => ({ ...row, _id: String(row._id), directorId: String(row.directorId ?? ""), previousId: row.previousId ? String(row.previousId) : undefined })), directorId);
+  if (!latest) return;
+  const director = await getOwned(ctx, "directors", directorId, societyId);
+  const consentOnFile = consentOnFileFromEntry(latest);
+  if (director.consentOnFile !== consentOnFile) await ctx.db.patch(directorId, { consentOnFile });
 }

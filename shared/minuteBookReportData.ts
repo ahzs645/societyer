@@ -35,7 +35,7 @@ async function rows(ctx: PortableQueryCtx, table: string, societyId: string): Pr
 
 export async function loadMinuteBookReport(
   ctx: PortableQueryCtx,
-  args: { societyId: string; packetKey: string; society: Record<string, any>; asOf: string },
+  args: { societyId: string; packetKey: string; society: Record<string, any>; asOf: string; selectedIds?: readonly string[] },
 ): Promise<MinuteBookReport | undefined> {
   const kind = reportKindForPacket(args.packetKey);
   if (!kind) return undefined;
@@ -62,7 +62,7 @@ export async function loadMinuteBookReport(
     organization: args.society,
     asOf: args.asOf,
     roleHolders: roleHolders.map((row) => ({ ...row, _id: String(row._id) })),
-    directors,
+    directors: directors.map((row) => ({ ...row, _id: String(row._id) })),
     rightsClasses: rightsClasses.map((row) => ({ ...row, _id: String(row._id) })),
     transfers: transfers.map((row) => ({
       ...row,
@@ -78,5 +78,6 @@ export async function loadMinuteBookReport(
     transparencySteps,
     generatedDocuments,
     canViewRestricted,
+    ...(args.selectedIds?.length ? { selectedIds: args.selectedIds } : {}),
   });
 }

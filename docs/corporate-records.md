@@ -256,7 +256,7 @@ default signers are that body's members as at the document date:
 | `appoint-director`, `director-removal` | Voting shareholders. BC removal is a special resolution under s. 128(3), or the method the articles provide. |
 | `appoint-director-by-directors` | Directors, for casual vacancies and additional directors only |
 | `director-resignation` | Directors record the resignation; a resignation-letter annex is attached |
-| `director-consent-to-act` | The director whose appointment starts on the document date. If there is none, the user chooses. |
+| `director-consent-to-act`, `society-director-consent-to-act` | The consenting director alone: the directors passed in `transactionIds` (the director register's "Generate consent form"), else the director whose appointment starts on the document date. If there is none, the user chooses. |
 
 There is no directors' route for removing a director. The BCA gives directors no such power; a
 disqualified director must resign (s. 124(3)).

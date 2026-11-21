@@ -73,7 +73,7 @@ const APPOINT_DIRECTOR: InstrumentSpec = {
     { kind: "clause", when: "appointment.hasDirectors", text: "The following {appointment.personS} be elected as {appointment.asDirector} of {org.shortName}, to hold office until ceasing to hold office under the {org.legislation} or the articles of {org.shortName}:", list: { items: "appointment.directors", item: "{.name}" } },
     { kind: "clause", unless: "appointment.hasDirectors", text: "[Name of person] be elected as a director of {org.shortName}." },
     noTransaction("appointment.hasDirectors", "director appointment"),
-    { kind: "note", text: "[Each person elected must consent to act as a director ({law.directorConsentCitation} of the {org.legislation}); keep each written consent with this resolution. Then file {law.directorChangeFiling}.]" },
+    { kind: "note", text: "[Each person elected must consent to act as a director ({law.directorConsentCitation} of the {org.legislation}); prepare each written consent with the \"Consent to act as director\" template and keep it with this resolution. Then file {law.directorChangeFiling}.]" },
     NO_VOTING_SHAREHOLDERS,
   ],
 };
@@ -88,7 +88,7 @@ const APPOINT_DIRECTOR_BY_DIRECTORS: InstrumentSpec = {
     { kind: "clause", unless: "appointment.hasDirectors", text: "[Name of person] be appointed as a director of {org.shortName} to fill a casual vacancy among the directors." },
     noTransaction("appointment.hasDirectors", "director appointment"),
     { kind: "note", text: "{law.directorsAppointBasis}" },
-    { kind: "note", text: "[Each person appointed must consent to act as a director ({law.directorConsentCitation} of the {org.legislation}); keep each written consent with this resolution. Then file {law.directorChangeFiling}.]" },
+    { kind: "note", text: "[Each person appointed must consent to act as a director ({law.directorConsentCitation} of the {org.legislation}); prepare each written consent with the \"Consent to act as director\" template and keep it with this resolution. Then file {law.directorChangeFiling}.]" },
     NO_DIRECTORS,
   ],
 };

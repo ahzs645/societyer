@@ -44,7 +44,7 @@ import {
   documentDocxDataUrl,
   nextPacketDocumentSequence,
 } from "../corporationPacketDocx";
-import { isReportPacketKey, isRestrictedReportPacketKey } from "../corporationReportPackets";
+import { isDirectorConsentPacketKey, isReportPacketKey, isRestrictedReportPacketKey } from "../corporationReportPackets";
 import { assertMinuteBookReportAccess, loadMinuteBookReport } from "../minuteBookReportData";
 import { buildSubscriptionAgreementBlocks } from "../subscriptionAgreement";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../societyDocumentPackets";
@@ -838,6 +838,46 @@ async function corporationPacketPrecedentForSociety(ctx: any, societyId: any, pa
   return precedent;
 }
 
+/** The register row ids a run was generated for (`transactionIds` in its data), if any. */
+function selectedPacketIds(dataJson: string | undefined): string[] {
+  if (!dataJson) return [];
+  try {
+    const data: unknown = JSON.parse(dataJson);
+    const ids = data && typeof data === "object" ? (data as { transactionIds?: unknown }).transactionIds : undefined;
+    return Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Who signs a consent to act: the role-holder rows of the chosen directors
+ * (selected by role-holder id, or `directors` id matched by name), else the
+ * directors whose appointment starts on the document date.
+ */
+async function consentSignerRoleHolderIds(
+  ctx: PortableQueryCtx,
+  societyId: string,
+  roleHolders: ReadonlyArray<{ _id: string; roleType?: string; startDate?: string | null; fullName?: string }>,
+  asOf: string,
+  selectedIds: string[],
+): Promise<string[]> {
+  const roleDirectors = roleHolders.filter((row) => row.roleType === "director");
+  if (!selectedIds.length) {
+    return roleDirectors
+      .filter((row) => String(row.startDate ?? "").slice(0, 10) === String(asOf).slice(0, 10))
+      .map((row) => row._id);
+  }
+  const nameKey = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const directors = await ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  const names = new Set(directors
+    .filter((row) => selectedIds.includes(String(row._id)))
+    .map((row) => nameKey(`${row.firstName ?? ""} ${row.lastName ?? ""}`)));
+  return roleDirectors
+    .filter((row) => selectedIds.includes(String(row._id)) || names.has(nameKey(row.fullName)))
+    .map((row) => row._id);
+}
+
 async function createPacketRunArtifacts(ctx: any, args: {
   societyId: any;
   packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number];
@@ -882,11 +922,10 @@ async function createPacketRunArtifacts(ctx: any, args: {
   // Default signer placeholders: the resolving body's members as at the date.
   const bodyRows = renderCtx ? bodyRowsAsOf(roleHolders, asOf, { transfers, rightsClasses })[groupRowsKey(body.group)] : [];
   // A consent to act is signed by the consenting director alone: default to the
+  // chosen directors (their role-holder rows, by id or by name), else to the
   // directors whose appointment starts on the document date, never the whole board.
-  const enteringDirectorIds = args.packet.key === "director-consent-to-act"
-    ? roleHolders
-      .filter((row: any) => row.roleType === "director" && String(row.startDate ?? "").slice(0, 10) === String(asOf).slice(0, 10))
-      .map((row: any) => row._id)
+  const enteringDirectorIds = isDirectorConsentPacketKey(args.packet.key)
+    ? await consentSignerRoleHolderIds(ctx, args.societyId, roleHolders, asOf, selectedPacketIds(args.dataJson))
     : undefined;
   const signerRoleHolderIds = args.packet.preparationOnly || !args.packet.signatureRequired ? [] : args.signerRoleHolderIds?.length
     ? args.signerRoleHolderIds
@@ -995,9 +1034,11 @@ async function createPacketRunArtifacts(ctx: any, args: {
   const docxDataUrl = corporationPacketDocxDataUrl(docPacket, context);
   const docxFileName = corporationPacketDocxFileName(args.packet, fileOpts);
   const docxMimeType = corporationPacketDocxMimeType();
+  // A form prepared for chosen people (a director's consent) names them in its title.
+  const reportSubject = (context as { report?: { subject?: string } } | undefined)?.report?.subject;
   const draftDocumentId = await ctx.db.insert("documents", {
     societyId: args.societyId,
-    title: `${args.packet.packageName} - editable draft`,
+    title: `${args.packet.packageName}${reportSubject ? ` - ${reportSubject}` : ""} - editable draft`,
     category: "governance",
     fileName: docxFileName,
     mimeType: docxMimeType,
@@ -1239,7 +1280,11 @@ async function buildPacketDataContext(
   // built from the registers as of the effective date.
   if (isReportPacketKey(packet.key)) {
     const asOf = isoDay(registers.asOf) || String(renderCtx.date?.iso ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10);
-    return { report: await loadMinuteBookReport(ctx, { societyId: String(societyId), packetKey: packet.key, society, asOf }) };
+    // A consent form can be prepared for chosen directors (`transactionIds`).
+    const selectedIds = isDirectorConsentPacketKey(packet.key) && Array.isArray(runData?.transactionIds)
+      ? (runData.transactionIds as unknown[]).map(String).filter(Boolean)
+      : undefined;
+    return { report: await loadMinuteBookReport(ctx, { societyId: String(societyId), packetKey: packet.key, society, asOf, selectedIds }) };
   }
   if (packet.key === "bc-incorporation-agreement" || packet.key === "bc-articles-preparation" || packet.key === "bc-officer-indemnity-agreement") {
     // Recorded articles + a Part skeleton per share class (shared/articlesPartSkeleton.ts).

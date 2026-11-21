@@ -32,6 +32,7 @@ import {
   isCorporation,
   isFederalCbca,
   isOntarioObca,
+  isSociety,
   organizationLabel,
   type LegalEntityLike,
 } from "./organizationDomain";
@@ -92,11 +93,13 @@ export interface ReportRoleHolder {
 
 /** Live `directors` register rows (used when roleHolders carries no directors). */
 export interface ReportDirectorRow {
+  _id?: string;
   firstName?: string;
   lastName?: string;
   position?: string;
   termStart?: string;
   termEnd?: string | null;
+  residentCanadianStatus?: string;
 }
 
 export interface ReportRightsClass {
@@ -164,6 +167,12 @@ export interface MinuteBookReportInput {
   canViewRestricted: boolean;
   /** LOTA "significant number of shares" threshold; 10 by statute. */
   lotaThresholdPercent?: number;
+  /**
+   * Director consent: the directors to prepare a form for (`directors` or
+   * `roleHolders` row ids). Each form is effective from that director's term
+   * start. Without ids, the form covers the directors appointed on the as-of date.
+   */
+  selectedIds?: readonly string[];
 }
 
 export interface MinuteBookReport {
@@ -176,6 +185,8 @@ export interface MinuteBookReport {
   blocks: PacketBlock[];
   /** Data gaps worth a reviewer's attention (also printed in the document). */
   warnings: string[];
+  /** Who the output is about, when it names specific people (e.g. the consenting directors). */
+  subject?: string;
 }
 
 const BLANK = "____________________";
@@ -470,48 +481,110 @@ function transparencyRegister(input: MinuteBookReportInput & { asOf: string }, n
   return { title: "Transparency register", subtitle: asAt(name, asOfLong), blocks, warnings };
 }
 
-function directorConsent(input: MinuteBookReportInput & { asOf: string }, name: string): Body {
+/** One consent form: the consenting director, the date the consent takes effect and their register row. */
+interface ConsentPerson { name: string; effective: string; row?: ReportRoleHolder; residentCanadianStatus?: string }
+
+/**
+ * The directors a consent form is prepared for: the selected `directors` (or
+ * `roleHolders`) rows, each effective from its term start; otherwise the
+ * directors appointed on the as-of date.
+ */
+function consentPeople(input: MinuteBookReportInput & { asOf: string }): ConsentPerson[] {
+  const roleDirectors = (input.roleHolders ?? []).filter((row) => row.roleType === "director");
+  if (input.selectedIds?.length) {
+    const people: ConsentPerson[] = [];
+    for (const id of input.selectedIds) {
+      const director = (input.directors ?? []).find((row) => String(row._id ?? "") === id);
+      if (director) {
+        const name = `${clean(director.firstName)} ${clean(director.lastName)}`.trim();
+        // The register of directors keeps no address; use the same person's role-holder row when there is one.
+        const row = name ? roleDirectors.find((candidate) => sameName(clean(candidate.fullName), name)) : undefined;
+        people.push({ name, effective: day(director.termStart) || input.asOf, row, residentCanadianStatus: clean(director.residentCanadianStatus) || undefined });
+        continue;
+      }
+      const role = roleDirectors.find((row) => String(row._id ?? "") === id);
+      if (role) people.push({ name: clean(role.fullName), effective: day(role.startDate) || input.asOf, row: role });
+    }
+    return people.filter((person) => person.name);
+  }
+  return directorsFrom(input)
+    .filter((row) => row.name && row.start === input.asOf)
+    .map((row) => ({ name: row.name, effective: input.asOf, row: row.row }));
+}
+
+const CONSENT_REVIEW_NOTE = "Preparation draft: review this form with a lawyer before it is signed.";
+
+function directorConsent(input: MinuteBookReportInput & { asOf: string }, name: string): Body & { subject?: string } {
   const org = input.organization;
   const statute = reportStatute(org);
+  const society = statute === "other" && isSociety(org);
+  const noun = society ? "Society" : statute === "bc" ? "Company" : "Corporation";
   const asOfLong = formatLongDate(input.asOf, "en");
   const act = governingActName(org);
   const warnings: string[] = [];
-  const appointees = directorsFrom(input).filter((row) => row.name && row.start === input.asOf);
-  const people: Array<OfficeHolding | null> = appointees.length ? appointees : [null];
-  if (!appointees.length) warnings.push(`No director appointment is recorded on ${asOfLong}; a blank consent form was prepared.`);
+  const selected = Boolean(input.selectedIds?.length);
+  const appointees = consentPeople(input);
+  const people: Array<ConsentPerson | null> = appointees.length ? appointees : [null];
+  if (!appointees.length) {
+    warnings.push(selected
+      ? "The selected directors could not be found in the register; a blank consent form was prepared."
+      : `No director appointment is recorded on ${asOfLong}; a blank consent form was prepared.`);
+  }
   const blocks: PacketBlock[] = [];
   people.forEach((person, index) => {
     if (index > 0) blocks.push({ kind: "pageBreak" });
     const personName = person?.name || "[Full name of director]";
     const address = person?.row ? serviceAddress(person.row) || residentialAddress(person.row) : "";
     blocks.push({ kind: "heading", text: `Consent to act as a director — ${personName}` });
-    blocks.push({ kind: "paragraph", text: `To: ${name} (the "${statute === "bc" ? "Company" : "Corporation"}")` });
-    blocks.push({ kind: "paragraph", text: `I, ${personName}, consent to act as a director of the ${statute === "bc" ? "Company" : "Corporation"}${person ? `, effective ${asOfLong}` : ""}.` });
-    if (statute === "bc") {
+    blocks.push({ kind: "note", text: CONSENT_REVIEW_NOTE });
+    blocks.push({ kind: "paragraph", text: `To: ${name} (the "${noun}")` });
+    blocks.push({ kind: "paragraph", text: `I, ${personName}, consent to act as a director of the ${noun}, effective ${person ? formatLongDate(person.effective, "en") : "[date]"}.` });
+    if (society) {
+      blocks.push(
+        { kind: "paragraph", text: "I give this consent in writing under section 42(4) of the Societies Act (British Columbia)." },
+        { kind: "paragraph", text: "To my knowledge I am qualified to be a director under sections 43 and 44 of the Act. In particular: I am an individual; I am at least 18 years of age, or my age is permitted by the Act, the regulations and the Society's bylaws; I have not been found by a court, in Canada or elsewhere, to be incapable of managing my own affairs; I am not an undischarged bankrupt; and I am not disqualified by a conviction described in section 44(3)." },
+        { kind: "paragraph", text: `My address for the Society's register of directors is: ${address || BLANK}` },
+        { kind: "note", text: "Review note: a director may also consent by attending the meeting at which they are elected or appointed and not refusing to act (s. 42(4)). Keep each written consent with the Society's records (s. 20(1)(f)). Confirm the qualification statements against sections 43 and 44 and the Society's bylaws before this form is signed." },
+      );
+    } else if (statute === "bc") {
       blocks.push(
         { kind: "paragraph", text: "I give this consent in writing under section 123(1)(a) of the Business Corporations Act (British Columbia). It remains effective until it ends under section 123(3)." },
-        { kind: "paragraph", text: "To my knowledge I am qualified to act as a director under section 124 of the Act." },
+        { kind: "paragraph", text: "To my knowledge I am qualified to act as a director under section 124 of the Act. In particular: I am an individual; I am at least 18 years of age; I have not been found by a court, in Canada or elsewhere, to be incapable of managing my own affairs; I am not an undischarged bankrupt; and I am not disqualified by a conviction described in section 124(2)." },
         { kind: "paragraph", text: `My prescribed address for the register of directors (s. 126) and the notice of articles is: ${address || BLANK}` },
         { kind: "note", text: "Review note: a written consent is one of the ways a BC director may consent; section 123(1)(b) and section 122(4)(b) set out others. Keep a copy of each consent received at the records office (s. 42(1)(f)), and file any notice of change of directors within 15 days (s. 127). Confirm the prescribed address against the Business Corporations Regulation." },
       );
     } else if (statute === "cbca") {
+      const resident = person?.residentCanadianStatus;
       blocks.push(
         { kind: "paragraph", text: "I give this consent in writing for the purposes of section 106(9) of the Canada Business Corporations Act." },
+        { kind: "paragraph", text: "To my knowledge I am not disqualified from being a director under section 105(1) of the Act. In particular: I am an individual; I am at least 18 years of age; I have not been declared incapable by a court in Canada or in another country; and I do not have the status of bankrupt." },
+        {
+          kind: "paragraph",
+          text: resident === "yes"
+            ? "I am a resident Canadian within the meaning of section 2(1) of the Act."
+            : resident === "no"
+              ? "I am not a resident Canadian within the meaning of section 2(1) of the Act."
+              : "Resident Canadian status under section 2(1) of the Act (mark one): [ ] I am a resident Canadian.  [ ] I am not a resident Canadian.",
+        },
         { kind: "paragraph", text: `My address for the register of directors is: ${address || BLANK}` },
-        { kind: "note", text: "Review note: if the individual was not present at the meeting that elected or appointed them, the consent should be given before, or within ten days after, the election or appointment (s. 106(9)); acting as a director is the other statutory route." },
+        { kind: "note", text: "Review note: if the individual was not present at the meeting that elected or appointed them, the consent should be given before, or within ten days after, the election or appointment (s. 106(9)); acting as a director is the other statutory route. Resident Canadian status counts toward the board's residency requirement (s. 105(3)); confirm it against the definition in section 2(1)." },
       );
     } else if (statute === "obca") {
       blocks.push(
         { kind: "paragraph", text: "I give this consent in writing for the purposes of section 119(9) of the Business Corporations Act (Ontario)." },
+        { kind: "paragraph", text: "To my knowledge I am not disqualified from being a director under section 118(1) of the Act. In particular: I am an individual; I am at least 18 years of age; I have not been found incapable by a court in Canada or elsewhere; and I do not have the status of bankrupt." },
         { kind: "paragraph", text: `My address for the register of directors is: ${address || BLANK}` },
         { kind: "note", text: "Review note: an election or appointment is not effective until the person consents in writing before or within 10 days after it; a later written consent makes it valid (s. 119(10)), and an uninterrupted re-election is excepted (s. 119(11))." },
       );
     } else {
-      blocks.push({ kind: "paragraph", text: `My address for the register of directors is: ${address || BLANK}` }, { kind: "note", text: `Review note: confirm the consent requirements of ${act} before relying on this form.` });
+      blocks.push({ kind: "paragraph", text: `My address for the register of directors is: ${address || BLANK}` }, { kind: "note", text: `Review note: confirm the consent and qualification requirements of ${act} before relying on this form.` });
     }
-    blocks.push({ kind: "signatures", dateLine: `Dated: ${person ? asOfLong : BLANK}`, signers: [{ name: personName }] });
+    // A form prepared for a chosen director is dated when it is signed; the
+    // consent itself states the date it takes effect.
+    blocks.push({ kind: "signatures", dateLine: `Dated: ${person && !selected ? asOfLong : BLANK}`, signers: [{ name: personName }] });
   });
-  return { title: "Consent to act as a director", subtitle: asAt(name, asOfLong), blocks, warnings };
+  const subject = selected && appointees.length ? appointees.map((person) => person.name).join(", ") : undefined;
+  return { title: "Consent to act as a director", subtitle: asAt(name, asOfLong), blocks, warnings, ...(subject ? { subject } : {}) };
 }
 
 function holdingsTable(input: MinuteBookReportInput & { asOf: string }) {
