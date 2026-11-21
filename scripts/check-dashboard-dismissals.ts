@@ -221,12 +221,23 @@ assert.ok(owned.acknowledgement, "the follow-up keeps the acknowledgement");
 assert.equal(outstanding(await flags()), outstanding(demoFlags), "a follow-up leaves the counts intact");
 
 // A newly affected director is a new subject: the acknowledgement no longer applies.
-const otherDirector = seed.directors.find((row) => row.status === "Active" && row.consentOnFile)!;
-await db.patch(otherDirector._id, { consentOnFile: false });
+// Consent is derived from the register, so take a verified director's entries away.
+const consentRows = await db.query("directorConsents").collect();
+const otherDirector = seed.directors.find((row) =>
+  row.status === "Active" && consentRows.some((entry) => String(entry.directorId) === String(row._id) && entry.reviewStatus === "Reviewed"))!;
+assert.ok(otherDirector, "the demo has a director with a reviewed consent");
+const removedConsents = consentRows.filter((entry) => String(entry.directorId) === String(otherDirector._id));
+for (const entry of removedConsents) await db.delete(entry._id);
 const widened = (await flagById(consent.ruleId))!;
 assert.notEqual(widened.subjectKey, consent.subjectKey, "another affected director changes the subject");
 assert.equal(widened.acknowledgement, undefined, "an acknowledgement covers only the directors it was made for");
-await db.patch(otherDirector._id, { consentOnFile: true });
+const restoredConsentIds = new Map<string, string>();
+for (const entry of removedConsents) {
+  const { _id, _creationTime, ...rest } = entry as PortableDoc & { _creationTime?: number };
+  void _creationTime;
+  const previousId = rest.previousId ? restoredConsentIds.get(String(rest.previousId)) ?? rest.previousId : undefined;
+  restoredConsentIds.set(String(_id), await db.insert("directorConsents", { ...rest, ...(previousId ? { previousId } : {}) }));
+}
 assert.ok((await flagById(consent.ruleId))!.acknowledgement, "back to the acknowledged subject");
 
 // Withdrawing an acknowledgement keeps the row's review task.

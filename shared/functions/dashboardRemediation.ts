@@ -1,7 +1,7 @@
 /**
  * PORTABLE FUNCTIONS: the dashboard-remediation domain
  * (createComplianceReviewTask / createPrivacyReviewTask /
- *  markPrivacyProgramReviewed / markMemberDataAccessReviewed /
+ *  markPrivacyProgramReviewed (deprecated) / markMemberDataAccessReviewed /
  *  dismissItem / acknowledgeItem / restoreItem).
  *
  * Reads/writes `society / tasks / complianceRemediations / activity` over
@@ -62,6 +62,13 @@ export async function createPrivacyReviewTaskPortable(
   });
 }
 
+/**
+ * Deprecated: the one-click "Mark reviewed" set the privacy program to
+ * Documented without recording what was reviewed, by whom, or where the policy
+ * is kept. The route stays registered so a client loaded before the change
+ * gets a clear message instead of an unknown-function error; it writes
+ * nothing. Use `society:recordPrivacyReview` (shared/functions/governingDocumentEvidence.ts).
+ */
 export async function markPrivacyProgramReviewedPortable(
   ctx: PortableMutationCtx,
   args: {
@@ -71,31 +78,9 @@ export async function markPrivacyProgramReviewedPortable(
     flagText: string;
     evidenceRequired: string[];
   },
-) {
-  const nowISO = new Date().toISOString();
-  await ctx.db.patch(args.societyId, {
-    privacyProgramStatus: "Documented",
-    privacyProgramReviewedAtISO: nowISO.slice(0, 10),
-    updatedAt: Date.now(),
-  });
-  const remediationId = await upsertRemediation(ctx, {
-    ...args,
-    status: "resolved",
-    resolvedAtISO: nowISO,
-    notes: "Marked privacy program reviewed from dashboard remediation action.",
-  });
-  await ctx.db.insert("activity", {
-    societyId: args.societyId,
-    actor: "You",
-    entityType: "society",
-    subjectId: args.societyId,
-    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
-    entityId: args.societyId,
-    action: "privacy-program-reviewed",
-    summary: "Marked privacy program reviewed from dashboard remediation.",
-    createdAtISO: nowISO,
-  });
-  return { remediationId, reviewedAtISO: nowISO };
+): Promise<never> {
+  await requireSocietyMembership(ctx, args.societyId);
+  throw new Error("Privacy reviews are now recorded with who reviewed what and where it is kept. Reload Societyer and use Record review.");
 }
 
 export async function markMemberDataAccessReviewedPortable(

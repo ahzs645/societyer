@@ -127,6 +127,14 @@ const society = {
   privacyProgramStatus: "Documented",
   privacyProgramReviewedAtISO: "2026-04-21",
   privacyProgramNotes: "Demo privacy program includes a PIPA policy, complaint process, privacy officer contact, and annual training.",
+  privacyProgramReview: {
+    policiesReviewed: "PIPA privacy policy, complaint process, access and correction procedure",
+    versionOrEffectiveDate: "Adopted by the board 2026-03",
+    maintainedAt: "Societyer Documents: PIPA privacy policy",
+    reviewedOn: "2026-04-21",
+    reviewedAtISO: "2026-04-21T17:00:00.000Z",
+    reviewedByName: "Avery Santos",
+  },
   memberDataAccessStatus: "Partially available",
   memberDataGapDocumented: true,
   memberDataAccessReviewedAtISO: "2026-04-21",
@@ -143,6 +151,10 @@ const society = {
   privacyPolicyDocId: DOCUMENT_POLICY_ID,
   constitutionDocId: "static_document_constitution",
   bylawsDocId: DOCUMENT_BYLAWS_ID,
+  governingDocumentVerifications: [
+    { field: "constitutionDocId", verifiedAsOf: "2026-04-21", versionReference: "Constitution as filed on transition", evidenceKind: "document", documentId: "static_document_constitution", recordedAtISO: "2026-04-21T17:00:00.000Z", verifiedByName: "Avery Santos" },
+    { field: "bylawsDocId", verifiedAsOf: "2026-04-21", versionReference: "Bylaws as last amended at the AGM", evidenceKind: "document", documentId: DOCUMENT_BYLAWS_ID, recordedAtISO: "2026-04-21T17:00:00.000Z", verifiedByName: "Avery Santos" },
+  ],
   demoMode: true,
   // Procurement review and AI are off by default; the demo turns them on. Procurement review
   // reads its bundled snapshot (shared/procurementReview/demo.ts); the assistant answers from demo data.

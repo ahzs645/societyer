@@ -26872,6 +26872,22 @@
     "idArguments": []
   },
   {
+    "key": "convex:society:recordPrivacyReview",
+    "surface": "convex",
+    "name": "society:recordPrivacyReview",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:society:setDarkLogo",
     "surface": "convex",
     "name": "society:setDarkLogo",
@@ -26888,6 +26904,22 @@
       {
         "path": "storageId",
         "table": "_storage",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:society:setGoverningDocumentEvidence",
+    "surface": "convex",
+    "name": "society:setGoverningDocumentEvidence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -27086,6 +27118,22 @@
         "table": "documents",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:society:verifyGoverningDocumentCurrent",
+    "surface": "convex",
+    "name": "society:verifyGoverningDocumentCurrent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -52916,6 +52964,22 @@
     "idArguments": []
   },
   {
+    "key": "portable:society:recordPrivacyReview",
+    "surface": "portable",
+    "name": "society:recordPrivacyReview",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:society:setDarkLogo",
     "surface": "portable",
     "name": "society:setDarkLogo",
@@ -52932,6 +52996,22 @@
       {
         "path": "storageId",
         "table": "_storage",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:society:setGoverningDocumentEvidence",
+    "surface": "portable",
+    "name": "society:setGoverningDocumentEvidence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -53081,6 +53161,22 @@
     "key": "portable:society:updateNotificationSettings",
     "surface": "portable",
     "name": "society:updateNotificationSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:society:verifyGoverningDocumentCurrent",
+    "surface": "portable",
+    "name": "society:verifyGoverningDocumentCurrent",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

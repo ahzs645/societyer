@@ -1,4 +1,5 @@
 import { governingDocumentSlots } from "../../../shared/governingDocuments";
+import { hasIdentifiedEvidence, type EvidenceFacts } from "../../../shared/governingDocumentEvidence";
 import { legalGovernanceProfile, requiredResidentCanadianDirectors } from "../../../shared/legalGovernanceProfiles";
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, isPreparingIncorporation, type LegalEntityLike } from "../../../shared/organizationDomain";
 import { optionLabel } from "../../lib/orgHubOptions";
@@ -20,7 +21,7 @@ export type AttentionItem = {
   target: AttentionTarget;
 };
 
-export type AttentionOrganization = LegalEntityLike & {
+export type AttentionOrganization = LegalEntityLike & Pick<EvidenceFacts, "governingDocumentEvidence"> & {
   fiscalYearEnd?: string;
   craBnStatus?: string;
   corporationKeyVaultItemId?: string;
@@ -100,8 +101,9 @@ export function organizationProfileAttention(org: AttentionOrganization, detail:
   }
 
   for (const slot of governingDocumentSlots(org)) {
-    if (org[slot.field]) continue;
-    items.push({ id: `governing-document-missing:${slot.field}`, text: `${slot.label} ${slot.label.endsWith("s") ? "are" : "is"} not on file.`, action: "Add", target: { tab: "documents" } });
+    // Uploaded, or recorded as held elsewhere (external system or physical records).
+    if (hasIdentifiedEvidence(org, slot.field)) continue;
+    items.push({ id: `governing-document-missing:${slot.field}`, text: slot.label.endsWith("s") ? `${slot.label} aren't identified yet. Upload a copy or record where they're held.` : `${slot.label} isn't identified yet. Upload a copy or record where it's held.`, action: "Add", target: { tab: "documents", anchor: "governing-documents" } });
   }
 
   const residency = legalGovernanceProfile(org)?.directors.residency;

@@ -159,6 +159,7 @@ import * as notificationsFns from "./notifications";
 import * as partyPortalsFns from "./partyPortals";
 import * as societyFns from "./society";
 import * as governingDocumentFns from "./governingDocuments";
+import * as governingDocumentEvidenceFns from "./governingDocumentEvidence";
 import * as subscriptionsFns from "./subscriptions";
 import * as transparencyFns from "./transparency";
 import * as usersFns from "./users";
@@ -359,6 +360,13 @@ const DASHBOARD_DISMISSAL_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "dashboardRemediation:acknowledgeItem", handler: dashboardRemediationFns.acknowledgeItemPortable }),
   definePortableMutation({ name: "dashboardRemediation:restoreItem", handler: dashboardRemediationFns.restoreItemPortable }),
   definePortableMutation({ name: "complianceObligations:acknowledgeDecision", handler: complianceObligationsFns.acknowledgeDecisionPortable }),
+];
+
+// Governing-document and privacy-policy evidence (kept apart for the same reason).
+const GOVERNING_EVIDENCE_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableMutation({ name: "society:setGoverningDocumentEvidence", handler: governingDocumentEvidenceFns.setGoverningDocumentEvidencePortable }),
+  definePortableMutation({ name: "society:verifyGoverningDocumentCurrent", handler: governingDocumentEvidenceFns.verifyGoverningDocumentCurrentPortable }),
+  definePortableMutation({ name: "society:recordPrivacyReview", handler: governingDocumentEvidenceFns.recordPrivacyReviewPortable }),
 ];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
@@ -859,6 +867,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   ...MEETING_NOTES_FUNCTIONS,
   ...ORGANIZATION_REGISTRY_FUNCTIONS,
   ...DASHBOARD_DISMISSAL_FUNCTIONS,
+  ...GOVERNING_EVIDENCE_FUNCTIONS,
   // invoices
   definePortableMutation({ name: "invoices:upsertTemplate", handler: invoicesFns.upsertTemplatePortable }),
   definePortableMutation({ name: "invoices:upsertPriceList", handler: invoicesFns.upsertPriceListPortable }),

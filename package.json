@@ -114,6 +114,7 @@
     "test:entity-sweep": "playwright test --config playwright.entity-sweep.config.ts",
     "test:entity-copy-scanner": "node --import tsx scripts/check-entity-copy-scanner.ts",
     "test:dashboard-compliance": "tsx scripts/check-dashboard-compliance-rules.ts && tsx scripts/check-entity-rule-scope.ts && tsx scripts/check-dashboard-dismissals.ts",
+    "test:governing-document-evidence": "tsx scripts/check-governing-document-evidence.ts",
     "test:entity-rule-scope": "tsx scripts/check-entity-rule-scope.ts",
     "test:organization-vocabulary": "tsx scripts/check-organization-vocabulary.ts",
     "test:organization-workflows": "node --import tsx scripts/check-organization-workflows.ts && node --import tsx scripts/check-receipt-workflows.ts && node --import tsx scripts/check-receipt-workflows-convex.ts && node --import tsx scripts/check-receipt-evidence-retention.ts && node --import tsx scripts/check-tax-organization-facts.ts && node --import tsx scripts/check-local-write-dispatch.ts",

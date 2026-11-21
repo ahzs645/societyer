@@ -468,6 +468,11 @@ export async function cloneSocietyPortable(
       // resolutions); a clone records its own.
       annualDeadlineCalendarReviews: undefined,
       annualMeetingCompletions: undefined,
+      // Where the governing documents are held, their currentness checks and
+      // the privacy review are attestations about the source entity.
+      governingDocumentEvidence: undefined,
+      governingDocumentVerifications: undefined,
+      privacyProgramReview: undefined,
       annualMeetingFinancialYearEnd: undefined,
       annualReturnPeriodEnd: undefined,
       updatedAt: Date.now(),

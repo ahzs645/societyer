@@ -27,6 +27,7 @@ import { organizationToday } from "./electionElectorate";
 import { loadOrganizationTaxContext } from "./organizationTaxFacts";
 import { charityRegistrationAtDate } from "../receipting/registration";
 import { isDateOnly, parseDateOnly } from "../dateOnly";
+import { hasIdentifiedEvidence } from "../governingDocumentEvidence";
 import { summarizeNameRequests } from "../nameRequests";
 import {
   decidableSetupSteps,
@@ -77,9 +78,10 @@ function setupOrganization(society: Record<string, any>): SetupOrganization {
     iscRegisterEntryDate: society.iscRegisterEntryDate, transparencyEntryDate: society.transparencyEntryDate,
     privacyProgramStatus: society.privacyProgramStatus,
     filingSubmittedAtISO: society.filingSubmittedAtISO, filingReference: society.filingReference,
-    hasConstitutionDocument: Boolean(society.constitutionDocId),
-    hasBylawsDocument: Boolean(society.bylawsDocId),
-    hasPrivacyPolicyDocument: Boolean(society.privacyPolicyDocId),
+    // On record either as an upload or as a copy recorded as held elsewhere.
+    hasConstitutionDocument: hasIdentifiedEvidence(society, "constitutionDocId"),
+    hasBylawsDocument: hasIdentifiedEvidence(society, "bylawsDocId"),
+    hasPrivacyPolicyDocument: hasIdentifiedEvidence(society, "privacyPolicyDocId"),
   };
 }
 
