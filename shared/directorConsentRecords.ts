@@ -20,7 +20,7 @@
  */
 import { legalGovernanceProfile, type GovernanceOrganization } from "./legalGovernanceProfiles";
 import { organizationTimeZone, type LegalEntityLike } from "./organizationDomain";
-import { todayDateOnly } from "./dateOnly";
+import { addDaysToDateOnly, todayDateOnly } from "./dateOnly";
 
 export const CONSENT_TO_ACT_SCOPE = "Consent to act";
 
@@ -52,6 +52,12 @@ export interface DirectorConsentRow {
   reviewedByName?: string;
   reviewedAt?: string;
   reviewNote?: string;
+  /** Who wrote this version (on a review version, the reviewer). */
+  recordedBy?: string;
+  /** On a review version: who recorded the particulars it reviews. */
+  enteredBy?: string;
+  /** Stamped by the server when the reviewer also recorded the particulars. */
+  selfReviewed?: boolean;
   recordedAt?: string;
   previousId?: string;
   documentId?: string;
@@ -79,6 +85,8 @@ export interface DirectorConsentAssessment<Row extends DirectorConsentRow = Dire
   upcoming?: Row;
   /** A reviewed entry whose basis the governing Act doesn't accept; it stays awaiting review. */
   basisNotAccepted?: boolean;
+  /** Why, when it's more specific than the basis itself (a CBCA consent signed too late). */
+  basisNotAcceptedReason?: string;
 }
 
 /** Only a verified consent satisfies the requirement. */
@@ -109,12 +117,28 @@ export function latestConsentToAct<Row extends DirectorConsentRow>(rows: readonl
  * The director's consent evidence state on `today` (a `YYYY-MM-DD` in the
  * organization's calendar; see `consentToday`). `acceptedBases` limits which
  * reviewed bases count as verified (see `acceptedConsentBases`); omit it to
- * accept any recorded basis.
+ * accept any recorded basis. `writtenConsentWindowDays` (CBCA s.106(9)) keeps a
+ * reviewed written consent signed later than that many days after the
+ * appointment from counting. `consentAssessmentOptions` builds the options for
+ * an organization.
+ *
+ * Re-election: the state reads the latest entry in effect, so a verified
+ * consent keeps covering the director after a re-election until a later entry
+ * withdraws or replaces it. The Acts differ on whether one consent carries
+ * over: BCA s.123(3)(b) keeps it effective while the director is promptly
+ * re-elected or re-appointed; OBCA s.119(11) needs no new consent on a
+ * re-election with no break in term; CBCA s.106(9) and Societies Act s.42(4)
+ * attach the consent route to each election or appointment, so nothing is
+ * carried over. The director register keeps only the current term (`termStart`
+ * is overwritten on re-election) and no appointment history, so the break
+ * between terms isn't known and carry-over isn't checked here. Record a new
+ * consent entry for each re-election under the CBCA or the Societies Act, and
+ * after a break in term under the BCA or the OBCA.
  */
 export function assessDirectorConsent<Row extends DirectorConsentRow>(
   rows: readonly Row[],
   director: { _id: string; consentOnFile?: boolean },
-  options: { today: string; acceptedBases?: readonly string[] },
+  options: ConsentAssessmentOptions,
 ): DirectorConsentAssessment<Row> {
   const entries = bySupersession(rows, String(director._id)).sort(newestFirst);
   if (!entries.length) return { state: director.consentOnFile ? "legacy_flag_only" : "none" };
@@ -126,8 +150,13 @@ export function assessDirectorConsent<Row extends DirectorConsentRow>(
   if (current.reviewStatus === "Disputed") return { state: "disputed", current, ...extra };
   if (current.reviewStatus === "Reviewed") {
     const basisAccepted = !options.acceptedBases || (current.basis !== undefined && options.acceptedBases.includes(current.basis));
-    if (basisAccepted) return { state: "verified", current, ...extra };
-    return { state: "awaiting_review", current, basisNotAccepted: true, ...extra };
+    if (!basisAccepted) return { state: "awaiting_review", current, basisNotAccepted: true, ...extra };
+    // A written consent reviewed before the ten-day rule was checked doesn't
+    // count once its signed date shows it came too late.
+    if (options.writtenConsentWindowDays !== undefined && writtenConsentTiming(current, options.writtenConsentWindowDays) === "late") {
+      return { state: "awaiting_review", current, basisNotAccepted: true, basisNotAcceptedReason: CBCA_LATE_WRITTEN_CONSENT, ...extra };
+    }
+    return { state: "verified", current, ...extra };
   }
   return { state: "awaiting_review", current, ...extra };
 }
@@ -154,38 +183,113 @@ export interface ConsentBasisOption {
   value: DirectorConsentBasis;
   /** What the basis means under this organization's governing Act. */
   label: string;
-  /** What to record as evidence for it. */
+  /** What the evidence must show. */
   evidence: string;
 }
 
-const WRITTEN = (label: string): ConsentBasisOption => ({ value: "Written consent", label, evidence: "The signed consent: link the document, or say where it is held." });
-const MEETING = (label: string): ConsentBasisOption => ({ value: "Meeting record", label, evidence: "The meeting and the minutes or attendance record showing presence without refusal." });
-const CONDUCT = (label: string): ConsentBasisOption => ({ value: "Conduct", label, evidence: "A record of the director acting in office, such as a signed resolution or minutes." });
+export interface ConsentAssessmentOptions {
+  today: string;
+  acceptedBases?: readonly string[];
+  /** A reviewed written consent signed later than this many days after the appointment doesn't count. */
+  writtenConsentWindowDays?: number;
+}
+
+/** CBCA s.106(9)(b)(i) and OBCA s.119(9): before, or within ten days after, the election or appointment. */
+export const WRITTEN_CONSENT_WINDOW_DAYS = 10;
+
+export const CBCA_LATE_WRITTEN_CONSENT = "Signed more than ten days after the appointment, which CBCA s.106(9) doesn't accept. If they have acted as a director, record that basis instead.";
+export const CBCA_WRITTEN_CONSENT_NEEDS_DATE = "Record the date the consent was signed before marking it reviewed. CBCA s.106(9) accepts a written consent signed before, or within ten days after, the appointment.";
+export const OBCA_LATE_WRITTEN_CONSENT_NOTE = "Signed after the ten-day window; s.119(10) still validates the appointment.";
+
+const MEETING_LABEL = "At the meeting that elected or appointed them, and didn't refuse";
+const MEETING_EVIDENCE = "The meeting, and the minutes or attendance record showing they were there and didn't refuse to act.";
+const CONDUCT_EXAMPLES = "for example a resolution they signed, or minutes of a board meeting they took part in.";
+
+interface ConsentActRules {
+  options: ConsentBasisOption[];
+  /** A written consent signed later than this many days after the appointment can't be verified. */
+  writtenConsentWindowDays?: number;
+  /** Shown, not enforced, when a written consent was signed after the ten-day window. */
+  lateWrittenConsentNote?: string;
+}
 
 /**
- * The consent bases the organization's governing Act accepts:
- * - BC society, Societies Act s.42(4): written consent, or present at the
- *   meeting where elected or appointed and did not refuse.
- * - BC company, Business Corporations Act s.123: written consent, present at
- *   the meeting and did not refuse, or acting as a director (qualifying conduct).
- * - CBCA s.106(9): present at the meeting without refusing; if absent, written
- *   consent before or within ten days, or acting under the appointment.
- * - OBCA s.119(9): written consent.
+ * The consent routes each governing Act accepts. Statute text checked
+ * 2026-11-21, except the OBCA (see below).
+ *
+ * - BC society, Societies Act s.42(4): consents in writing, or attends the
+ *   meeting at which designated, elected or appointed and doesn't refuse.
+ * - BC company, Business Corporations Act:
+ *   - s.123(1)(a): written consent, given before or after the designation,
+ *     election or appointment;
+ *   - s.123(1)(b): performing the functions of, or realizing benefits only
+ *     available to, a director after the individual knew or ought to have
+ *     known of the designation, election or appointment;
+ *   - s.122(4)(b): an election or appointment of a succeeding director made at
+ *     a meeting the individual attends without refusing, at the meeting, to be
+ *     a director. Section 122(4) makes the election or appointment valid if (a)
+ *     the individual consents under s.123 or (b) this meeting route (BC Laws
+ *     text current to 2026-11-17). It doesn't reach a first director
+ *     designated in the incorporation application (s.121).
+ *   - s.123(2): once consent is given the appointment is valid, and the
+ *     director is deemed one from its date. s.123(3): a consent stays
+ *     effective until revoked, the term expires without the director being
+ *     promptly re-elected or re-appointed, the director resigns, or is removed.
+ * - CBCA s.106(9): not a director unless (a) present at the meeting when
+ *   elected or appointed and didn't refuse; or (b) not present and (i)
+ *   consented in writing before, or within ten days after, the election or
+ *   appointment, or (ii) has acted as a director under it.
+ * - OBCA s.119(9)–(11), from secondary sources: ontario.ca refused the fetch
+ *   (HTTP 403), so the e-Laws text wasn't read. (9) written consent before, or
+ *   within ten days after, the election or appointment; (10) a written consent
+ *   after that period still makes the election or appointment valid; (11) (9)
+ *   doesn't apply to a director re-elected or re-appointed with no break in
+ *   term.
+ *
  * Organizations without a reviewed profile get every basis, including Other.
  */
-export function consentBasisOptions(organization?: GovernanceOrganization | null): ConsentBasisOption[] {
+function consentActRules(organization?: GovernanceOrganization | null): ConsentActRules {
   switch (legalGovernanceProfile(organization)?.id) {
     case "bc_society":
-      return [WRITTEN("Consented in writing"), MEETING("Present at the meeting and did not refuse")];
+      return { options: [
+        { value: "Written consent", label: "Consented in writing", evidence: "The written consent they signed: link it, or say where it is held." },
+        { value: "Meeting record", label: MEETING_LABEL, evidence: MEETING_EVIDENCE },
+      ] };
     case "bc_company":
-      return [WRITTEN("Consented in writing"), MEETING("Present at the meeting and did not refuse"), CONDUCT("Acted as a director after the appointment")];
+      return { options: [
+        { value: "Written consent", label: "Consented in writing, before or after the appointment", evidence: "The written consent they signed. Any date counts, before or after the appointment." },
+        { value: "Meeting record", label: MEETING_LABEL, evidence: `${MEETING_EVIDENCE} Not for a first director named in the incorporation application.` },
+        { value: "Conduct", label: "Acted as a director after learning of the appointment", evidence: `A record of them acting as a director, or taking a benefit only directors get, after they knew of the appointment: ${CONDUCT_EXAMPLES}` },
+      ] };
     case "federal_cbca":
-      return [MEETING("Present at the meeting and did not refuse"), WRITTEN("Consented in writing before or within ten days"), CONDUCT("Acted as a director under the appointment")];
+      return {
+        options: [
+          { value: "Meeting record", label: MEETING_LABEL, evidence: MEETING_EVIDENCE },
+          { value: "Written consent", label: "Consented in writing, no later than ten days after the appointment", evidence: "The written consent and the date they signed it: before the appointment, or within ten days after." },
+          { value: "Conduct", label: "Not at the meeting, but acted as a director under the appointment", evidence: `A record of them acting as a director under this appointment: ${CONDUCT_EXAMPLES}` },
+        ],
+        writtenConsentWindowDays: WRITTEN_CONSENT_WINDOW_DAYS,
+      };
     case "ontario_obca":
-      return [WRITTEN("Consented in writing")];
+      return {
+        options: [
+          { value: "Written consent", label: "Consented in writing", evidence: "The written consent and the date they signed it. One signed more than ten days after the appointment still makes it valid." },
+        ],
+        lateWrittenConsentNote: OBCA_LATE_WRITTEN_CONSENT_NOTE,
+      };
     default:
-      return [WRITTEN("Written consent"), MEETING("Meeting record"), CONDUCT("Acting as a director"), { value: "Other", label: "Other", evidence: "Describe the basis and where its evidence is held." }];
+      return { options: [
+        { value: "Written consent", label: "Written consent", evidence: "The signed consent: link the document, or say where it is held." },
+        { value: "Meeting record", label: "Meeting record", evidence: "The meeting and the minutes or attendance record." },
+        { value: "Conduct", label: "Acting as a director", evidence: "A record of the director acting in office, such as a signed resolution or minutes." },
+        { value: "Other", label: "Other", evidence: "Describe the basis and where its evidence is held." },
+      ] };
   }
+}
+
+/** The consent bases the organization's governing Act accepts, each with what its evidence must show. */
+export function consentBasisOptions(organization?: GovernanceOrganization | null): ConsentBasisOption[] {
+  return consentActRules(organization).options;
 }
 
 /** The basis values that can be verified for this organization. */
@@ -193,18 +297,68 @@ export function acceptedConsentBases(organization?: GovernanceOrganization | nul
   return consentBasisOptions(organization).map((option) => option.value);
 }
 
+/** What `assessDirectorConsent` needs from the organization: its today and its Act's rules. */
+export function consentAssessmentOptions(organization?: (GovernanceOrganization & { timeZone?: string | null }) | null, today?: string): ConsentAssessmentOptions {
+  const rules = consentActRules(organization);
+  return {
+    today: today ?? consentToday(organization),
+    acceptedBases: rules.options.map((option) => option.value),
+    ...(rules.writtenConsentWindowDays !== undefined ? { writtenConsentWindowDays: rules.writtenConsentWindowDays } : {}),
+  };
+}
+
+/**
+ * When a written consent was signed relative to the appointment. The entry's
+ * effective date is the appointment date: the record form defaults it to the
+ * director's term start, and the generated consent form takes effect from it.
+ * Undefined for other bases, or without an effective date.
+ */
+export function writtenConsentTiming(
+  entry: Pick<DirectorConsentRow, "basis" | "signedOn" | "effectiveDate">,
+  windowDays = WRITTEN_CONSENT_WINDOW_DAYS,
+): "missing" | "on_time" | "late" | undefined {
+  if (entry.basis !== "Written consent" || !entry.effectiveDate) return undefined;
+  if (!entry.signedOn) return "missing";
+  const deadline = addDaysToDateOnly(entry.effectiveDate, windowDays);
+  if (!deadline) return undefined;
+  return entry.signedOn > deadline ? "late" : "on_time";
+}
+
+/**
+ * A note on when a written consent was signed, for the drawer: late under the
+ * CBCA (not accepted), or late under the OBCA (still valid under s.119(10)).
+ */
+export function consentTimingNote(
+  entry: Pick<DirectorConsentRow, "event" | "basis" | "signedOn" | "effectiveDate">,
+  organization?: GovernanceOrganization | null,
+): string | undefined {
+  if (entry.event === "Withdrawn") return undefined;
+  const rules = consentActRules(organization);
+  if (rules.writtenConsentWindowDays !== undefined) return writtenConsentTiming(entry, rules.writtenConsentWindowDays) === "late" ? CBCA_LATE_WRITTEN_CONSENT : undefined;
+  if (rules.lateWrittenConsentNote && writtenConsentTiming(entry) === "late") return rules.lateWrittenConsentNote;
+  return undefined;
+}
+
 /**
  * Why an entry can't be marked reviewed yet, or undefined when it can. A
  * reviewed consent needs a basis the Act accepts and something pointing at its
- * evidence: a document, the meeting, or where the evidence is held.
+ * evidence: a document, the meeting, or where the evidence is held. Under the
+ * CBCA a written consent also needs its signed date, no later than ten days
+ * after the appointment (the entry's effective date).
  */
 export function consentReviewProblem(
-  entry: Pick<DirectorConsentRow, "event" | "basis" | "documentId" | "meetingId" | "evidenceLocation" | "evidenceReference">,
+  entry: Pick<DirectorConsentRow, "event" | "basis" | "documentId" | "meetingId" | "evidenceLocation" | "evidenceReference" | "signedOn" | "effectiveDate">,
   organization?: GovernanceOrganization | null,
 ): string | undefined {
   if (entry.event === "Withdrawn") return undefined;
   if (!entry.basis) return "Record the consent basis before marking it reviewed.";
-  if (!acceptedConsentBases(organization).includes(entry.basis as DirectorConsentBasis)) return "This basis isn't one the governing Act accepts for consent to act. Correct the basis before marking it reviewed.";
+  const rules = consentActRules(organization);
+  if (!rules.options.some((option) => option.value === entry.basis)) return "This basis isn't one the governing Act accepts for consent to act. Correct the basis before marking it reviewed.";
+  if (rules.writtenConsentWindowDays !== undefined) {
+    const timing = writtenConsentTiming(entry, rules.writtenConsentWindowDays);
+    if (timing === "missing") return CBCA_WRITTEN_CONSENT_NEEDS_DATE;
+    if (timing === "late") return CBCA_LATE_WRITTEN_CONSENT;
+  }
   if (entry.basis === "Meeting record" && !entry.meetingId && !entry.evidenceReference) return "Choose the meeting, or give the meeting record's reference, before marking it reviewed.";
   if (!entry.documentId && !entry.meetingId && !entry.evidenceLocation && !entry.evidenceReference) return "Link the evidence or say where it is held before marking it reviewed.";
   return undefined;

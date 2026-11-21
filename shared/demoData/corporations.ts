@@ -341,7 +341,7 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
     add("directorConsents", {
       _id: id(`consent_${term.person}_${term.start}`), societyId, directorId, scope: "Consent to act", event: "Given", effectiveDate: term.start,
       basis: "Written consent", signedOn: term.start, evidenceLocation: "Minute book, Directors' consents tab (records office)",
-      reviewStatus: "Reviewed", reviewedBy: ownerUserId, reviewedByName: fullName(person(ownerKey)), reviewedAt: createdAt(term.start),
+      reviewStatus: "Reviewed", reviewedBy: ownerUserId, reviewedByName: fullName(person(ownerKey)), reviewedAt: createdAt(term.start), selfReviewed: true,
       recordedAt: createdAt(term.start), recordedBy: ownerUserId,
     });
     add("roleHolders", {

@@ -1322,7 +1322,7 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     const reviewer = userIdsByName.get("Elena Vasquez");
     const recordedAt = new Date().toISOString();
     const minuteBook = "Minute book, Directors' consents tab (registered office)";
-    const reviewed = { reviewStatus: "Reviewed" as const, reviewedBy: reviewer, reviewedByName: "Elena Vasquez", reviewedAt: recordedAt };
+    const reviewed = { reviewStatus: "Reviewed" as const, reviewedBy: reviewer, reviewedByName: "Elena Vasquez", reviewedAt: recordedAt, selfReviewed: true };
     const consents: [string, string, Record<string, unknown>][] = [
       ["Elena Vasquez", "2024-06-15", { basis: "Written consent", signedOn: "2024-06-12", evidenceLocation: minuteBook, ...reviewed }],
       ["Jordan Nakamura", "2024-06-15", { basis: "Written consent", signedOn: "2024-06-14", evidenceLocation: minuteBook, ...reviewed }],

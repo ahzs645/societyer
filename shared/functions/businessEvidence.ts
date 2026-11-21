@@ -1,6 +1,6 @@
 import { businessRegisters, registerPermission, type EvidenceField, type EvidenceRegister } from "../businessEvidence";
 import { evidenceRules } from "../businessEvidenceRules";
-import { acceptedConsentBases, assessDirectorConsent, consentReviewProblem, consentStateSatisfied, consentToday, CONSENT_TO_ACT_SCOPE, type DirectorConsentRow } from "../directorConsentRecords";
+import { assessDirectorConsent, consentAssessmentOptions, consentReviewProblem, consentStateSatisfied, CONSENT_TO_ACT_SCOPE, type DirectorConsentRow } from "../directorConsentRecords";
 import { isCalendarDate } from "../invoicing";
 import type { PortableMutationCtx, PortableQueryCtx, PortableDoc } from "../portable/ctx";
 import { getOwned } from "./access";
@@ -171,7 +171,9 @@ export async function save(ctx: PortableMutationCtx, args: Scope & {
   }
   // Saving a consent as Reviewed or Disputed is the accountable review: the
   // server records who did it and when, and a review needs a basis and evidence.
-  const review = register.table === "directorConsents" ? consentReviewStamp(values, args.documentId, org, user) : {};
+  // Whoever saves the particulars recorded them, so a review saved this way is
+  // always the same person's.
+  const review = register.table === "directorConsents" ? consentReviewStamp(values, args.documentId, org, user, { enteredBy: String(user._id) }) : {};
   const row = {
     ...values, ...review, ...(particulars && { particulars }), societyId: args.societyId, recordedAt: new Date().toISOString(), recordedBy: user._id,
     ...(args.previousId && { previousId: args.previousId }), ...(args.documentId && { documentId: args.documentId }),
@@ -188,19 +190,27 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
 }
 
-function consentReviewStamp(values: Record<string, unknown>, documentId: string | undefined, org: PortableDoc, user: ConsentReviewer, note?: string) {
+/**
+ * The review fields for a consent saved Reviewed or Disputed: who and when,
+ * any note, and `selfReviewed` when the reviewer is the person who recorded
+ * the particulars. Recording and reviewing your own entry is allowed (a small
+ * organization may have one secretary); it is stamped, not blocked.
+ */
+function consentReviewStamp(values: Record<string, unknown>, documentId: string | undefined, org: PortableDoc, user: ConsentReviewer, options: { enteredBy?: string; note?: string } = {}) {
   const status = values.reviewStatus;
   if (status !== "Reviewed" && status !== "Disputed") return {};
   if (status === "Reviewed" && values.scope === CONSENT_TO_ACT_SCOPE) {
     const problem = consentReviewProblem({
       event: text(values.event), basis: text(values.basis), documentId,
       meetingId: text(values.meetingId), evidenceLocation: text(values.evidenceLocation), evidenceReference: text(values.evidenceReference),
+      signedOn: text(values.signedOn), effectiveDate: text(values.effectiveDate),
     }, org);
     if (problem) throw new Error(problem);
   }
   return {
     reviewedBy: user._id, reviewedByName: String(user.displayName || user.email || "Workspace member"), reviewedAt: new Date().toISOString(),
-    ...(note ? { reviewNote: note } : {}),
+    ...(options.note ? { reviewNote: options.note } : {}),
+    ...(options.enteredBy && options.enteredBy === String(user._id) ? { selfReviewed: true } : {}),
   };
 }
 
@@ -228,8 +238,12 @@ export async function reviewDirectorConsent(ctx: PortableMutationCtx, args: { so
     if (value !== undefined && value !== null && value !== "") carried[field.key] = value;
   }
   carried.reviewStatus = args.decision;
+  // Who recorded the particulars under review: carried through earlier review
+  // versions, otherwise whoever wrote the entry being reviewed.
+  const enteredBy = text(previous.enteredBy) ?? text(previous.recordedBy);
   const row = {
-    ...carried, ...consentReviewStamp(carried, documentId, org, user, note),
+    ...carried, ...consentReviewStamp(carried, documentId, org, user, { enteredBy, note }),
+    ...(enteredBy && { enteredBy }),
     societyId: args.societyId, recordedAt: new Date().toISOString(), recordedBy: user._id, previousId: args.consentId,
     ...(documentId && { documentId }), ...(documentId && previous.sourcePage && { sourcePage: previous.sourcePage }),
   };
@@ -243,7 +257,7 @@ export async function directorConsentAssessments(ctx: PortableQueryCtx, societyI
   const rows = ((await ctx.db.query("directorConsents").withIndex("by_society", q => q.eq("societyId", societyId)).collect()) as unknown as DirectorConsentRow[])
     .map(row => ({ ...row, _id: String(row._id), directorId: String(row.directorId ?? ""), previousId: row.previousId ? String(row.previousId) : undefined }));
   const organization = org === undefined ? await ctx.db.get(societyId, "societies") : org;
-  const options = { today: consentToday(organization), acceptedBases: acceptedConsentBases(organization) };
+  const options = consentAssessmentOptions(organization);
   return new Map(directors.map(director => [String(director._id), assessDirectorConsent(rows, { _id: String(director._id), consentOnFile: director.consentOnFile }, options)]));
 }
 
@@ -260,7 +274,7 @@ async function syncDirectorConsentFlag(ctx: PortableMutationCtx, societyId: stri
   const normalized = rows.map(row => ({ ...row, _id: String(row._id), directorId: String(row.directorId ?? ""), previousId: row.previousId ? String(row.previousId) : undefined }));
   if (!normalized.some(row => row.directorId === directorId && row.scope === CONSENT_TO_ACT_SCOPE)) return;
   const org = await ctx.db.get(societyId, "societies");
-  const { state } = assessDirectorConsent(normalized, { _id: directorId, consentOnFile: director.consentOnFile }, { today: consentToday(org), acceptedBases: acceptedConsentBases(org) });
+  const { state } = assessDirectorConsent(normalized, { _id: directorId, consentOnFile: director.consentOnFile }, consentAssessmentOptions(org));
   const consentOnFile = consentStateSatisfied(state);
   if (director.consentOnFile !== consentOnFile) await ctx.db.patch(directorId, { consentOnFile });
 }

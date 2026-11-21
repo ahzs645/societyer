@@ -317,7 +317,8 @@ const directors = [
 
 /**
  * The consent register: a realistic mix for the demo. Mina and Jordan signed
- * written consents (reviewed); Hannah and Grace were elected at an AGM they
+ * written consents (reviewed; Mina's by the secretary who recorded it, so it
+ * is stamped as recorded and reviewed by the same person); Hannah and Grace were elected at an AGM they
  * attended without refusing (reviewed, one against the recorded meeting);
  * Priya's scanned consent awaits review; Devon is marked on file with no
  * details; Sam has nothing recorded yet.
@@ -327,7 +328,7 @@ const directorConsents = [
   {
     _id: "static_consent_mina", societyId: SOCIETY_ID, directorId: "static_director_mina", scope: "Consent to act", event: "Given",
     effectiveDate: "2024-06-20", basis: "Written consent", signedOn: "2024-06-18", evidenceLocation: MINUTE_BOOK, custodian: "Avery Santos",
-    reviewStatus: "Reviewed", reviewedBy: USER_SECRETARY_ID, reviewedByName: "Avery Santos", reviewedAt: "2024-07-02T17:00:00.000Z",
+    reviewStatus: "Reviewed", reviewedBy: USER_SECRETARY_ID, reviewedByName: "Avery Santos", reviewedAt: "2024-07-02T17:00:00.000Z", selfReviewed: true,
     recordedAt: "2024-07-02T16:40:00.000Z", recordedBy: USER_SECRETARY_ID,
   },
   {

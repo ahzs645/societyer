@@ -91,6 +91,7 @@ export interface DirectorConsentStateRow {
   upcomingId?: string;
   upcomingEffectiveDate?: string;
   basisNotAccepted?: boolean;
+  basisNotAcceptedReason?: string;
 }
 
 export async function directorConsentStates(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<DirectorConsentStateRow[]> {
@@ -106,6 +107,7 @@ export async function directorConsentStates(ctx: PortableQueryCtx, { societyId }
       out.upcomingEffectiveDate = assessment.upcoming.effectiveDate;
     }
     if (assessment?.basisNotAccepted) out.basisNotAccepted = true;
+    if (assessment?.basisNotAcceptedReason) out.basisNotAcceptedReason = assessment.basisNotAcceptedReason;
     return out;
   });
 }

@@ -219,7 +219,7 @@ calendar day (`consentToday`: its recorded time zone or home province):
 | State | When | Satisfies the requirement |
 | --- | --- | --- |
 | `none` | No "Consent to act" entry and no legacy mark | No: no basis recorded |
-| `awaiting_review` | The entry in effect has no review yet, or was reviewed on a basis the Act doesn't accept | No: verification outstanding |
+| `awaiting_review` | The entry in effect has no review yet, or was reviewed on a basis the Act doesn't accept (including a CBCA written consent signed more than ten days after the appointment) | No: verification outstanding |
 | `verified` | The entry in effect is Given/Corrected, marked Reviewed, on an accepted basis | **Yes** |
 | `disputed` | The entry in effect was marked Disputed | No: review outstanding |
 | `scheduled` | Every entry takes effect after today | No: not current yet |
@@ -230,15 +230,44 @@ The entry in effect is the latest one effective on or before today; a later entr
 withdrawal dated next month) is shown as upcoming and doesn't change today's state.
 
 **Basis per Act** (`consentBasisOptions`). The register's basis values are `Written consent`,
-`Meeting record`, `Conduct` and `Other`; which of them can be verified depends on the governing Act:
+`Meeting record`, `Conduct` and `Other`; which of them can be verified depends on the governing Act.
+Statute text checked 2026-11-21, except the OBCA:
 
-| Organization | Accepted bases |
-| --- | --- |
-| BC society, Societies Act s. 42(4) | Written consent; present at the meeting where elected or appointed and did not refuse |
-| BC company, BCA s. 123 | Written consent; present at the meeting and did not refuse; acting as a director (qualifying conduct) |
-| CBCA s. 106(9) | Present at the meeting without refusing; if absent, written consent before or within ten days, or acting under the appointment |
-| OBCA s. 119(9) | Written consent |
-| No reviewed profile | Any basis, including Other |
+| Organization | Accepted bases (label in the drawer) | Written-consent timing |
+| --- | --- | --- |
+| BC society, Societies Act s. 42(4) | Written consent ("Consented in writing"); meeting ("At the meeting that elected or appointed them, and didn't refuse") | None |
+| BC company, BCA ss. 122(4), 123(1) | Written consent, given before or after the appointment (s. 123(1)(a)); meeting, for an election or appointment, not a first director's designation (s. 122(4)(b)); conduct: performing a director's functions or taking a director-only benefit after they knew or ought to have known of the appointment (s. 123(1)(b)) | None: before or after both count |
+| CBCA s. 106(9) | Meeting: present and didn't refuse (a); if not present, written consent before or within ten days after (b)(i), or acting as a director under the appointment (b)(ii) | Enforced: signed date required, no later than ten days after |
+| OBCA s. 119(9)–(11) | Written consent | Noted only: a later consent still validates the appointment (s. 119(10)) |
+| No reviewed profile | Any basis, including Other | None |
+
+The OBCA row comes from secondary sources: ontario.ca refused the fetch (HTTP 403) when the text
+was checked, so s. 119(9)–(11) should be confirmed against e-Laws.
+
+**Ten-day timing.** The entry's effective date is the appointment date: the record form defaults it
+to the director's term start, and the generated consent form takes effect from it.
+`writtenConsentTiming` compares the signed date with it (the tenth day after still counts).
+
+- CBCA: a written consent without a signed date can't be marked reviewed ("Record the date the
+  consent was signed…"), and one signed more than ten days after can't be marked reviewed on the
+  written basis ("Signed more than ten days after the appointment, which CBCA s.106(9) doesn't
+  accept. If they have acted as a director, record that basis instead."). A late written consent
+  already marked Reviewed derives to `awaiting_review` with that reason
+  (`basisNotAcceptedReason`, returned by `directors:consentStates`). An existing review with no
+  signed date isn't reopened.
+- OBCA: no block. The drawer notes "Signed after the ten-day window; s.119(10) still validates the
+  appointment."
+- BC society and BC company: no timing gate.
+
+**Re-election.** The state reads the latest entry in effect, so a verified consent keeps covering
+a re-elected director until a later entry withdraws or replaces it. Under the Acts, one consent
+carries over only where the Act says so: BCA s. 123(3)(b) keeps a consent effective while the
+director is promptly re-elected or re-appointed, and OBCA s. 119(11) needs no new consent on a
+re-election with no break in term. The CBCA and the Societies Act attach the consent route to each
+election or appointment. Societyer doesn't check this: the director register keeps only the
+current term (`termStart` is overwritten on re-election) and no appointment history, so a break
+between terms isn't known. Record a new consent entry for each re-election under the CBCA or the
+Societies Act, and after a break in term under the BCA or the OBCA.
 
 **Evidence fields.** Besides the dates and an optional document, an entry can name the meeting
 (`meetingId`), and where evidence held outside Societyer is kept (`evidenceLocation`,
@@ -251,7 +280,15 @@ Reviewed or Disputed through the generic register form stamps the reviewer the s
 needs the consent register's write permission (`directors:write`). Marking Reviewed is refused
 unless the entry has a basis the Act accepts and something pointing at its evidence: a document,
 the meeting, or where the evidence is held. A meeting basis needs the meeting or the minutes
-reference. Disputing needs a note.
+reference; a CBCA written consent needs a signed date within the ten days. Disputing needs a note.
+
+**Same person recording and reviewing** is allowed (a small organization may have one secretary)
+but stamped. A review version carries `enteredBy`, who recorded the particulars it reviews (carried
+through earlier review versions; the row's own `recordedBy` is the reviewer), and the server sets
+`selfReviewed: true` when the reviewer is that person. Saving particulars as Reviewed through the
+generic register form is always a self-review. The drawer shows "Recorded and reviewed by the same
+person" beside the review, the consent history beside the review status, and the review form warns
+the reviewer before they confirm. It doesn't change the state.
 
 **The legacy flag.** `directors.consentOnFile` is a cache: the register's write path sets it to
 true only while the director's consent is `verified`, and the readers that decide compliance
