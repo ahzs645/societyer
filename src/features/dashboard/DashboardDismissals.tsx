@@ -5,11 +5,13 @@ import { api } from "@/lib/convexApi";
 import { Modal, usePrompt } from "../../components/Modal";
 import { Field } from "../../components/ui";
 import { DatePicker } from "../../components/DatePicker";
+import { RadioGroup } from "../../components/Controls";
 import { useToast } from "../../components/Toast";
 import { usePermissions } from "../../hooks/usePermissions";
 import { useUndoableAction } from "../../hooks/useUndoableAction";
 import { formatDate, relative } from "../../lib/format";
-import type { DashboardItemAcknowledgement, DashboardItemDismissal } from "../../../shared/dashboardDismissals";
+import { calendarDateKey } from "../../lib/calendarDates";
+import type { DashboardItemAcknowledgement, DashboardItemDismissal, DashboardItemSnooze } from "../../../shared/dashboardDismissals";
 import { REQUIREMENT_BASIS_LABEL, type RequirementBasis } from "../../../shared/dashboardFindingPolicy";
 
 /**
@@ -18,8 +20,9 @@ import { REQUIREMENT_BASIS_LABEL, type RequirementBasis } from "../../../shared/
  * (shared/dashboardFindingPolicy.ts): a recommendation at "warn" or "info" is
  * `dismissable` and may leave the dashboard for the whole workspace; a
  * statutory, bylaw or internal-policy finding is not, and can instead be
- * acknowledged or given a follow-up, both of which leave it on the dashboard
- * and in every count.
+ * acknowledged, given a follow-up or snoozed ("Remind me later"), all of
+ * which leave it on the dashboard and in every count. A snoozed requirement
+ * sorts after the others, reads muted, and is left out of nudges.
  */
 
 /** What a dismiss, acknowledge or restore needs to know about one item. */
@@ -38,6 +41,7 @@ export type FindingPolicyFields = {
   dismissable?: boolean;
   dismissal?: DashboardItemDismissal;
   acknowledgement?: DashboardItemAcknowledgement;
+  snooze?: DashboardItemSnooze;
   followUp?: { assignee?: string; dueDate?: string };
 };
 
@@ -46,9 +50,18 @@ export function canDismissItem(item: Pick<FindingPolicyFields, "dismissable" | "
   return Boolean(item.dismissable && !item.dismissal);
 }
 
-/** The item stays until resolved, so it offers Acknowledge and a follow-up instead of Dismiss. */
+/**
+ * The item stays until resolved, so it offers Acknowledge and a follow-up
+ * instead of Dismiss. That includes a requirement's "info" note (the privacy
+ * program marked documented with no review on record).
+ */
 export function isOutstandingRequirement(item: FindingPolicyFields) {
-  return !item.dismissable && (item.level === "warn" || item.level === "err");
+  return !item.dismissable && (item.level === "info" || item.level === "warn" || item.level === "err");
+}
+
+/** "Remind me later" applies to a requirement that would otherwise remind people (warn or err). */
+export function canSnoozeItem(item: FindingPolicyFields) {
+  return isOutstandingRequirement(item) && item.level !== "info";
 }
 
 export function useDashboardDismissals(societyId: string | undefined) {
@@ -169,11 +182,13 @@ export function useDashboardDismissals(societyId: string | undefined) {
         evidenceRequired,
         ...details,
       });
-      toast.success(result?.reused ? "Existing follow-up task reused" : "Follow-up assigned");
+      toast.success(followUpToast(result));
     } catch (error) {
       toast.error("Could not assign the follow-up", error instanceof Error ? error.message : undefined);
     }
   }, [askFollowUp, canDismiss, createReviewTask, societyId, toast]);
+
+  const snoozing = useFindingSnooze(societyId, canDismiss);
 
   return {
     canDismiss,
@@ -183,9 +198,58 @@ export function useDashboardDismissals(societyId: string | undefined) {
     withdrawAcknowledgement,
     assignFollowUp,
     askFollowUp,
-    /** Render once wherever the hook is used, for Assign follow-up. */
-    followUpDialog: followUp.dialog,
+    snooze: snoozing.snooze,
+    cancelSnooze: snoozing.cancelSnooze,
+    /** Render once wherever the hook is used, for Assign follow-up and Remind me later. */
+    dialogs: <>{followUp.dialog}{snoozing.dialog}</>,
   };
+}
+
+/**
+ * "Remind me later" for a requirement (a dashboard finding or an obligation
+ * occurrence): it stays listed and counted; only nudges skip it. The server
+ * refuses recommendations and re-checks the level.
+ */
+export function useFindingSnooze(societyId: string | undefined, enabled: boolean) {
+  const toast = useToast();
+  const undoable = useUndoableAction();
+  const snoozeDialog = useSnoozeDialog();
+  const askSnooze = snoozeDialog.ask;
+  const snoozeItem = useMutation(api.dashboardRemediation.snoozeItem);
+  const cancelSnoozeItem = useMutation(api.dashboardRemediation.cancelSnooze);
+
+  const snooze = useCallback(async (target: DismissTarget, flagText?: string) => {
+    if (!societyId || !enabled) return;
+    const untilISO = await askSnooze(target);
+    if (!untilISO) return;
+    await undoable({
+      message: `Snoozed until ${formatDate(untilISO, "MMM d")}`,
+      description: "It stays listed and in the counts.",
+      errorMessage: "Could not snooze the reminder",
+      dedupeKey: `snooze-${target.id}`,
+      run: () => snoozeItem({ societyId, ruleId: target.id, flagLevel: target.level, flagText, untilISO }),
+      undo: () => cancelSnoozeItem({ societyId, ruleId: target.id }),
+      undoneMessage: "Snooze cancelled",
+    });
+  }, [askSnooze, cancelSnoozeItem, enabled, snoozeItem, societyId, undoable]);
+
+  const cancelSnooze = useCallback(async (target: DismissTarget) => {
+    if (!societyId || !enabled) return;
+    try {
+      await cancelSnoozeItem({ societyId, ruleId: target.id });
+      toast.success("Snooze cancelled");
+    } catch (error) {
+      toast.error("Could not cancel the snooze", error instanceof Error ? error.message : undefined);
+    }
+  }, [cancelSnoozeItem, enabled, societyId, toast]);
+
+  return { snooze, cancelSnooze, dialog: snoozeDialog.dialog };
+}
+
+/** The toast after Assign follow-up: a new task, a reassigned one, or one left as it was. */
+export function followUpToast(result: { reused?: boolean; reassigned?: boolean } | null | undefined) {
+  if (result?.reassigned) return "Follow-up reassigned";
+  return result?.reused ? "Existing follow-up task kept" : "Follow-up assigned";
 }
 
 type DashboardDismissals = ReturnType<typeof useDashboardDismissals>;
@@ -210,6 +274,9 @@ export function findingAttentionActions(
       ? { id: "withdraw-acknowledgement", label: "Withdraw acknowledgement", onSelect: () => void dismissals.withdrawAcknowledgement(target) }
       : { id: "acknowledge", label: "Acknowledge", onSelect: () => void dismissals.acknowledge(target) },
     ...(followUp ? [{ id: "assign-follow-up", label: "Assign follow-up", onSelect: () => void dismissals.assignFollowUp(target, evidenceRequired) }] : []),
+    ...(item.snooze
+      ? [{ id: "cancel-snooze", label: "Cancel snooze", onSelect: () => void dismissals.cancelSnooze(target) }]
+      : canSnoozeItem(item) ? [{ id: "snooze", label: "Remind me later", onSelect: () => void dismissals.snooze(target) }] : []),
   ];
 }
 
@@ -240,6 +307,7 @@ export function FindingStatusLine({ item, todayISO }: { item: FindingPolicyField
   }
   if (item.acknowledgement) parts.push(<span key="ack">{acknowledgementText(item.acknowledgement)}</span>);
   if (item.followUp) parts.push(<span key="follow-up">{followUpText(item.followUp, todayISO)}</span>);
+  if (item.snooze) parts.push(<span key="snooze">{snoozeText(item.snooze, todayISO)}</span>);
   if (!parts.length) return null;
   return (
     <span className="finding-status" title={item.acknowledgement?.note ? `Note: ${item.acknowledgement.note}` : undefined}>
@@ -254,7 +322,88 @@ function showsBasis(item: FindingPolicyFields): item is FindingPolicyFields & { 
 
 /** True when FindingStatusLine has something to say for this item. */
 export function hasFindingStatus(item: FindingPolicyFields) {
-  return showsBasis(item) || Boolean(item.acknowledgement || item.followUp);
+  return showsBasis(item) || Boolean(item.acknowledgement || item.followUp || item.snooze);
+}
+
+/** "Reminder snoozed until Dec 5 by Mina Patel". */
+export function snoozeText(snooze: DashboardItemSnooze, todayISO?: string) {
+  const sameYear = !todayISO || snooze.untilISO.slice(0, 4) === todayISO.slice(0, 4);
+  const until = formatDate(snooze.untilISO, sameYear ? "MMM d" : "MMM d, yyyy");
+  return `Reminder snoozed until ${until}${snooze.snoozedByName ? ` by ${snooze.snoozedByName}` : ""}`;
+}
+
+type SnoozeChoice = "week" | "month" | "date";
+
+function addDaysKey(days: number, months = 0) {
+  const date = new Date();
+  date.setMonth(date.getMonth() + months);
+  date.setDate(date.getDate() + days);
+  return calendarDateKey(date);
+}
+
+/**
+ * "Remind me later": 1 week, 1 month, or a chosen date. Returns a function
+ * that opens the dialog and resolves with the date (YYYY-MM-DD), or null when
+ * cancelled, and the dialog element to render.
+ */
+export function useSnoozeDialog() {
+  const [target, setTarget] = useState<DismissTarget | null>(null);
+  const [choice, setChoice] = useState<SnoozeChoice>("week");
+  const [date, setDate] = useState("");
+  const resolver = useRef<((value: string | null) => void) | null>(null);
+
+  const ask = useCallback((next: DismissTarget) => new Promise<string | null>((resolve) => {
+    resolver.current?.(null);
+    resolver.current = resolve;
+    setChoice("week");
+    setDate("");
+    setTarget(next);
+  }), []);
+
+  const close = (value: string | null) => {
+    resolver.current?.(value);
+    resolver.current = null;
+    setTarget(null);
+  };
+
+  const week = addDaysKey(7);
+  const month = addDaysKey(0, 1);
+  const chosen = choice === "week" ? week : choice === "month" ? month : date;
+  const dialog = (
+    <Modal
+      open={Boolean(target)}
+      onClose={() => close(null)}
+      title="Remind me later"
+      size="sm"
+      footer={
+        <>
+          <button className="btn" type="button" onClick={() => close(null)}>Cancel</button>
+          <button className="btn btn--accent" type="button" disabled={!chosen} onClick={() => close(chosen)}>
+            Snooze
+          </button>
+        </>
+      }
+    >
+      {target && <p className="muted" style={{ marginTop: 0 }}>“{target.text}” stays listed and in the counts. Reminders pause until then.</p>}
+      <RadioGroup<SnoozeChoice>
+        name="snooze-until"
+        value={choice}
+        onChange={setChoice}
+        options={[
+          { value: "week", label: "1 week", hint: formatDate(week, "EEE, MMM d") },
+          { value: "month", label: "1 month", hint: formatDate(month, "EEE, MMM d") },
+          { value: "date", label: "Until a date" },
+        ]}
+      />
+      {choice === "date" && (
+        <Field label="Remind me on">
+          <DatePicker value={date} onChange={setDate} min={addDaysKey(1)} max={addDaysKey(365)} />
+        </Field>
+      )}
+    </Modal>
+  );
+
+  return { ask, dialog };
 }
 
 /** "Acknowledged by Mina Patel · 2 days ago". */

@@ -36,7 +36,8 @@ import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { automatedComplianceChecksLabel } from "../../shared/entityRuleScope";
 import { ContinuityChecksCard, continuityDismissTarget, type ContinuityCheck } from "../features/gaps/ContinuityChecksCard";
-import { canDismissItem, DismissButton, DismissedItems, findingAttentionActions, FindingStatusLine, hasFindingStatus, useDashboardDismissals, type DismissedEntry, type DismissTarget } from "../features/dashboard/DashboardDismissals";
+import { canDismissItem, DismissButton, DismissedItems, findingAttentionActions, FindingStatusLine, followUpToast, hasFindingStatus, useDashboardDismissals, type DismissedEntry, type DismissTarget } from "../features/dashboard/DashboardDismissals";
+import { snoozedLast } from "../../shared/dashboardDismissals";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
 import { RollingNumber } from "../components/RollingNumber";
@@ -107,8 +108,9 @@ export function Dashboard() {
   const todayISO = organizationTodayISO(society);
   const canRead = (permission: string) => data.readAccess?.includes(permission) ?? can(permission);
   // Dismissed recommendations leave the list and every count; they sit under
-  // "Dismissed (n)" at the foot of the card.
-  const openComplianceFlags = (complianceFlags as DashboardComplianceFlag[]).filter((flag) => !flag.dismissal);
+  // "Dismissed (n)" at the foot of the card. Snoozed requirements stay listed
+  // and counted, after the others.
+  const openComplianceFlags = snoozedLast((complianceFlags as DashboardComplianceFlag[]).filter((flag) => !flag.dismissal));
   const dismissedComplianceFlags = (complianceFlags as DashboardComplianceFlag[]).filter((flag) => flag.dismissal);
   const actionableComplianceFlags = openComplianceFlags.filter((flag) => flag.level !== "ok" && flag.level !== "info");
   const completeComplianceAccess = ["directors:read", "members:read", "documents:read"].every(canRead);
@@ -202,12 +204,12 @@ export function Dashboard() {
       }
       if (action.intent === "createPrivacyReviewTask") {
         const result = await createPrivacyReviewTask({ ...payload, ...followUp });
-        toast.success(result?.reused ? "Existing privacy review task reused" : "Privacy follow-up assigned");
+        toast.success(followUpToast(result));
         return;
       }
       if (action.intent === "createComplianceReviewTask") {
         const result = await createComplianceReviewTask({ ...payload, ...followUp });
-        toast.success(result?.reused ? "Existing follow-up task reused" : "Follow-up assigned");
+        toast.success(followUpToast(result));
         return;
       }
       if (action.intent === "markMemberDataAccessReviewed") {
@@ -343,6 +345,7 @@ export function Dashboard() {
                 <Flag
                   key={f.ruleId ?? i}
                   level={f.level}
+                  muted={Boolean(f.snooze)}
                   citationId={(f as any).citationId}
                   citationIds={(f as any).citationIds}
                   actions={actions}
@@ -732,7 +735,7 @@ export function Dashboard() {
       ) : (
         <DashboardModuleGrid modules={visibleModules} content={moduleContent} layout={dashboardLayout.layout} />
       )}
-      {dismissals.followUpDialog}
+      {dismissals.dialogs}
 
       {visibleModules.length === 0 && (
         <EmptyState

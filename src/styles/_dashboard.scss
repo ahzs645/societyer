@@ -226,6 +226,13 @@ a.attention-item__main:focus-visible {
   background: token('danger-soft');
   color: token('danger');
 }
+// Snoozed: still listed and counted, after the others, in quieter colours.
+.attention-item--snoozed .attention-item__icon { background: token('bg-subtle'); }
+.attention-item--snoozed .attention-item__title { color: token('text-secondary'); font-weight: token('fw-regular'); }
+.attention-item__snooze {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
 .attention-item__text {
   display: grid;
   gap: 2px;

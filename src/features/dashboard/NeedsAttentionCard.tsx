@@ -7,7 +7,7 @@ import type { ContinuityCheck } from "../gaps/ContinuityChecksCard";
 import { InfoPopover } from "../../components/InfoPopover";
 import { getRegulatoryCitation } from "../../lib/regulatoryCitations";
 import { pluralizeCounts } from "../../lib/pluralizeCounts";
-import { formatShortDate, relative } from "../../lib/format";
+import { formatDate, formatShortDate, relative } from "../../lib/format";
 
 /**
  * Phone Dashboard: one "Needs attention" list in place of the Compliance
@@ -41,6 +41,8 @@ export type AttentionItem = {
   actions?: ReactNode;
   /** What the item rests on and who has acknowledged or owns it (popover). */
   status?: ReactNode;
+  /** "Snoozed until Dec 5": still listed and counted, after the others in its group, muted. */
+  snoozedLabel?: string;
 };
 
 export type AttentionFiling = { _id: string; kind: string; periodLabel?: string; dueDate: string; status?: string };
@@ -70,6 +72,11 @@ export function continuityChecksShownAsFlags(flags: readonly Pick<DashboardCompl
 
 function flagLinkLabel(flag: DashboardComplianceFlag, to: string | undefined) {
   return to ? flag.remediationActions?.find((action) => action.intent === "navigate" && action.to === to)?.label : undefined;
+}
+
+/** "Snoozed until Dec 5" (with the year when it isn't this year). */
+function snoozedUntilLabel(untilISO: string, todayISO: string) {
+  return `Snoozed until ${formatDate(untilISO, untilISO.slice(0, 4) === todayISO.slice(0, 4) ? "MMM d" : "MMM d, yyyy")}`;
 }
 
 /** "First sentence. The rest…" → title and detail. */
@@ -170,6 +177,7 @@ export function buildAttentionItems({
       evidence: flag.evidenceRequired ?? [],
       actions: flagActions(flag, to),
       status: findingStatus?.(flag),
+      ...(flag.snooze ? { snoozedLabel: snoozedUntilLabel(flag.snooze.untilISO, todayISO) } : {}),
     });
   }
 
@@ -193,13 +201,16 @@ export function buildAttentionItems({
       evidence: [],
       actions: checkActions?.(check),
       status: findingStatus?.(check),
+      ...(check.snooze ? { snoozedLabel: snoozedUntilLabel(check.snooze.untilISO, todayISO) } : {}),
     });
   }
 
+  // Snoozed items stay listed and counted, after the others of their severity.
   return items
     .map((item, index) => ({ item, index }))
     .sort((a, b) =>
       SEVERITY_ORDER[a.item.severity] - SEVERITY_ORDER[b.item.severity]
+      || Number(Boolean(a.item.snoozedLabel)) - Number(Boolean(b.item.snoozedLabel))
       || KIND_ORDER[a.item.kind] - KIND_ORDER[b.item.kind]
       || (a.item.dueDate ?? "").localeCompare(b.item.dueDate ?? "")
       || a.index - b.index)
@@ -248,13 +259,14 @@ function AttentionRow({ item }: { item: AttentionItem }) {
             {item.detail}
           </span>
         )}
+        {item.snoozedLabel && <span className="attention-item__snooze">{item.snoozedLabel}</span>}
       </span>
       {item.to && <ChevronRight size={16} className="attention-item__chevron" aria-hidden="true" />}
     </>
   );
   const hasDetails = item.sources.length > 0 || item.evidence.length > 0 || Boolean(item.actions) || Boolean(item.status);
   return (
-    <li className={`attention-item attention-item--${item.severity}`}>
+    <li className={`attention-item attention-item--${item.severity}${item.snoozedLabel ? " attention-item--snoozed" : ""}`}>
       {item.to ? (
         <Link to={item.to} className="attention-item__main">{body}</Link>
       ) : (

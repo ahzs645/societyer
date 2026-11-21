@@ -803,9 +803,12 @@ export function Flag({
   citationId,
   citationIds,
   actions,
+  muted = false,
 }: {
   /** `info` is a neutral status note: not a pass and not a gap. */
   level: "ok" | "info" | "warn" | "err";
+  /** Quieter colours for a finding that is still listed but snoozed. */
+  muted?: boolean;
   children: ReactNode;
   /** Buttons for the flag, drawn inside its tinted box at the trailing edge. */
   actions?: ReactNode;
@@ -826,7 +829,7 @@ export function Flag({
       ? [citationId]
       : [];
   return (
-    <div className={`flag flag--${level}${actions ? " flag--has-actions" : ""}`}>
+    <div className={`flag flag--${level}${muted ? " flag--muted" : ""}${actions ? " flag--has-actions" : ""}`}>
       <Icon />
       <div className="flag__body">
         <div className="flag__text">{children}</div>

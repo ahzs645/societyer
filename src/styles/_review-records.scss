@@ -375,6 +375,11 @@ details.exports-tables {
     padding-left: token('s-5');
   }
 }
+// A snoozed requirement: still listed and counted, its title muted.
+.obligation--snoozed .record-table__identifier-primary {
+  color: token('text-secondary');
+  font-weight: token('fw-regular');
+}
 
 // Annual cycle.
 .annual-cycle-evidence {

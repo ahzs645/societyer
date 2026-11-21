@@ -8,7 +8,7 @@ import { usePermissions } from "../../hooks/usePermissions";
 import { interfaceRouteReadPermission } from "../../../shared/interfaceRouteAccess";
 import { InfoPopover } from "../../components/InfoPopover";
 import { pluralizeCounts } from "../../lib/pluralizeCounts";
-import type { DashboardItemAcknowledgement, DashboardItemDismissal } from "../../../shared/dashboardDismissals";
+import { snoozedLast, type DashboardItemAcknowledgement, type DashboardItemDismissal, type DashboardItemSnooze } from "../../../shared/dashboardDismissals";
 import type { RequirementBasis } from "../../../shared/dashboardFindingPolicy";
 import {
   canDismissItem,
@@ -24,8 +24,9 @@ import {
  * `actionLabel` says what the button does ("Add directors"); older servers may
  * omit it. `requirementBasis` is what the check rests on; `dismissable` marks
  * a recommendation (shared/dashboardFindingPolicy.ts); `dismissal` is set while
- * it is dismissed and `acknowledgement` while someone has acknowledged a
- * requirement that stays outstanding.
+ * it is dismissed, `acknowledgement` while someone has acknowledged a
+ * requirement that stays outstanding, and `snooze` while its reminders are
+ * snoozed (still listed and counted).
  */
 export type ContinuityCheck = {
   id: string;
@@ -41,6 +42,7 @@ export type ContinuityCheck = {
   dismissable?: boolean;
   dismissal?: DashboardItemDismissal;
   acknowledgement?: DashboardItemAcknowledgement;
+  snooze?: DashboardItemSnooze;
   followUp?: { assignee?: string; dueDate?: string };
 };
 
@@ -75,16 +77,17 @@ export function ContinuityChecksCard({ societyId, hideCheckIds }: { societyId: s
         {!data && <div className="muted">Checking records…</div>}
         {data?.preIncorporation && <div className="muted">Record checks start at incorporation.</div>}
         {data && !data.preIncorporation && data.checks.length === 0 && <div className="muted">No continuity checks apply to your role.</div>}
-        {shownChecks.filter((check) => !check.dismissal).map((check) => {
+        {snoozedLast(shownChecks.filter((check) => !check.dismissal)).map((check) => {
           const permission = interfaceRouteReadPermission(check.to.split("?")[0]);
           const canOpen = !permission || can(permission);
           const dismissable = dismissals.canDismiss && canDismissItem(check);
-          // Requirements: Acknowledge / Assign follow-up in a ⋯ menu; they stay listed.
+          // Requirements: Acknowledge / Assign follow-up / Remind me later in a ⋯ menu; they stay listed.
           const requirementActions = dismissable ? [] : findingAttentionActions(check, continuityDismissTarget(check), dismissals, { followUp: true });
           return (
             <Flag
               key={check.id}
               level={check.level}
+              muted={Boolean(check.snooze)}
               actions={canOpen || check.citation || dismissable || requirementActions.length ? (
                 <>
                   {canOpen && <Link className="btn btn--sm" to={check.to}>{check.actionLabel ?? "Open"}</Link>}
@@ -110,7 +113,7 @@ export function ContinuityChecksCard({ societyId, hideCheckIds }: { societyId: s
           canRestore={dismissals.canDismiss}
           onRestore={(item) => void dismissals.restore(item)}
         />
-        {dismissals.followUpDialog}
+        {dismissals.dialogs}
       </div>
     </div>
   );

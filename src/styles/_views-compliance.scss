@@ -9,6 +9,10 @@
 /* A status note, not a pass or a gap ("isn't incorporated yet"). */
 .flag--info { background: token('bg-subtle'); color: token('text-secondary'); }
 .flag > svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+/* Still listed and counted, but snoozed: neutral box, the icon keeps the level's colour. */
+.flag--muted { background: token('bg-subtle'); color: token('text-secondary'); }
+.flag--muted.flag--warn > svg { color: token('warn'); }
+.flag--muted.flag--err > svg { color: token('danger'); }
 
 /* Citation chips follow the flag text on the same line when there's room,
  * and only wrap underneath when there isn't. */
