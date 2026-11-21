@@ -68,6 +68,16 @@ workspace with uploaded documents amber without a new legal gap. There is no
 organization's legal profile is the way to change which rules apply
 (`shared/entityRuleScope.ts`).
 
+Dismissing (`shared/dashboardFindingPolicy.ts`): the constitution and bylaws
+rules are statutory at `warn` (no copy identified), so that gap can only be
+acknowledged, assigned or snoozed. At `info` the currentness note is a
+recommendation and can be dismissed. The dismissal is tied to the copy on
+record: the document id, or the held-elsewhere entry's reference and when it
+was recorded. Uploading a replacement or recording a different external copy
+brings the note back. `PIPA-POLICY-DOCUMENTED` at `info` (marked documented
+with no review) stays statutory: its action is **Record review**, with
+Acknowledge and Assign follow-up in the menu.
+
 ## Interface
 
 - Organization profile, Documents tab (`/app/society?tab=documents`): each

@@ -12,7 +12,7 @@ export const governanceTables = {
     flagLevel: v.string(),
     flagText: v.string(),
     evidenceRequired: v.array(v.string()),
-    status: v.string(), // open | resolved | dismissed | acknowledged
+    status: v.string(), // open | resolved | dismissed | acknowledged | snoozed
     assignedTo: v.optional(v.string()),
     taskId: v.optional(v.id("tasks")),
     sourceEvidenceIds: v.optional(v.array(v.id("sourceEvidence"))),
@@ -37,7 +37,14 @@ export const governanceTables = {
     acknowledgedByName: v.optional(v.string()),
     acknowledgementNote: v.optional(v.string()),
     acknowledgedSubjectKey: v.optional(v.string()),
+    // "Remind me later" on a requirement (shared/dashboardDismissals.ts):
+    // reminders pause until this calendar day (YYYY-MM-DD) while the subject
+    // and level are unchanged. The finding stays listed and in every count.
     snoozedUntilISO: v.optional(v.string()),
+    snoozedByUserId: v.optional(v.string()),
+    snoozedByName: v.optional(v.string()),
+    snoozedSubjectKey: v.optional(v.string()),
+    snoozedLevel: v.optional(v.string()),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),

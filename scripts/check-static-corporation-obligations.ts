@@ -183,4 +183,16 @@ decisions = await client.query("complianceObligations:listDecisions", { societyI
 assert.equal(decisions[0].status, "open");
 assert.equal(decisions[0].acknowledgedAtISO, undefined, "reopening withdraws the acknowledgement");
 
+// A good-practice review (corporation key custody) is a recommendation: this
+// occurrence can be dismissed and restored on the local runtime.
+const keyCustody = obligations.find((obligation) => obligation.ruleId === "compliance-ca-fed-cbca-corporation-key-custody");
+assert.ok(keyCustody, "the CBCA pack computes a key custody review");
+const keyCustodyArgs = { societyId: created.societyId, ruleId: keyCustody.occurrenceKey, flagLevel: "info", flagText: keyCustody.title, evidenceRequired: [] };
+await client.mutation("complianceObligations:dismissDecision", keyCustodyArgs);
+let keyDecision = (await client.query("complianceObligations:listDecisions", { societyId: created.societyId })).find((row: any) => row.ruleId === keyCustody.occurrenceKey);
+assert.equal(keyDecision?.status, "dismissed");
+await client.mutation("complianceObligations:reopenDecision", keyCustodyArgs);
+keyDecision = (await client.query("complianceObligations:listDecisions", { societyId: created.societyId })).find((row: any) => row.ruleId === keyCustody.occurrenceKey);
+assert.equal(keyDecision?.status, "open", "restoring brings it back");
+
 console.log("Static corporation obligation checks passed.");

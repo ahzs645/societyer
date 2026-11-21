@@ -50,7 +50,7 @@ import { appliesBcSocietyRules } from "../entityRuleScope";
 import { directorConsentAssessments } from "./businessEvidence";
 import { consentStateSatisfied, unverifiedConsentSentence, type DirectorConsentState } from "../directorConsentRecords";
 import { entityMeetingWording } from "../entityMeetingWording";
-import { activeAcknowledgement, activeDismissal, type DashboardItemAcknowledgement, type DashboardItemDismissal, type DismissalRecord } from "../dashboardDismissals";
+import { activeAcknowledgement, activeDismissal, activeSnooze, type DashboardItemAcknowledgement, type DashboardItemDismissal, type DashboardItemSnooze, type DismissalRecord } from "../dashboardDismissals";
 import { continuityFindingPolicy, findingSubjectKey, isDismissableFinding, type RequirementBasis } from "../dashboardFindingPolicy";
 
 /** The dismissal-policy fields every dashboard continuity check carries. */
@@ -60,6 +60,7 @@ type DashboardCheckPolicyFields = {
   dismissable: boolean;
   dismissal?: DashboardItemDismissal;
   acknowledgement?: DashboardItemAcknowledgement;
+  snooze?: DashboardItemSnooze;
   followUp?: { assignee?: string; dueDate?: string };
 };
 
@@ -413,6 +414,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       const remediation = remediationById.get(check.id);
       const dismissal = activeDismissal(remediation, { level: check.level, dismissable, subjectKey });
       const acknowledgement = activeAcknowledgement(remediation, { subjectKey });
+      const snooze = dismissable ? undefined : activeSnooze(remediation, { level: check.level, subjectKey }, today);
       const followUp = followUps.get(check.id);
       return {
         ...check,
@@ -421,6 +423,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
         dismissable,
         ...(dismissal ? { dismissal } : {}),
         ...(acknowledgement ? { acknowledgement } : {}),
+        ...(snooze ? { snooze } : {}),
         ...(followUp && (followUp.assignee || followUp.dueDate) ? { followUp } : {}),
       };
     }),

@@ -119,6 +119,8 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "dashboardRemediation:dismissItem": ["ruleId"],
   "dashboardRemediation:acknowledgeItem": ["ruleId"],
   "dashboardRemediation:restoreItem": ["ruleId"],
+  "dashboardRemediation:snoozeItem": ["ruleId"],
+  "dashboardRemediation:cancelSnooze": ["ruleId"],
   "legalOperations:stageCorporationDocumentPacket": ["obligationRuleId"],
   "waveCache:sync": ["businessId"],
   "waveCache:healthCheck": ["businessId"],

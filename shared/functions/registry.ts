@@ -359,6 +359,8 @@ const DASHBOARD_DISMISSAL_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "dashboardRemediation:dismissItem", handler: dashboardRemediationFns.dismissItemPortable }),
   definePortableMutation({ name: "dashboardRemediation:acknowledgeItem", handler: dashboardRemediationFns.acknowledgeItemPortable }),
   definePortableMutation({ name: "dashboardRemediation:restoreItem", handler: dashboardRemediationFns.restoreItemPortable }),
+  definePortableMutation({ name: "dashboardRemediation:snoozeItem", handler: dashboardRemediationFns.snoozeItemPortable }),
+  definePortableMutation({ name: "dashboardRemediation:cancelSnooze", handler: dashboardRemediationFns.cancelSnoozePortable }),
   definePortableMutation({ name: "complianceObligations:acknowledgeDecision", handler: complianceObligationsFns.acknowledgeDecisionPortable }),
 ];
 

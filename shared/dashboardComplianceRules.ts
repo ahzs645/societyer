@@ -16,7 +16,7 @@ import { legalGovernanceProfile, LEGAL_GOVERNANCE_PROFILES, minimumLegalDirector
 import { resolvePrivacyProfile, hasApplicablePrivacyLaw, PRIVACY_LAWS, type PrivacyAssessmentFacts } from "./privacyRuleProfiles";
 import type { LegalEntityLike } from "./organizationDomain";
 import { audienceAppliesToOrganization, type RuleAudience } from "./entityRuleScope";
-import type { DashboardItemAcknowledgement, DashboardItemDismissal } from "./dashboardDismissals";
+import type { DashboardItemAcknowledgement, DashboardItemDismissal, DashboardItemSnooze } from "./dashboardDismissals";
 import type { RequirementBasis } from "./dashboardFindingPolicy";
 import { consentStateSatisfied, unverifiedConsentSentence, type DirectorConsentState } from "./directorConsentRecords";
 import {
@@ -64,6 +64,8 @@ export type DashboardComplianceFlag = {
   dismissal?: DashboardItemDismissal;
   /** Set while an acknowledgement applies to the flag's current subject; the flag stays outstanding. */
   acknowledgement?: DashboardItemAcknowledgement;
+  /** Set while a requirement's reminders are snoozed; it stays listed and counted. */
+  snooze?: DashboardItemSnooze;
   /** The open follow-up task's owner and due date, when one is assigned. */
   followUp?: { assignee?: string; dueDate?: string };
 };
@@ -488,11 +490,16 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
           case "unattested":
             // Marked documented by hand (or inferred from a linked policy) with
             // no review on record: a note, not a gap the organization must fix.
-            return flag(this, {
-              level: "info",
-              text: "Privacy program is marked documented, but no review attestation is recorded in Societyer.",
-              citationId: "PIPA-POLICY",
-            });
+            // The duty is still statutory (not dismissable); the fix is one
+            // "Record review", so a policy template isn't offered here.
+            return {
+              ...flag(this, {
+                level: "info",
+                text: "Privacy program is marked documented, but no review attestation is recorded in Societyer.",
+                citationId: "PIPA-POLICY",
+              }),
+              remediationActions: this.remediationActions.filter((action) => action.intent !== "createPipaPolicyDraft"),
+            };
           default:
             return flag(this, {
               level: "warn",

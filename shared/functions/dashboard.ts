@@ -28,8 +28,9 @@ import {
 } from "../dashboardComplianceRules";
 import { isHistoricalSourceAction } from "../taskStatus";
 import { todayDateOnly } from "../dateOnly";
-import { ACKNOWLEDGED_STATUS, activeAcknowledgement, activeDismissal, DISMISSED_STATUS } from "../dashboardDismissals";
-import { findingPolicy, findingSubjectKey, isDismissableFinding } from "../dashboardFindingPolicy";
+import { activeAcknowledgement, activeDismissal, activeSnooze, ATTENTION_ONLY_STATUSES, DISMISSED_STATUS } from "../dashboardDismissals";
+import { findingPolicy, findingSubjectKey, isDismissableFinding, type GoverningCopyField } from "../dashboardFindingPolicy";
+import { identifiedEvidence, type EvidenceFacts } from "../governingDocumentEvidence";
 import { financeControlFindingsFor } from "./expenseReports";
 import { directorConsentAssessments } from "./businessEvidence";
 import type { DirectorConsentState } from "../directorConsentRecords";
@@ -426,10 +427,15 @@ export async function summaryPortable(
   const legalFlags = evaluateDashboardComplianceRules(complianceContext, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length);
   // What a flag is about, for its subject key: the directors a per-director
   // rule flags (each director checked on their own through the same rule),
-  // otherwise the flag's text.
+  // the governing-document copy a currentness note is about, otherwise the
+  // flag's text.
   const subjectParts = (flag: DashboardComplianceFlag): string[] => {
+    const policy = findingPolicy(flag.ruleId, flag.level);
+    if (policy.subject === "governingCopy" && policy.evidenceField) {
+      return governingCopySubjectParts(complianceContext.society, policy.evidenceField) ?? [flag.text];
+    }
     const rule = visibleRules.find((candidate) => candidate.id === flag.ruleId);
-    if (!rule || findingPolicy(flag.ruleId).subject !== "directors") return [flag.text];
+    if (!rule || policy.subject !== "directors") return [flag.text];
     const affected = legalDirectors
       .filter((director) => rule.passFail({ ...complianceContext, activeDirectors: [toComplianceDirector(director)] }) !== null)
       .map((director) => `director:${String(director._id)}`);
@@ -457,11 +463,13 @@ export async function summaryPortable(
     // Only recommendations at warn/info may be dismissed; statutory, bylaw and
     // internal-policy findings stay outstanding whatever their level
     // (shared/dashboardFindingPolicy.ts).
-    const policy = findingPolicy(flag.ruleId);
+    const policy = findingPolicy(flag.ruleId, flag.level);
     const dismissable = isDismissableFinding(policy, flag.level);
     const subjectKey = findingSubjectKey(flag.ruleId, subjectParts(flag));
     const dismissal = activeDismissal(remediation, { level: flag.level, dismissable, subjectKey });
     const acknowledgement = activeAcknowledgement(remediation, { subjectKey });
+    // "Remind me later": still listed and counted; only nudges skip it.
+    const snooze = dismissable ? undefined : activeSnooze(remediation, { level: flag.level, subjectKey }, todayKey);
     // A requirement can always get a follow-up owner and due date.
     const needsFollowUpAction = policy.protected && (flag.level === "warn" || flag.level === "err")
       && !flag.remediationActions.some((action) => action.intent === "createComplianceReviewTask" || action.intent === "createPrivacyReviewTask");
@@ -472,13 +480,14 @@ export async function summaryPortable(
       dismissable,
       ...(dismissal ? { dismissal } : {}),
       ...(acknowledgement ? { acknowledgement } : {}),
+      ...(snooze ? { snooze } : {}),
       ...(needsFollowUpAction ? { remediationActions: [...flag.remediationActions, { id: "assign-follow-up", label: "Assign follow-up", intent: "createComplianceReviewTask" }] } : {}),
     };
     if (!remediation) return withPolicy;
     // A dismissal that no longer applies (another level or subject, or a
-    // now-protected rule) and an acknowledgement say nothing about the
-    // workflow; the row then only reports any review task it still holds.
-    const silentStatus = (remediation.status === DISMISSED_STATUS && !dismissal) || remediation.status === ACKNOWLEDGED_STATUS;
+    // now-protected rule), an acknowledgement and a snooze say nothing about
+    // the workflow; the row then only reports any review task it still holds.
+    const silentStatus = (remediation.status === DISMISSED_STATUS && !dismissal) || ATTENTION_ONLY_STATUSES.has(String(remediation.status));
     const task = remediation.status === "open" && remediation.taskId ? openTasksById.get(String(remediation.taskId)) : undefined;
     const assignee = task?.assignee ?? remediation.assignedTo;
     return {
@@ -514,6 +523,19 @@ export async function summaryPortable(
     complianceFlags,
     evidenceChains,
   };
+}
+
+/**
+ * The identity of the governing-document copy on record: the uploaded
+ * document, or the held-elsewhere entry (its kind, reference and when it was
+ * recorded). Replacing the document or recording another external copy gives
+ * the currentness note a new subject. Undefined when no copy is identified.
+ */
+export function governingCopySubjectParts(society: EvidenceFacts | null | undefined, field: GoverningCopyField): string[] | undefined {
+  const evidence = identifiedEvidence(society, field);
+  if (!evidence) return undefined;
+  if (evidence.kind === "document") return [`${field}:document:${evidence.documentId}`];
+  return [`${field}:${evidence.kind}:${evidence.entry.reference.trim()}`, `${field}:recorded:${evidence.entry.recordedAtISO}`];
 }
 
 function personNameKey(name: string) {

@@ -7552,6 +7552,22 @@
     ]
   },
   {
+    "key": "convex:dashboardRemediation:cancelSnooze",
+    "surface": "convex",
+    "name": "dashboardRemediation:cancelSnooze",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dashboardRemediation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:dashboardRemediation:createComplianceReviewTask",
     "surface": "convex",
     "name": "dashboardRemediation:createComplianceReviewTask",
@@ -7607,6 +7623,22 @@
     "key": "convex:dashboardRemediation:restoreItem",
     "surface": "convex",
     "name": "dashboardRemediation:restoreItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dashboardRemediation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:dashboardRemediation:snoozeItem",
+    "surface": "convex",
+    "name": "dashboardRemediation:snoozeItem",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/dashboardRemediation.ts",
@@ -37246,6 +37278,22 @@
     ]
   },
   {
+    "key": "portable:dashboardRemediation:cancelSnooze",
+    "surface": "portable",
+    "name": "dashboardRemediation:cancelSnooze",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:dashboardRemediation:createComplianceReviewTask",
     "surface": "portable",
     "name": "dashboardRemediation:createComplianceReviewTask",
@@ -37301,6 +37349,22 @@
     "key": "portable:dashboardRemediation:restoreItem",
     "surface": "portable",
     "name": "dashboardRemediation:restoreItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:dashboardRemediation:snoozeItem",
+    "surface": "portable",
+    "name": "dashboardRemediation:snoozeItem",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

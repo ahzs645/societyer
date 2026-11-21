@@ -92,6 +92,11 @@ await assert.rejects(() => admin.mutation(api.complianceObligations.dismissDecis
 await admin.mutation(api.complianceObligations.acknowledgeDecision, decisionArgs);
 await admin.mutation(api.complianceObligations.reopenDecision, decisionArgs);
 await admin.mutation(api.dashboardRemediation.createComplianceReviewTask, decisionArgs);
+// "Remind me later" on an obligation requirement needs deadlines:write as well.
+const snoozeArgs = { societyId: seeded.societyId, ruleId: "home:compliance-ca-bc-societies-annual-report:2026-07-31", flagLevel: "warn", flagText: "Annual report", untilISO: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10) };
+await assert.rejects(() => actor("Member").mutation(api.dashboardRemediation.snoozeItem, snoozeArgs), /Permission deadlines:write/);
+assert.equal((await admin.mutation(api.dashboardRemediation.snoozeItem, snoozeArgs)).snoozedUntilISO, snoozeArgs.untilISO);
+assert.deepEqual(await admin.mutation(api.dashboardRemediation.cancelSnooze, { societyId: seeded.societyId, ruleId: snoozeArgs.ruleId }), { cancelled: true });
 const foreignTarget = await test.run(async (ctx) => {
   const societyId = await ctx.db.insert("societies", { name: "Foreign review target", isCharity: false, isMemberFunded: false, updatedAt: 0 });
   return ctx.db.insert("members", { ...writeArgs, societyId });

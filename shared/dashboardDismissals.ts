@@ -15,6 +15,10 @@
  * concerns another director, record or period, shows again. A row dismissed
  * before subject keys were stored no longer hides anything; it is kept as it
  * was.
+ *
+ * A requirement can also be snoozed ("Remind me later"): it stays listed and
+ * in every count, sorts after the unsnoozed items and is left out of
+ * nudges, until the snooze date, a new subject, or a more serious level.
  */
 
 export type DashboardItemLevel = "ok" | "info" | "warn" | "err";
@@ -25,6 +29,15 @@ export const DISMISSED_STATUS = "dismissed";
 
 /** `complianceRemediations.status` for a row an acknowledgement created. */
 export const ACKNOWLEDGED_STATUS = "acknowledged";
+
+/** `complianceRemediations.status` for a row a snooze ("Remind me later") created. */
+export const SNOOZED_STATUS = "snoozed";
+
+/** Statuses that only record attention (an acknowledgement or a snooze), not a workflow. */
+export const ATTENTION_ONLY_STATUSES: ReadonlySet<string> = new Set([ACKNOWLEDGED_STATUS, SNOOZED_STATUS]);
+
+/** The furthest ahead a reminder can be snoozed. */
+export const SNOOZE_MAX_DAYS = 366;
 
 /** The longest dismissal reason kept. */
 export const DISMISSAL_REASON_MAX_LENGTH = 500;
@@ -47,8 +60,21 @@ export type DashboardItemAcknowledgement = {
   note?: string;
 };
 
+/**
+ * A snoozed requirement: its reminders pause until `untilISO` (a calendar
+ * day, YYYY-MM-DD). It stays listed and in every count.
+ */
+export type DashboardItemSnooze = {
+  untilISO: string;
+  snoozedByName?: string;
+};
+
 /** The `complianceRemediations` fields a dismissal or acknowledgement reads. */
 export type DismissalRecord = {
+  snoozedUntilISO?: string;
+  snoozedByName?: string;
+  snoozedSubjectKey?: string;
+  snoozedLevel?: string;
   status?: string;
   flagLevel?: string;
   dismissedAtISO?: string;
@@ -105,6 +131,53 @@ export function activeAcknowledgement(
     ...(record.acknowledgedByName ? { acknowledgedByName: record.acknowledgedByName } : {}),
     ...(record.acknowledgementNote ? { note: record.acknowledgementNote } : {}),
   };
+}
+
+const LEVEL_RANK: Record<string, number> = { ok: 0, info: 1, warn: 2, err: 3 };
+
+/**
+ * The snooze that applies now, or undefined. A snooze ends on its date
+ * (`todayISO` is the calendar day, YYYY-MM-DD), when the finding's subject
+ * changes, or when the finding becomes more serious than it was when snoozed.
+ */
+export function activeSnooze(
+  record: DismissalRecord | null | undefined,
+  item: { level: string; subjectKey?: string },
+  todayISO: string,
+): DashboardItemSnooze | undefined {
+  const until = record?.snoozedUntilISO?.slice(0, 10);
+  if (!until || !item.subjectKey || record?.snoozedSubjectKey !== item.subjectKey) return undefined;
+  if (!(until > todayISO.slice(0, 10))) return undefined;
+  if ((LEVEL_RANK[item.level] ?? 3) > (LEVEL_RANK[record.snoozedLevel ?? ""] ?? 0)) return undefined;
+  return { untilISO: until, ...(record.snoozedByName ? { snoozedByName: record.snoozedByName } : {}) };
+}
+
+/**
+ * The findings that may nudge people (reminders, assistant attention lists):
+ * neither dismissed nor snoozed. Counts and the dashboard lists still include
+ * snoozed findings.
+ */
+export function nudgeableFindings<T extends { dismissal?: unknown; snooze?: unknown }>(items: readonly T[]): T[] {
+  return items.filter((item) => !item.dismissal && !item.snooze);
+}
+
+/** Snoozed findings after the others, each group keeping its order. */
+export function snoozedLast<T extends { snooze?: unknown }>(items: readonly T[]): T[] {
+  return [...items.filter((item) => !item.snooze), ...items.filter((item) => item.snooze)];
+}
+
+/**
+ * A snooze end date the server accepts: a real calendar day after today and
+ * at most SNOOZE_MAX_DAYS ahead. Returns it as YYYY-MM-DD.
+ */
+export function normalizeSnoozeUntil(value: unknown, todayISO: string): string {
+  const text = typeof value === "string" ? value.trim().slice(0, 10) : "";
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(text) ? Date.parse(`${text}T00:00:00Z`) : Number.NaN;
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 10) !== text) throw new Error("Choose a date to be reminded on.");
+  const today = Date.parse(`${todayISO.slice(0, 10)}T00:00:00Z`);
+  if (parsed <= today) throw new Error("Choose a date after today.");
+  if (parsed > today + SNOOZE_MAX_DAYS * 86_400_000) throw new Error("Choose a date within a year.");
+  return text;
 }
 
 /** Trimmed, length-capped reason, or undefined when blank. */

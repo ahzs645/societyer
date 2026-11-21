@@ -10,6 +10,8 @@ import {
   dismissItemPortable,
   acknowledgeItemPortable,
   restoreItemPortable,
+  snoozeItemPortable,
+  cancelSnoozePortable,
 } from "../shared/functions/dashboardRemediation";
 import { toPortableMutationCtx } from "./lib/portable";
 
@@ -84,4 +86,24 @@ export const restoreItem = authorizedMutation("dashboardRemediation:restoreItem"
   args: { societyId: v.id("societies"), ruleId: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => restoreItemPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// "Remind me later" for a requirement: it stays listed and counted; only
+// nudges skip it until the date, a new subject or a more serious level.
+export const snoozeItem = authorizedMutation("dashboardRemediation:snoozeItem", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    ruleId: v.string(),
+    flagLevel: v.optional(v.string()),
+    flagText: v.optional(v.string()),
+    untilISO: v.string(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => snoozeItemPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const cancelSnooze = authorizedMutation("dashboardRemediation:cancelSnooze", mutation)({
+  args: { societyId: v.id("societies"), ruleId: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => cancelSnoozePortable(await toPortableMutationCtx(ctx), args),
 });

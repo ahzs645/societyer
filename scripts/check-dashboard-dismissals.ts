@@ -9,7 +9,17 @@
 // dismissed before a rule became protected are ignored and kept as they were.
 import assert from "node:assert/strict";
 import type { PortableDoc, PortableMutationCtx } from "../shared/portable/ctx";
-import { activeAcknowledgement, activeDismissal, isBindingSeverity, isRecommendationLevel, normalizeDismissalReason } from "../shared/dashboardDismissals";
+import {
+  activeAcknowledgement,
+  activeDismissal,
+  activeSnooze,
+  isBindingSeverity,
+  isRecommendationLevel,
+  normalizeDismissalReason,
+  normalizeSnoozeUntil,
+  nudgeableFindings,
+  snoozedLast,
+} from "../shared/dashboardDismissals";
 import {
   continuityFindingPolicy,
   decisionWaivesFinding,
@@ -17,7 +27,11 @@ import {
   findingSubjectKey,
   isClassifiedFinding,
   isDismissableFinding,
+  isProtectedAtEveryLevel,
+  OBLIGATION_RECOMMENDATION_RULE_IDS,
+  obligationRuleId,
 } from "../shared/dashboardFindingPolicy";
+import { todayDateOnly } from "../shared/dateOnly";
 import { bcSocietiesDashboardComplianceRulePack, type DashboardComplianceFlag } from "../shared/dashboardComplianceRules";
 import { LEGAL_GOVERNANCE_PROFILES } from "../shared/legalGovernanceProfiles";
 import { PRIVACY_LAWS } from "../shared/privacyRuleProfiles";
@@ -51,6 +65,23 @@ import type { ContinuityCheck } from "../src/features/gaps/ContinuityChecksCard"
     assert.equal(isDismissableFinding(policy, "info"), false, `${ruleId} is not dismissable at info`);
   }
   assert.equal(findingPolicy("LEGAL-bc_company-DIRECTOR-CONSENT").subject, "directors");
+  // Level-dependent basis: a governing document not identified (warn) is
+  // statutory; the "on record, currentness not verified" note (info) is a
+  // recommendation held to the identified copy. No level = the stricter basis.
+  for (const [ruleId, field] of [["BC-SOC-CONSTITUTION-EVIDENCE", "constitutionDocId"], ["BC-SOC-BYLAWS-EVIDENCE", "bylawsDocId"]] as const) {
+    assert.equal(findingPolicy(ruleId, "warn").basis, "statutory");
+    assert.ok(!isDismissableFinding(findingPolicy(ruleId, "warn"), "warn"), `${ruleId} at warn is protected`);
+    const note = findingPolicy(ruleId, "info");
+    assert.equal(note.basis, "recommendation", `${ruleId} at info is a recommendation`);
+    assert.ok(isDismissableFinding(note, "info"));
+    assert.equal(note.subject, "governingCopy");
+    assert.equal(note.evidenceField, field);
+    assert.ok(!isProtectedAtEveryLevel(ruleId), `${ruleId} can be dismissed at some level`);
+  }
+  assert.ok(findingPolicy("PIPA-POLICY-DOCUMENTED", "info").protected, "the privacy note without a review stays a requirement");
+  assert.ok(isProtectedAtEveryLevel("PIPA-POLICY-DOCUMENTED") && isProtectedAtEveryLevel("SOMETHING-NEW"));
+  // The corporate governing-documents rule has no info-level note; it stays statutory.
+  assert.ok(findingPolicy("LEGAL-cbca-GOVERNING-DOCUMENTS", "info").protected);
   for (const ruleId of ["PRIVACY-APPLICABILITY", "BYLAW-RULE-SET-CONFIGURED", "FINANCE-CONTROL-SINGLE-APPROVAL", "CONTINUITY-MINUTES-APPROVED"]) {
     const policy = findingPolicy(ruleId);
     assert.equal(policy.basis, "recommendation", `${ruleId} is a recommendation`);
@@ -74,6 +105,26 @@ import type { ContinuityCheck } from "../src/features/gaps/ContinuityChecksCard"
   assert.equal(decisionWaivesFinding(occurrence, { status: "dismissed" }), false, "a dismissed statutory occurrence still counts");
   assert.equal(decisionWaivesFinding(occurrence, { status: "acknowledged" }), false);
   assert.equal(decisionWaivesFinding("CONTINUITY-MINUTES-APPROVED", { status: "dismissed" }), true);
+  // Obligation occurrences: good-practice reviews are recommendations per
+  // occurrence; filings, deadlines and anything citing a section are statutory.
+  for (const ruleId of OBLIGATION_RECOMMENDATION_RULE_IDS) {
+    for (const key of [`home:${ruleId}:2026-03-31`, `registration:reg-on:${ruleId}:2026-03-31`, ruleId]) {
+      assert.equal(obligationRuleId(key), ruleId);
+      assert.equal(findingPolicy(key).basis, "recommendation", `${key} is a recommendation`);
+    }
+    assert.equal(decisionWaivesFinding(`home:${ruleId}:2026-03-31`, { status: "dismissed" }), true, `${ruleId}: a dismissed occurrence leaves the counts`);
+  }
+  for (const key of [
+    "home:compliance-ca-fed-cbca-annual-return-window:2026-06-30",
+    "home:compliance-ca-bc-company-records-review:2026-03-31",
+    "home:compliance-ca-fed-cbca-isc-annual-review:2026-03-31",
+    "home:compliance-ca-bc-societies-agm-planning:2026-12-31",
+    "registration:reg-on:compliance-ca-on-extra-provincial-initial-return:2026-03-03",
+    "home:compliance-something-new:2026-01-01",
+  ]) {
+    assert.equal(findingPolicy(key).basis, "statutory", `${key} is statutory`);
+    assert.equal(decisionWaivesFinding(key, { status: "dismissed" }), false);
+  }
 
   // Subject keys: order-free, versioned, and different for different records.
   assert.equal(findingSubjectKey("BC-SOC-DIRECTOR-CONSENT", ["director:a", "director:b"]), findingSubjectKey("BC-SOC-DIRECTOR-CONSENT", ["director:b", "director:a"]));
@@ -83,6 +134,20 @@ import type { ContinuityCheck } from "../src/features/gaps/ContinuityChecksCard"
   assert.ok(isRecommendationLevel("warn") && isRecommendationLevel("info"));
   assert.ok(!isRecommendationLevel("err") && !isRecommendationLevel("ok"));
   assert.ok(isBindingSeverity("statutory") && isBindingSeverity("bylaw") && !isBindingSeverity("practice") && !isBindingSeverity(undefined));
+  // Snoozes end on their date, with a new subject, or when the level rises.
+  const snoozeRow = { snoozedUntilISO: "2026-12-05", snoozedByName: "Mina Patel", snoozedSubjectKey: "K1", snoozedLevel: "warn" };
+  assert.deepEqual(activeSnooze(snoozeRow, { level: "warn", subjectKey: "K1" }, "2026-11-21"), { untilISO: "2026-12-05", snoozedByName: "Mina Patel" });
+  assert.ok(activeSnooze(snoozeRow, { level: "info", subjectKey: "K1" }, "2026-11-21"), "a finding that eases keeps its snooze");
+  assert.equal(activeSnooze(snoozeRow, { level: "warn", subjectKey: "K1" }, "2026-12-05"), undefined, "ends on its date");
+  assert.equal(activeSnooze(snoozeRow, { level: "warn", subjectKey: "K2" }, "2026-11-21"), undefined, "ends with a new subject");
+  assert.equal(activeSnooze(snoozeRow, { level: "err", subjectKey: "K1" }, "2026-11-21"), undefined, "ends when it escalates");
+  assert.equal(activeSnooze({ ...snoozeRow, snoozedLevel: undefined }, { level: "info", subjectKey: "K1" }, "2026-11-21"), undefined, "a snooze without a level holds nothing");
+  assert.throws(() => normalizeSnoozeUntil("2026-11-21", "2026-11-21"), /after today/);
+  assert.throws(() => normalizeSnoozeUntil("2026-02-30", "2026-01-01"), /date/);
+  assert.throws(() => normalizeSnoozeUntil("2028-01-01", "2026-11-21"), /within a year/);
+  assert.equal(normalizeSnoozeUntil("2026-12-21", "2026-11-21"), "2026-12-21");
+  assert.deepEqual(snoozedLast([{ id: 1, snooze: {} }, { id: 2 }, { id: 3, snooze: {} }, { id: 4 }]).map((item) => item.id), [2, 4, 1, 3]);
+
   const row = { status: "dismissed", flagLevel: "warn", dismissedAtISO: "2026-11-20T10:00:00.000Z", dismissedByName: "Mina Patel", dismissalReason: "Handled offline", dismissedSubjectKey: "K1" };
   assert.deepEqual(activeDismissal(row, { level: "warn", dismissable: true, subjectKey: "K1" }), { level: "warn", dismissedAtISO: row.dismissedAtISO, dismissedByName: "Mina Patel", reason: "Handled offline" });
   assert.equal(activeDismissal(row, { level: "warn", dismissable: true, subjectKey: "K2" }), undefined, "a new subject is not hidden by an old dismissal");
@@ -129,7 +194,7 @@ const remediationRows = async () => (await db.query("complianceRemediations").co
 const demoFlags = await flags();
 const demoChecks = await checks();
 for (const flag of demoFlags) {
-  const policy = findingPolicy(flag.ruleId);
+  const policy = findingPolicy(flag.ruleId, flag.level);
   assert.equal(flag.requirementBasis, policy.basis, `${flag.ruleId}: basis surfaced`);
   assert.equal(flag.dismissable, isDismissableFinding(policy, flag.level), `${flag.ruleId}: only recommendations at warn/info are dismissable`);
   assert.ok(flag.subjectKey?.startsWith(`${flag.ruleId}@v`), `${flag.ruleId}: has a subject key`);
@@ -340,6 +405,244 @@ await remediation.restoreItemPortable(ctx, { societyId: S, ruleId: check.id });
   assert.deepEqual(attention([consentFlag]), ["flag:BC-SOC-DIRECTOR-CONSENT"], "phone: consent listed once, as the compliance item");
   assert.deepEqual(attention([hiddenFlag]), ["continuity:CONTINUITY-DIRECTOR-CONSENT"], "phone: consent never disappears from both");
   assert.deepEqual(attention(undefined), ["continuity:CONTINUITY-DIRECTOR-CONSENT"], "phone: with Compliance hidden, the continuity check shows consent");
+}
+
+// ---- the obligation recommendations are good-practice reviews in the rule packs
+{
+  const { loadComplianceRulePacks } = await import("../src/lib/compliance/registry");
+  const rules = new Map(loadComplianceRulePacks().flatMap((pack) => pack.rules.map((rule) => [rule.ruleId, rule] as const)));
+  for (const ruleId of OBLIGATION_RECOMMENDATION_RULE_IDS) {
+    const rule = rules.get(ruleId);
+    assert.ok(rule, `${ruleId} is in a rule pack`);
+    assert.equal(rule.creates?.filingKind, undefined, `${ruleId} files nothing`);
+    assert.doesNotMatch(rule.authority.displayCitation, /\bss?\.\s*\d/, `${ruleId} cites guidance, not a section`);
+  }
+}
+
+const societyEvidence = async () => (await db.get(S)) as PortableDoc & Record<string, unknown>;
+const originalSociety = await societyEvidence();
+const restoreSocietyEvidence = () => db.patch(S, {
+  constitutionDocId: originalSociety.constitutionDocId,
+  bylawsDocId: originalSociety.bylawsDocId,
+  governingDocumentEvidence: originalSociety.governingDocumentEvidence,
+  governingDocumentVerifications: originalSociety.governingDocumentVerifications,
+  privacyProgramStatus: originalSociety.privacyProgramStatus,
+  privacyProgramReview: originalSociety.privacyProgramReview,
+});
+
+// ---- currentness notes are dismissable and come back when the copy changes
+{
+  const ruleId = "BC-SOC-CONSTITUTION-EVIDENCE";
+  assert.ok(originalSociety.constitutionDocId, "the demo has an uploaded constitution");
+  await db.patch(S, { governingDocumentVerifications: [] });
+  const note = (await flagById(ruleId))!;
+  assert.equal(note.level, "info", "an identified, unverified copy is an info note");
+  assert.equal(note.requirementBasis, "recommendation");
+  assert.ok(note.dismissable, "the currentness note can be dismissed");
+  await remediation.dismissItemPortable(ctx, { societyId: S, ruleId, flagLevel: "info", reason: "Checked against the registry" });
+  assert.ok((await flagById(ruleId))!.dismissal, "dismissed while the same copy is on record");
+  const storedNote = (await remediationRows()).find((row) => row.ruleId === ruleId)!;
+  assert.equal(storedNote.dismissedSubjectKey, note.subjectKey);
+
+  await db.patch(S, { constitutionDocId: "doc_replacement_constitution" });
+  const replaced = (await flagById(ruleId))!;
+  assert.equal(replaced.level, "info");
+  assert.notEqual(replaced.subjectKey, note.subjectKey, "a replaced document is a new subject");
+  assert.equal(replaced.dismissal, undefined, "replacing the document brings the note back");
+  await db.patch(S, { constitutionDocId: originalSociety.constitutionDocId });
+  assert.ok((await flagById(ruleId))!.dismissal, "the original copy is still dismissed");
+
+  // A copy held elsewhere: recording a different external copy brings it back.
+  const external = { field: "constitutionDocId", kind: "external", reference: "BC Registry filing 1234", recordedAtISO: "2026-11-01T10:00:00.000Z", recordedByName: "Mina Patel" };
+  await db.patch(S, { constitutionDocId: undefined, governingDocumentEvidence: [external] });
+  const held = (await flagById(ruleId))!;
+  assert.equal(held.level, "info");
+  assert.equal(held.dismissal, undefined, "a held-elsewhere copy is another copy");
+  await remediation.dismissItemPortable(ctx, { societyId: S, ruleId, flagLevel: "info" });
+  assert.ok((await flagById(ruleId))!.dismissal);
+  await db.patch(S, { governingDocumentEvidence: [{ ...external, reference: "BC Registry filing 5678", recordedAtISO: "2026-11-20T10:00:00.000Z" }] });
+  assert.equal((await flagById(ruleId))!.dismissal, undefined, "recording a different external copy brings the note back");
+  await db.patch(S, { governingDocumentEvidence: [{ ...external, recordedAtISO: "2026-11-21T10:00:00.000Z" }] });
+  assert.equal((await flagById(ruleId))!.dismissal, undefined, "re-recording the entry is a new copy too");
+
+  // No copy identified: statutory, refused whatever the client sends, and counted.
+  await db.patch(S, { governingDocumentEvidence: [] });
+  const missing = (await flagById(ruleId))!;
+  assert.equal(missing.level, "warn");
+  assert.equal(missing.requirementBasis, "statutory");
+  assert.equal(missing.dismissable, false);
+  assert.equal(missing.dismissal, undefined, "the old info dismissal hides nothing at warn");
+  for (const flagLevel of ["warn", undefined]) {
+    await assert.rejects(remediation.dismissItemPortable(ctx, { societyId: S, ruleId, flagLevel }), /requirement/, "a governing document not identified cannot be dismissed");
+  }
+  await assert.rejects(remediation.dismissItemPortable(ctx, { societyId: S, ruleId, flagLevel: "info" }), /changed/, "a stale info level is refused");
+  await assert.rejects(
+    obligations.dismissDecisionPortable(ctx, { societyId: S, ruleId, flagLevel: "info", flagText: "x", evidenceRequired: [] }),
+    /requirement/,
+    "the obligations path applies the rule-wide (stricter) basis",
+  );
+  await remediation.restoreItemPortable(ctx, { societyId: S, ruleId });
+  await restoreSocietyEvidence();
+  assert.equal((await flagById(ruleId)), undefined, "a verified copy raises nothing");
+}
+
+// ---- the privacy note without a review stays a requirement; its fix is Record review
+{
+  const ruleId = "PIPA-POLICY-DOCUMENTED";
+  await db.patch(S, { privacyProgramStatus: "Documented", privacyProgramReview: undefined });
+  const note = (await flagById(ruleId))!;
+  assert.equal(note.level, "info");
+  assert.equal(note.requirementBasis, "statutory");
+  assert.equal(note.dismissable, false);
+  assert.equal(note.remediationActions[0]?.label, "Record review", "Record review is the row's action");
+  assert.ok(note.remediationActions[0]?.to?.includes("record=privacy-review"), "and opens the review form");
+  assert.ok(!note.remediationActions.some((action) => action.intent === "createPipaPolicyDraft"), "no policy template for a program marked documented");
+  assert.ok(note.remediationActions.some((action) => action.intent === "createPrivacyReviewTask"), "a follow-up can still be assigned");
+  for (const flagLevel of ["info", undefined]) {
+    await assert.rejects(remediation.dismissItemPortable(ctx, { societyId: S, ruleId, flagLevel }), /requirement/, "the privacy note refuses dismissal");
+  }
+  await remediation.acknowledgeItemPortable(ctx, { societyId: S, ruleId, flagLevel: "info" });
+  assert.ok((await flagById(ruleId))!.acknowledgement, "it can be acknowledged");
+  await remediation.restoreItemPortable(ctx, { societyId: S, ruleId });
+  assert.equal((await remediationRows()).some((row) => row.ruleId === ruleId), false, "withdrawing removes the row it made");
+  await restoreSocietyEvidence();
+}
+
+// ---- obligations: recommendation occurrences dismiss and restore; the next one shows
+{
+  const occurrenceKey = (date: string) => `home:compliance-ca-fed-cbca-corporation-key-custody:${date}`;
+  const thisYear = occurrenceKey("2026-03-31");
+  const nextYear = occurrenceKey("2027-03-31");
+  const payload = (ruleId: string) => ({ societyId: S, ruleId, flagLevel: "warn", flagText: "Corporation key custody review", evidenceRequired: [] });
+  const decisionFor = async (ruleId: string) => (await remediationRows()).find((row) => row.ruleId === ruleId);
+  await obligations.dismissDecisionPortable(ctx, payload(thisYear));
+  assert.equal((await decisionFor(thisYear))?.status, "dismissed");
+  assert.ok(decisionWaivesFinding(thisYear, await decisionFor(thisYear)), "a dismissed recommendation occurrence leaves the counts");
+  assert.equal(await decisionFor(nextYear), undefined, "the next occurrence has no decision");
+  assert.equal(decisionWaivesFinding(nextYear, await decisionFor(nextYear)), false, "so the next period still counts");
+  await obligations.reopenDecisionPortable(ctx, payload(thisYear));
+  assert.equal(decisionWaivesFinding(thisYear, await decisionFor(thisYear)), false, "restoring puts it back in the counts");
+  const statutory = "home:compliance-ca-fed-cbca-annual-return-window:2026-06-30";
+  await assert.rejects(obligations.dismissDecisionPortable(ctx, payload(statutory)), /requirement/, "a statutory filing occurrence is refused");
+  await assert.rejects(obligations.dismissDecisionPortable(ctx, payload("home:compliance-ca-bc-company-records-review:2026-03-31")), /requirement/, "a review citing a section is refused");
+  assert.equal(await decisionFor(statutory), undefined);
+}
+
+// ---- snooze: still listed and counted, out of nudges; ends by date, subject or escalation
+{
+  const inDays = (days: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return todayDateOnly(date);
+  };
+  const ruleId = "BC-SOC-DIRECTOR-CONSENT";
+  const before = await flags();
+  const consentNow = before.find((row) => row.ruleId === ruleId)!;
+  assert.ok(consentNow.level === "warn" && !consentNow.dismissable && !consentNow.snooze);
+  await assert.rejects(
+    remediation.snoozeItemPortable(ctx, { societyId: S, ruleId: "PRIVACY-APPLICABILITY", flagLevel: "warn", untilISO: inDays(7) }),
+    /recommendation/,
+    "a recommendation is dismissed, not snoozed",
+  );
+  await assert.rejects(remediation.snoozeItemPortable(ctx, { societyId: S, ruleId, flagLevel: "warn", untilISO: inDays(0) }), /after today/);
+  await assert.rejects(remediation.snoozeItemPortable(ctx, { societyId: S, ruleId, flagLevel: "err", untilISO: inDays(7) }), /changed/, "a stale level is refused");
+  await remediation.snoozeItemPortable(ctx, { societyId: S, ruleId, flagLevel: "warn", untilISO: inDays(7) });
+  const snoozed = (await flagById(ruleId))!;
+  assert.deepEqual(snoozed.snooze, { untilISO: inDays(7), snoozedByName: "Mina Patel" });
+  assert.equal(snoozed.dismissal, undefined, "a snooze hides nothing");
+  assert.equal(snoozed.remediationStatus, "open", "the row keeps its review workflow");
+  assert.equal(outstanding(await flags()), outstanding(before), "a snoozed requirement stays in the counts");
+  assert.ok(!nudgeableFindings(await flags()).some((row) => row.ruleId === ruleId), "and is left out of nudges");
+  assert.ok(nudgeableFindings(await flags()).some((row) => row.ruleId === "PRIVACY-APPLICABILITY"), "other findings still nudge");
+  assert.ok((await db.query("activity").collect()).some((row) => row.action === "dashboard-item-snoozed"));
+
+  const stored = (await remediationRows()).find((row) => row.ruleId === ruleId)!;
+  assert.equal(stored.snoozedSubjectKey, consentNow.subjectKey);
+  assert.equal(stored.snoozedLevel, "warn");
+  assert.equal(stored.snoozedByUserId, owner._id);
+  await db.patch(stored._id, { snoozedUntilISO: inDays(0) });
+  assert.equal((await flagById(ruleId))!.snooze, undefined, "the snooze ends on its date");
+  await db.patch(stored._id, { snoozedUntilISO: inDays(7), snoozedLevel: "info" });
+  assert.equal((await flagById(ruleId))!.snooze, undefined, "a finding more serious than when snoozed reminds again");
+  await db.patch(stored._id, { snoozedLevel: "warn", snoozedSubjectKey: "BC-SOC-DIRECTOR-CONSENT@v1:00000000" });
+  assert.equal((await flagById(ruleId))!.snooze, undefined, "a snooze for other directors does not apply");
+  await db.patch(stored._id, { snoozedSubjectKey: consentNow.subjectKey });
+  assert.ok((await flagById(ruleId))!.snooze);
+  assert.deepEqual(await remediation.cancelSnoozePortable(ctx, { societyId: S, ruleId }), { cancelled: true });
+  const cancelled = (await remediationRows()).find((row) => row.ruleId === ruleId)!;
+  assert.equal(cancelled.snoozedUntilISO, undefined);
+  assert.equal(cancelled.status, "open", "cancelling keeps the review workflow");
+  assert.deepEqual(await remediation.cancelSnoozePortable(ctx, { societyId: S, ruleId }), { cancelled: false });
+
+  // A continuity requirement: a row made by a snooze, kept while acknowledged, removed when both end.
+  const checkId = "CONTINUITY-AGM-THIS-YEAR";
+  const agm = (await checks()).find((row) => row.id === checkId)!;
+  assert.ok(agm && !agm.dismissable && agm.level === "warn");
+  await remediation.snoozeItemPortable(ctx, { societyId: S, ruleId: checkId, flagLevel: agm.level, untilISO: inDays(30) });
+  const agmSnoozed = (await checks()).find((row) => row.id === checkId)!;
+  assert.equal(agmSnoozed.snooze?.untilISO, inDays(30));
+  assert.equal(agmSnoozed.dismissal, undefined);
+  assert.equal((await remediationRows()).find((row) => row.ruleId === checkId)?.status, "snoozed");
+  await remediation.acknowledgeItemPortable(ctx, { societyId: S, ruleId: checkId, flagLevel: agm.level });
+  await remediation.restoreItemPortable(ctx, { societyId: S, ruleId: checkId });
+  assert.equal((await remediationRows()).find((row) => row.ruleId === checkId)?.status, "snoozed", "withdrawing the acknowledgement keeps the snooze");
+  assert.ok((await checks()).find((row) => row.id === checkId)!.snooze);
+  await remediation.cancelSnoozePortable(ctx, { societyId: S, ruleId: checkId });
+  assert.equal((await remediationRows()).some((row) => row.ruleId === checkId), false, "a row only the snooze held is removed");
+
+  // Phone list: the snoozed item stays listed, after the others of its severity.
+  {
+    const { buildAttentionItems } = await import("../src/features/dashboard/NeedsAttentionCard");
+    const consentFlag = (await flagById(ruleId))!;
+    const privacy = (await flagById("PRIVACY-APPLICABILITY"))!;
+    const list = (rows: DashboardComplianceFlag[]) => buildAttentionItems({
+      flags: rows, todayISO: inDays(0), filingLabel: (kind) => kind, canOpen: () => true, flagLink: () => undefined, flagActions: () => null,
+    });
+    const snoozedFlag = { ...consentFlag, snooze: { untilISO: inDays(7) } };
+    const items = list([snoozedFlag, { ...privacy, dismissal: undefined }]);
+    assert.deepEqual(items.map((item) => item.key), [`flag:${privacy.ruleId}`, `flag:${ruleId}`], "snoozed after the others");
+    assert.match(items[1].snoozedLabel ?? "", /^Snoozed until /);
+  }
+
+  // Obligation requirements can be snoozed too; recommendations cannot.
+  const occurrence = "home:compliance-ca-bc-societies-annual-report:2026-07-31";
+  await remediation.snoozeItemPortable(ctx, { societyId: S, ruleId: occurrence, flagLevel: "info", flagText: "Annual report", untilISO: inDays(14) });
+  const decision = (await remediationRows()).find((row) => row.ruleId === occurrence)!;
+  assert.ok(activeSnooze(decision, { level: "info", subjectKey: occurrence }, inDays(0)), "snoozed while upcoming");
+  assert.equal(activeSnooze(decision, { level: "warn", subjectKey: occurrence }, inDays(0)), undefined, "reminds again once it is past its date");
+  assert.equal(decisionWaivesFinding(occurrence, decision), false, "a snoozed occurrence stays in the counts");
+  await assert.rejects(
+    remediation.snoozeItemPortable(ctx, { societyId: S, ruleId: "home:compliance-ca-fed-cbca-corporation-key-custody:2026-03-31", flagLevel: "warn", untilISO: inDays(7) }),
+    /recommendation/,
+  );
+  await remediation.cancelSnoozePortable(ctx, { societyId: S, ruleId: occurrence });
+}
+
+// ---- Assign follow-up on an open task reassigns it; a closed task gets a new one
+{
+  const ruleId = "BC-SOC-DIRECTOR-CONSENT";
+  const current = (await flagById(ruleId))!;
+  const existingTaskId = String(current.remediationTaskId);
+  const args = { societyId: S, ruleId, flagLevel: current.level, flagText: current.text, evidenceRequired: current.evidenceRequired };
+  const kept = await remediation.createComplianceReviewTaskPortable(ctx, { ...args, assignee: "Jordan Lee", dueDate: "2026-12-15" });
+  assert.equal(kept.taskId, existingTaskId);
+  assert.ok(kept.reused && !kept.reassigned, "the same owner and date change nothing");
+  const reassigned = await remediation.createComplianceReviewTaskPortable(ctx, { ...args, assignee: "Priya Shah", dueDate: "2027-01-10" });
+  assert.equal(reassigned.taskId, existingTaskId, "the open task is updated, not duplicated");
+  assert.ok(reassigned.reused && reassigned.reassigned);
+  const task = (await db.get(existingTaskId)) as PortableDoc & Record<string, unknown>;
+  assert.equal(task.assignee, "Priya Shah");
+  assert.equal(task.dueDate, "2027-01-10");
+  assert.deepEqual((await flagById(ruleId))!.followUp, { assignee: "Priya Shah", dueDate: "2027-01-10" });
+  assert.ok((await db.query("activity").collect()).some((row) => row.action === "follow-up-reassigned" && row.summary === "Follow-up reassigned to Priya Shah, due 2027-01-10"));
+  const tasksFor = async () => (await db.query("tasks").collect()).filter((row) => row.eventId === `compliance:${ruleId}`);
+  assert.equal((await tasksFor()).length, 1);
+  await db.patch(existingTaskId, { status: "Done" });
+  const fresh = await remediation.createComplianceReviewTaskPortable(ctx, { ...args, assignee: "Sam Ortiz" });
+  assert.notEqual(fresh.taskId, existingTaskId, "a closed task is left as history");
+  assert.ok(!fresh.reused);
+  assert.equal((await tasksFor()).length, 2);
+  assert.deepEqual((await flagById(ruleId))!.followUp, { assignee: "Sam Ortiz" });
 }
 
 console.log(`Dashboard dismissals: ${demoFlags.filter((row) => row.dismissable).length} of ${demoFlags.length} demo flags and ${demoChecks.filter((row) => row.dismissable).length} of ${demoChecks.length} continuity checks are dismissable; requirements refuse dismissal on both paths.`);

@@ -293,7 +293,7 @@ Every unique function found in the 978 call expressions is listed below. `†` m
 | courtOrders | `create`, `list`, `remove`, `update` |
 | customFields | `clearValue`, `createDefinition`, `deleteDefinition`, `listDefinitions`, `listValues`, `setValue`, `updateDefinition` |
 | dashboard | `navCounts`, `summary` |
-| dashboardRemediation | `acknowledgeItem`, `createComplianceReviewTask`, `createPrivacyReviewTask`, `dismissItem`, `markMemberDataAccessReviewed`, `markPrivacyProgramReviewed` (retired; use `society:recordPrivacyReview`), `restoreItem` |
+| dashboardRemediation | `acknowledgeItem`, `cancelSnooze`, `createComplianceReviewTask`, `createPrivacyReviewTask`, `dismissItem`, `markMemberDataAccessReviewed`, `markPrivacyProgramReviewed` (retired; use `society:recordPrivacyReview`), `restoreItem`, `snoozeItem` |
 | deadlines | `create`, `list`, `remove`, `setStatus`, `update` |
 | directors | `create`, `list`, `remove`, `update` |
 | dividends | `create`, `list`, `remove`, `summary` |

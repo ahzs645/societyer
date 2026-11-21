@@ -13,9 +13,16 @@
  *   recommendation   good practice the workspace may decline
  *
  * Only recommendations can be dismissed. Everything else stays outstanding
- * until the evidence resolves it; people can acknowledge it or assign a
- * follow-up, and both leave it on the dashboard and in every count. A rule id
- * this module does not know is treated as a requirement (fail closed).
+ * until the evidence resolves it; people can acknowledge it, assign a
+ * follow-up or snooze its reminders, and all three leave it on the dashboard
+ * and in every count. A rule id this module does not know is treated as a
+ * requirement (fail closed).
+ *
+ * A few rules rest on a different basis at a different level: the
+ * constitution and bylaws checks are statutory while no copy is identified
+ * ("warn"), but the "on record, currentness not verified" note ("info") is a
+ * recommendation. `findingPolicy(ruleId, level)` applies those; without a
+ * level the rule-wide (stricter) basis applies.
  *
  * The same policy is applied by the dashboard reads (shared/functions/
  * dashboard.ts, continuity.ts), the dismiss/acknowledge mutations
@@ -36,6 +43,17 @@ export const REQUIREMENT_BASIS_LABEL: Record<RequirementBasis, string> = {
   recommendation: "Recommendation",
 };
 
+/**
+ * How the dashboard computes a finding's subject: per affected director, from
+ * its text, or from the identity of the governing-document copy on record
+ * (the document id, or the held-elsewhere entry's reference and when it was
+ * recorded), so replacing the copy brings a dismissed note back.
+ */
+export type FindingSubject = "directors" | "text" | "governingCopy";
+
+/** The society field a `governingCopy` subject reads (shared/governingDocumentEvidence.ts). */
+export type GoverningCopyField = "constitutionDocId" | "bylawsDocId";
+
 export type FindingPolicy = {
   /** Undefined for a rule id this module does not classify (treated as a requirement). */
   basis?: RequirementBasis;
@@ -43,11 +61,17 @@ export type FindingPolicy = {
   version: number;
   /** True when the finding stays outstanding until resolved (never dismissable). */
   protected: boolean;
-  /** How the dashboard computes the finding's subject: per affected director, or from its text. */
-  subject: "directors" | "text";
+  subject: FindingSubject;
+  /** Set for a `governingCopy` subject. */
+  evidenceField?: GoverningCopyField;
 };
 
-type PolicyEntry = { basis: RequirementBasis; version?: number; subject?: "directors" | "text" };
+type LevelEntry = { basis: RequirementBasis; subject?: FindingSubject; evidenceField?: GoverningCopyField };
+type PolicyEntry = LevelEntry & {
+  version?: number;
+  /** A different basis (and subject) at one level; every other level uses the entry itself. */
+  byLevel?: Partial<Record<"info" | "warn" | "err", LevelEntry>>;
+};
 
 /**
  * Dashboard compliance flags (shared/dashboardComplianceRules.ts), finance
@@ -66,9 +90,17 @@ const EXACT: Record<string, PolicyEntry> = {
   // Societies Act s.20 records (register of members) and PIPA.
   "MEMBER-DATA-ACCESS-STATUS": { basis: "statutory" },
   "MEMBER-DATA-GAP-MEMO": { basis: "statutory" },
-  // Societies Act s.20: constitution and bylaws are records the society keeps.
-  "BC-SOC-CONSTITUTION-EVIDENCE": { basis: "statutory" },
-  "BC-SOC-BYLAWS-EVIDENCE": { basis: "statutory" },
+  // Societies Act s.20: constitution and bylaws are records the society keeps,
+  // so "not identified" (warn) is statutory. Once a copy is identified, the
+  // "currentness not verified" note (info) is good practice, held to that copy.
+  "BC-SOC-CONSTITUTION-EVIDENCE": {
+    basis: "statutory",
+    byLevel: { info: { basis: "recommendation", subject: "governingCopy", evidenceField: "constitutionDocId" } },
+  },
+  "BC-SOC-BYLAWS-EVIDENCE": {
+    basis: "statutory",
+    byLevel: { info: { basis: "recommendation", subject: "governingCopy", evidenceField: "bylawsDocId" } },
+  },
   // Configuring Societyer's bylaw rule set: the bylaws themselves still apply.
   "BYLAW-RULE-SET-CONFIGURED": { basis: "recommendation" },
   // Which privacy law applies is an assessment; the duties it finds are separate rules.
@@ -99,26 +131,72 @@ const PATTERNS: { pattern: RegExp; entry: PolicyEntry }[] = [
   { pattern: /^LEGAL-[a-z0-9_]+-GOVERNING-DOCUMENTS$/i, entry: { basis: "statutory" } },
   { pattern: /^PRIVACY-[a-z0-9_]+-OFFICER$/i, entry: { basis: "statutory" } },
   { pattern: /^PRIVACY-[a-z0-9_]+-POLICY$/i, entry: { basis: "statutory" } },
-  // Compliance-obligation occurrences ("<context>:<ruleId>:<due date>") from
-  // the statute-based rule packs in src/lib/compliance/rulePacks.
-  { pattern: /^[^:]+:compliance-[a-z0-9-]+:\d{4}-\d{2}-\d{2}$/, entry: { basis: "statutory", subject: "text" } },
-  { pattern: /^compliance-[a-z0-9-]+$/, entry: { basis: "statutory", subject: "text" } },
 ];
 
-function entryFor(ruleId: string): PolicyEntry | undefined {
-  return EXACT[ruleId] ?? PATTERNS.find(({ pattern }) => pattern.test(ruleId))?.entry;
+/**
+ * Compliance-obligation rules (src/lib/compliance/rulePacks) that are
+ * good-practice reviews: the rule cites guidance rather than a section that
+ * requires the review, and nothing is filed. Each occurrence can be dismissed
+ * on its own; the next period's occurrence shows again. Every other
+ * obligation rule (filings, statutory deadlines, anything citing a section)
+ * is statutory, and so is any obligation rule id not listed here.
+ */
+export const OBLIGATION_RECOMMENDATION_RULE_IDS: ReadonlySet<string> = new Set([
+  // "BC Societies Act records guidance": an annual inspection-readiness review.
+  "compliance-ca-bc-societies-records-review",
+  // "BC Societies Act director requirements": an annual re-check. The
+  // minimum and residency duties themselves are dashboard rules.
+  "compliance-ca-bc-societies-director-minimum-review",
+  // "BC Business Corporations Act director and records guidance".
+  "compliance-ca-bc-company-director-minimum-review",
+  // "BC Business Corporations Act records and registry evidence workflow".
+  "compliance-ca-bc-extra-provincial-profile-evidence",
+  // "CBCA annual filing and records guidance": who holds the registry key.
+  "compliance-ca-fed-cbca-corporation-key-custody",
+  // "CBCA corporate records guidance": a minute-book completeness review.
+  "compliance-ca-fed-cbca-corporate-records-review",
+]);
+
+/** "<context>:<ruleId>:<due date>" (the context may hold colons) or a bare obligation rule id. */
+const OBLIGATION_ID = /^(?:.+:)?(compliance-[a-z0-9-]+)(?::\d{4}-\d{2}-\d{2})?$/;
+
+/** The obligation rule id inside an occurrence key, or undefined for any other id. */
+export function obligationRuleId(id: string): string | undefined {
+  return OBLIGATION_ID.exec(id)?.[1];
 }
 
-/** The policy for one rule, check or obligation occurrence id. */
-export function findingPolicy(ruleId: string): FindingPolicy {
-  const entry = entryFor(String(ruleId ?? ""));
-  if (!entry) return { version: 1, protected: true, subject: "text" };
+function entryFor(ruleId: string): PolicyEntry | undefined {
+  const known = EXACT[ruleId] ?? PATTERNS.find(({ pattern }) => pattern.test(ruleId))?.entry;
+  if (known) return known;
+  const obligation = obligationRuleId(ruleId);
+  if (!obligation) return undefined;
+  return { basis: OBLIGATION_RECOMMENDATION_RULE_IDS.has(obligation) ? "recommendation" : "statutory", subject: "text" };
+}
+
+/**
+ * The policy for one rule, check or obligation occurrence id, at the
+ * finding's level when given. Without a level, a rule whose basis depends on
+ * the level gets its rule-wide (stricter) basis.
+ */
+export function findingPolicy(ruleId: string, level?: unknown): FindingPolicy {
+  const base = entryFor(String(ruleId ?? ""));
+  if (!base) return { version: 1, protected: true, subject: "text" };
+  const atLevel = level === "info" || level === "warn" || level === "err" ? base.byLevel?.[level] : undefined;
+  const entry: LevelEntry = atLevel ?? base;
   return {
     basis: entry.basis,
-    version: entry.version ?? 1,
+    version: base.version ?? 1,
     protected: entry.basis !== "recommendation",
     subject: entry.subject ?? "text",
+    ...(entry.evidenceField ? { evidenceField: entry.evidenceField } : {}),
   };
+}
+
+/** True when the rule is a requirement at every level, so nothing about it can be dismissed. */
+export function isProtectedAtEveryLevel(ruleId: string): boolean {
+  const entry = entryFor(String(ruleId ?? ""));
+  if (!entry) return true;
+  return [entry, ...Object.values(entry.byLevel ?? {})].every((variant) => variant?.basis !== "recommendation");
 }
 
 /** True when this module classifies the id (tests use it to catch new, unclassified rules). */
