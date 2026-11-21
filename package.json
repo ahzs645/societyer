@@ -310,6 +310,7 @@
     "test:live-interface": "playwright test -c playwright.live-interface.config.ts",
     "test:live-qualification": "npm --prefix experiments/live-qualification run test",
     "test:continuity": "tsx scripts/check-continuity.ts",
+    "test:director-consent": "tsx scripts/check-director-consent-state.ts && tsx scripts/check-business-evidence.ts",
     "test:representation-gaps": "tsx scripts/check-representation-gaps.ts",
     "test:agreements": "tsx scripts/check-agreements.ts",
     "test:agreements-ui": "playwright test --config playwright.agreements.config.ts",

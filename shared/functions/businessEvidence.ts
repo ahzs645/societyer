@@ -1,6 +1,6 @@
 import { businessRegisters, registerPermission, type EvidenceField, type EvidenceRegister } from "../businessEvidence";
 import { evidenceRules } from "../businessEvidenceRules";
-import { consentOnFileFromEntry, latestConsentToAct, type DirectorConsentRow } from "../directorConsentRecords";
+import { acceptedConsentBases, assessDirectorConsent, consentReviewProblem, consentStateSatisfied, consentToday, CONSENT_TO_ACT_SCOPE, type DirectorConsentRow } from "../directorConsentRecords";
 import { isCalendarDate } from "../invoicing";
 import type { PortableMutationCtx, PortableQueryCtx, PortableDoc } from "../portable/ctx";
 import { getOwned } from "./access";
@@ -15,6 +15,7 @@ const referencePermissions: Record<string, Permission> = {
   organizationAddresses: "society:read", agreements: "agreements:read", corporateCards: "financials:read",
   financialAccounts: "financials:read", writtenResolutions: "motions:read",
   organizationIdentifiers: "settings:read", organizationRegistrations: "society:read",
+  meetings: "meetings:read",
 };
 
 async function authorize(ctx: PortableQueryCtx, args: Scope, mode: "read" | "write") {
@@ -23,7 +24,7 @@ async function authorize(ctx: PortableQueryCtx, args: Scope, mode: "read" | "wri
   const user = await requirePermissionPortable(ctx, args.societyId, registerPermission(register, mode));
   const org = await ctx.db.get(args.societyId, "societies");
   if (!org || !evidenceRules(org, register).available) throw new Error("Unavailable for this organization.");
-  return { register, user };
+  return { register, user, org };
 }
 
 function referenceLabel(table: string, row: PortableDoc) {
@@ -34,6 +35,7 @@ function referenceLabel(table: string, row: PortableDoc) {
     case "organizationIdentifiers": return [row.kind, row.number?.slice(-4)].filter(Boolean).join(" · ");
     case "organizationRegistrations": return [row.jurisdiction, row.registrationNumber].filter(Boolean).join(" · ");
     case "corporateCards": return [row.issuer, row.last4].join(" · ");
+    case "meetings": return [row.title, String(row.scheduledAt ?? "").slice(0, 10)].filter(Boolean).join(" · ");
     default: return String(row.title || row.name || row.className || row._id);
   }
 }
@@ -136,18 +138,19 @@ async function validateFields(ctx: PortableQueryCtx, societyId: string, register
   return clean;
 }
 
+async function checkDocument(ctx: PortableQueryCtx, societyId: string, id: string) {
+  await requirePermissionPortable(ctx, societyId, "documents:read");
+  const doc = await getOwned(ctx, "documents", id, societyId);
+  if (!(await documentAccessPredicate(ctx, societyId))(doc)) throw new Error("Document unavailable.");
+}
+
 export async function save(ctx: PortableMutationCtx, args: Scope & {
   values: Fields; documentId?: string; sourcePage?: number; previousId?: string;
 }) {
-  const { register, user } = await authorize(ctx, args, "write");
+  const { register, user, org } = await authorize(ctx, args, "write");
   const values = await validateFields(ctx, args.societyId, register, args.values);
   if (args.sourcePage !== undefined && (!args.documentId || !Number.isSafeInteger(args.sourcePage) || args.sourcePage < 1)) throw new Error("Choose a document and a positive page number.");
-  async function checkDocument(id: string) {
-    await requirePermissionPortable(ctx, args.societyId, "documents:read");
-    const doc = await getOwned(ctx, "documents", id, args.societyId);
-    if (!(await documentAccessPredicate(ctx, args.societyId))(doc)) throw new Error("Document unavailable.");
-  }
-  if (args.documentId) await checkDocument(args.documentId);
+  if (args.documentId) await checkDocument(ctx, args.societyId, args.documentId);
   let particulars;
   if (args.previousId) {
     const previous = await getOwned(ctx, register.table, args.previousId, args.societyId);
@@ -157,7 +160,7 @@ export async function save(ctx: PortableMutationCtx, args: Scope & {
     }
     if (register.table === "directorConsents" && previous.directorId !== values.directorId) throw new Error("A consent revision must refer to the same director.");
     // Revising needs access to the document the record cites, unless it was deleted.
-    if (previous.documentId && await ctx.db.get(previous.documentId, "documents")) await checkDocument(previous.documentId);
+    if (previous.documentId && await ctx.db.get(previous.documentId, "documents")) await checkDocument(ctx, args.societyId, previous.documentId);
     const newer = await ctx.db.query(register.table).withIndex("by_previous", q => q.eq("previousId", args.previousId)).first();
     if (newer) throw new Error("This record has a newer version. Open the latest entry.");
     if (register.table === "shareNotices" && previous.noticeNumber !== values.noticeNumber) throw new Error("A revised notice retains its number.");
@@ -166,8 +169,11 @@ export async function save(ctx: PortableMutationCtx, args: Scope & {
     if (existing) throw new Error("This notice number already exists.");
     particulars = await noticeParticulars(ctx, args.societyId, String(values.transactionId));
   }
+  // Saving a consent as Reviewed or Disputed is the accountable review: the
+  // server records who did it and when, and a review needs a basis and evidence.
+  const review = register.table === "directorConsents" ? consentReviewStamp(values, args.documentId, org, user) : {};
   const row = {
-    ...values, ...(particulars && { particulars }), societyId: args.societyId, recordedAt: new Date().toISOString(), recordedBy: user._id,
+    ...values, ...review, ...(particulars && { particulars }), societyId: args.societyId, recordedAt: new Date().toISOString(), recordedBy: user._id,
     ...(args.previousId && { previousId: args.previousId }), ...(args.documentId && { documentId: args.documentId }),
     ...(args.sourcePage && { sourcePage: args.sourcePage }),
   };
@@ -176,17 +182,85 @@ export async function save(ctx: PortableMutationCtx, args: Scope & {
   return id;
 }
 
+type ConsentReviewer = { _id: string; displayName?: string; email?: string };
+
+function text(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function consentReviewStamp(values: Record<string, unknown>, documentId: string | undefined, org: PortableDoc, user: ConsentReviewer, note?: string) {
+  const status = values.reviewStatus;
+  if (status !== "Reviewed" && status !== "Disputed") return {};
+  if (status === "Reviewed" && values.scope === CONSENT_TO_ACT_SCOPE) {
+    const problem = consentReviewProblem({
+      event: text(values.event), basis: text(values.basis), documentId,
+      meetingId: text(values.meetingId), evidenceLocation: text(values.evidenceLocation), evidenceReference: text(values.evidenceReference),
+    }, org);
+    if (problem) throw new Error(problem);
+  }
+  return {
+    reviewedBy: user._id, reviewedByName: String(user.displayName || user.email || "Workspace member"), reviewedAt: new Date().toISOString(),
+    ...(note ? { reviewNote: note } : {}),
+  };
+}
+
 /**
- * The director register's "consent on file" flag follows the consent register:
- * the latest "Consent to act" entry sets it (Given/Corrected → on file,
- * Withdrawn → not). A director with no such entry keeps the flag it has.
+ * Mark a consent register entry Reviewed or Disputed: the accountable
+ * verification step. Writes a new version of the entry (the register keeps
+ * every version) carrying the same particulars, the decision, who made it,
+ * when, and any note. Needs the same permission as recording a consent.
+ */
+export async function reviewDirectorConsent(ctx: PortableMutationCtx, args: { societyId: string; consentId: string; decision: string; note?: string }) {
+  const { register, user, org } = await authorize(ctx, { societyId: args.societyId, register: "directorConsents" }, "write");
+  if (args.decision !== "Reviewed" && args.decision !== "Disputed") throw new Error("Choose Reviewed or Disputed.");
+  const note = args.note?.trim() || undefined;
+  if (note && note.length > 2000) throw new Error("Keep the review note under 2,000 characters.");
+  if (args.decision === "Disputed" && !note) throw new Error("Say why the consent basis is disputed.");
+  const previous = await getOwned(ctx, "directorConsents", args.consentId, args.societyId);
+  const newer = await ctx.db.query("directorConsents").withIndex("by_previous", q => q.eq("previousId", args.consentId)).first();
+  if (newer) throw new Error("This record has a newer version. Open the latest entry.");
+  // A deleted supporting document is no longer evidence; it is not carried forward.
+  const documentId = previous.documentId && await ctx.db.get(previous.documentId, "documents") ? String(previous.documentId) : undefined;
+  if (documentId) await checkDocument(ctx, args.societyId, documentId);
+  const carried: Record<string, unknown> = {};
+  for (const field of register.fields) {
+    const value = previous[field.key];
+    if (value !== undefined && value !== null && value !== "") carried[field.key] = value;
+  }
+  carried.reviewStatus = args.decision;
+  const row = {
+    ...carried, ...consentReviewStamp(carried, documentId, org, user, note),
+    societyId: args.societyId, recordedAt: new Date().toISOString(), recordedBy: user._id, previousId: args.consentId,
+    ...(documentId && { documentId }), ...(documentId && previous.sourcePage && { sourcePage: previous.sourcePage }),
+  };
+  const id = await ctx.db.insert("directorConsents", row);
+  await syncDirectorConsentFlag(ctx, args.societyId, String(previous.directorId), { ...(row as DirectorConsentRow), _id: id });
+  return id;
+}
+
+/** Every director's consent assessment, derived from the register on the organization's today. */
+export async function directorConsentAssessments(ctx: PortableQueryCtx, societyId: string, directors: readonly { _id: string; consentOnFile?: boolean }[], org?: PortableDoc | null) {
+  const rows = ((await ctx.db.query("directorConsents").withIndex("by_society", q => q.eq("societyId", societyId)).collect()) as unknown as DirectorConsentRow[])
+    .map(row => ({ ...row, _id: String(row._id), directorId: String(row.directorId ?? ""), previousId: row.previousId ? String(row.previousId) : undefined }));
+  const organization = org === undefined ? await ctx.db.get(societyId, "societies") : org;
+  const options = { today: consentToday(organization), acceptedBases: acceptedConsentBases(organization) };
+  return new Map(directors.map(director => [String(director._id), assessDirectorConsent(rows, { _id: String(director._id), consentOnFile: director.consentOnFile }, options)]));
+}
+
+/**
+ * The director register's "consent on file" flag is a cache of the derived
+ * consent state: true only while the director's current consent is verified.
+ * A director with no register entry keeps the flag it has (a legacy flag reads
+ * as "marked on file only" until its details are recorded).
  */
 async function syncDirectorConsentFlag(ctx: PortableMutationCtx, societyId: string, directorId: string, inserted: DirectorConsentRow) {
-  const rows = (await ctx.db.query("directorConsents").withIndex("by_society", q => q.eq("societyId", societyId)).collect()) as unknown as DirectorConsentRow[];
-  const all = rows.some(row => String(row._id) === String(inserted._id)) ? rows : [...rows, inserted];
-  const latest = latestConsentToAct(all.map(row => ({ ...row, _id: String(row._id), directorId: String(row.directorId ?? ""), previousId: row.previousId ? String(row.previousId) : undefined })), directorId);
-  if (!latest) return;
   const director = await getOwned(ctx, "directors", directorId, societyId);
-  const consentOnFile = consentOnFileFromEntry(latest);
+  const stored = await ctx.db.query("directorConsents").withIndex("by_society", q => q.eq("societyId", societyId)).collect();
+  const rows = (stored.some(row => String(row._id) === String(inserted._id)) ? stored : [...stored, inserted]) as unknown as DirectorConsentRow[];
+  const normalized = rows.map(row => ({ ...row, _id: String(row._id), directorId: String(row.directorId ?? ""), previousId: row.previousId ? String(row.previousId) : undefined }));
+  if (!normalized.some(row => row.directorId === directorId && row.scope === CONSENT_TO_ACT_SCOPE)) return;
+  const org = await ctx.db.get(societyId, "societies");
+  const { state } = assessDirectorConsent(normalized, { _id: directorId, consentOnFile: director.consentOnFile }, { today: consentToday(org), acceptedBases: acceptedConsentBases(org) });
+  const consentOnFile = consentStateSatisfied(state);
   if (director.consentOnFile !== consentOnFile) await ctx.db.patch(directorId, { consentOnFile });
 }

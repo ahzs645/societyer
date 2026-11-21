@@ -678,7 +678,13 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
     // Consent on file, and the earliest observed term start (a 2021 consent before a 2025 filing).
     const earliest = (Array.isArray(row.terms) ? row.terms : []).map((term: any) => clean(term.termStart, 10)).filter((value: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(value))).sort()[0];
     const patch: Record<string, unknown> = {};
-    if (row.consentOnFile && !director.consentOnFile) patch.consentOnFile = true;
+    // A source showing consent marks the director "on file" for its details to
+    // be recorded, unless the consent register already speaks for them.
+    if (row.consentOnFile && !director.consentOnFile) {
+      const registered = (await ctx.db.query("directorConsents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect())
+        .some((entry) => String(entry.directorId) === String(director._id) && entry.scope === "Consent to act");
+      if (!registered) patch.consentOnFile = true;
+    }
     if (earliest && (!director.termStart || earliest < String(director.termStart))) patch.termStart = earliest;
     if (Object.keys(patch).length) await ctx.db.patch(director._id, patch);
     for (const term of Array.isArray(row.terms) ? row.terms : []) {

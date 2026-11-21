@@ -18,6 +18,7 @@ import type { LegalEntityLike } from "./organizationDomain";
 import { audienceAppliesToOrganization, type RuleAudience } from "./entityRuleScope";
 import type { DashboardItemAcknowledgement, DashboardItemDismissal } from "./dashboardDismissals";
 import type { RequirementBasis } from "./dashboardFindingPolicy";
+import { consentStateSatisfied, unverifiedConsentSentence, type DirectorConsentState } from "./directorConsentRecords";
 
 /** `info` is a neutral status note (e.g. "isn't incorporated yet"): not a pass and not a gap. */
 export type ComplianceFlagLevel = "ok" | "info" | "warn" | "err";
@@ -67,7 +68,8 @@ export type ComplianceSociety = GovernanceOrganization & PrivacyAssessmentFacts 
 };
 
 export type ComplianceDirector = {
-  consentOnFile: boolean;
+  /** Consent evidence state from the consent register; only `verified` satisfies the consent rules. */
+  consentState: DirectorConsentState;
   isBCResident: boolean;
   residentCanadianStatus?: "yes" | "no" | "unknown";
 };
@@ -120,7 +122,7 @@ const compliantSociety: ComplianceSociety = {
 };
 
 const compliantDirector: ComplianceDirector = {
-  consentOnFile: true,
+  consentState: "verified",
   isBCResident: true,
 };
 
@@ -265,34 +267,38 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       jurisdiction: "BC",
       societyType: "society",
       effectiveDate: "2016-11-28",
-      ruleText: "Director consent evidence should be on file for active directors.",
+      ruleText: "Each active director's consent basis (written consent, or presence at the meeting without refusing) should be recorded and its evidence reviewed.",
       citation: "Societies Act s.42 director consent requirements",
       evidenceRequired: ["Active director register", "Written consent or meeting-attendance/non-refusal evidence"],
       remediationActions: [
-        { id: "open-directors", label: "Update consent", intent: "navigate", to: "/app/directors?intent=consent" },
+        { id: "open-directors", label: "Review consents", intent: "navigate", to: "/app/directors?intent=consent" },
         { id: "upload-evidence", label: "Upload evidence", intent: "navigate", to: "/app/documents?intent=new&category=Governance&title=Director%20consent" },
         { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
       ],
       passFail(context) {
         if (!context.society) return null;
-        const missingConsent = context.activeDirectors.filter((director) => !director.consentOnFile);
-        if (missingConsent.length > 0) {
-          return flag(this, {
-            level: "warn",
-            text: `${missingConsent.length} active ${missingConsent.length === 1 ? "director has" : "directors have"} no consent to act recorded.`,
-            citationId: "BC-SOC-DIRECTOR-CONSENT",
-          });
-        }
-        return null;
+        const text = unverifiedConsentSentence(context.activeDirectors.map((director) => director.consentState));
+        return text ? flag(this, { level: "warn", text, citationId: "BC-SOC-DIRECTOR-CONSENT" }) : null;
       },
       fixtures: [
         {
-          name: "flags active directors missing consent",
+          name: "flags active directors whose consent basis is not verified",
           context: baseFixture({
             activeDirectors: [
               compliantDirector,
-              { ...compliantDirector, consentOnFile: false },
-              { ...compliantDirector, consentOnFile: false },
+              { ...compliantDirector, consentState: "awaiting_review" },
+              { ...compliantDirector, consentState: "none" },
+            ],
+          }),
+          expectedLevel: "warn",
+        },
+        {
+          name: "a disputed, scheduled or legacy-flag consent is not verified",
+          context: baseFixture({
+            activeDirectors: [
+              { ...compliantDirector, consentState: "disputed" },
+              { ...compliantDirector, consentState: "scheduled" },
+              { ...compliantDirector, consentState: "legacy_flag_only" },
             ],
           }),
           expectedLevel: "warn",
@@ -622,9 +628,10 @@ function extendedDashboardRules(organization?: LegalEntityLike | null): Dashboar
       const minimum = minimumLegalDirectors(ctx.society) ?? profile.directors.minimum;
       return ctx.activeDirectors.length < minimum ? { level: 'err', text: `Fewer than ${minimum} active legal directors are recorded for this ${profile.name}. Confirm the register and applicable articles.` } : null;
     }));
-    out.push(make(`LEGAL-${profile.id}-DIRECTOR-CONSENT`, 'Director consent evidence', profile.directors.consentSourceIds, audience, ctx => {
-      const missing = ctx.activeDirectors.filter(d => !d.consentOnFile).length;
-      return missing ? { level: 'warn', text: `${missing} active director${missing === 1 ? ' has' : 's have'} no consent to act recorded. ${profile.directors.consent}` } : null;
+    out.push(make(`LEGAL-${profile.id}-DIRECTOR-CONSENT`, 'Director consent basis verified', profile.directors.consentSourceIds, audience, ctx => {
+      if (ctx.activeDirectors.every(d => consentStateSatisfied(d.consentState))) return null;
+      const text = unverifiedConsentSentence(ctx.activeDirectors.map(d => d.consentState));
+      return { level: 'warn', text: `${text} ${profile.directors.consent}` };
     }));
     if (profile.directors.residency === 'canadian_25_percent') out.push(make(`LEGAL-${profile.id}-DIRECTORS-RESIDENCY`, 'Resident Canadian director requirement', profile.directors.sourceIds, audience, ctx => {
       const required = requiredResidentCanadianDirectors(ctx.activeDirectors.length);

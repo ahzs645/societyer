@@ -339,6 +339,9 @@ const BUSINESS_EVIDENCE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "businessEvidence:list", handler: businessEvidenceFns.list }),
   definePortableQuery({ name: "businessEvidence:choices", handler: businessEvidenceFns.choices }),
   definePortableMutation({ name: "businessEvidence:save", handler: businessEvidenceFns.save }),
+  definePortableMutation({ name: "businessEvidence:reviewDirectorConsent", handler: businessEvidenceFns.reviewDirectorConsent }),
+  // Director consent evidence states, derived from the consent register.
+  definePortableQuery({ name: "directors:consentStates", handler: directorsFns.directorConsentStates }),
 ];
 
 // Recording an incorporation and applying a registry-document import (kept

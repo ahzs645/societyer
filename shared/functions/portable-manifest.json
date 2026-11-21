@@ -1971,6 +1971,13 @@
       "classification": "portable"
     },
     {
+      "name": "businessEvidence:reviewDirectorConsent",
+      "module": "businessEvidence",
+      "export": "reviewDirectorConsent",
+      "kind": "mutation",
+      "classification": "portable"
+    },
+    {
       "name": "businessEvidence:save",
       "module": "businessEvidence",
       "export": "save",
@@ -3019,6 +3026,13 @@
       "export": "inbox",
       "kind": "internalQuery",
       "classification": "server-only"
+    },
+    {
+      "name": "directors:consentStates",
+      "module": "directors",
+      "export": "consentStates",
+      "kind": "query",
+      "classification": "portable"
     },
     {
       "name": "directors:create",

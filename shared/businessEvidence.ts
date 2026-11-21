@@ -48,6 +48,10 @@ export const businessRegisters: EvidenceRegister[] = [
       { key: "receivedOn", label: "Received on", type: "date" },
       { key: "documentDate", label: "Document date", type: "date" },
       { key: "reviewStatus", label: "Evidence review", type: "choice", options: ["Awaiting review", "Reviewed", "Disputed"] },
+      { key: "meetingId", label: "Meeting", type: "reference", table: "meetings" },
+      { key: "evidenceLocation", label: "Evidence held at", type: "text" },
+      { key: "evidenceReference", label: "Evidence reference", type: "text" },
+      { key: "custodian", label: "Evidence custodian", type: "text" },
     ],
   },
   {
