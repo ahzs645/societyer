@@ -265,7 +265,7 @@ as `legacy_flag_only` until someone records the basis.
 
 **Dashboard and continuity.** `BC-SOC-DIRECTOR-CONSENT`, the `LEGAL-<profile>-DIRECTOR-CONSENT`
 rules and the `CONTINUITY-DIRECTOR-CONSENT` check flag every active director whose state isn't
-`verified`, for example "2 active directors' consent basis has not been verified (1 with no basis
+`verified`, for example "Consent to act isn't verified for 2 active directors (1 with no basis
 recorded, 1 awaiting review)." The citations are unchanged.
 
 ## Operative articles

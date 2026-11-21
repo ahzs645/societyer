@@ -92,8 +92,8 @@ assert.equal(consentToday(BC_SOCIETY, new Date("2026-11-21T07:30:00Z")), "2026-1
 assert.equal(consentToday(OBCA, new Date("2026-11-21T07:30:00Z")), "2026-11-21", "Toronto has moved on");
 
 // Wording.
-assert.equal(unverifiedConsentSentence(["verified", "awaiting_review", "none"]), "2 active directors' consent basis has not been verified (1 with no basis recorded, 1 awaiting review).");
-assert.equal(unverifiedConsentSentence(["legacy_flag_only"]), "1 active director's consent basis has not been verified (1 marked on file without details).");
+assert.equal(unverifiedConsentSentence(["verified", "awaiting_review", "none"]), "Consent to act isn't verified for 2 active directors (1 with no basis recorded, 1 awaiting review).");
+assert.equal(unverifiedConsentSentence(["legacy_flag_only"]), "Consent to act isn't verified for 1 active director (marked on file without details).");
 assert.equal(unverifiedConsentSentence(["verified"]), undefined);
 assert.equal(describeUnverifiedConsents(["disputed", "scheduled", "withdrawn"]), "1 disputed, 1 not yet in effect, 1 withdrawn");
 
@@ -106,12 +106,12 @@ const ruleContext = (states: ("verified" | "awaiting_review" | "none" | "legacy_
 assert.equal(consentRule.passFail(ruleContext(["verified", "verified", "verified"])), null);
 const ruleFlag = consentRule.passFail(ruleContext(["verified", "awaiting_review", "none"]))!;
 assert.equal(ruleFlag.level, "warn");
-assert.equal(ruleFlag.text, "2 active directors' consent basis has not been verified (1 with no basis recorded, 1 awaiting review).");
+assert.equal(ruleFlag.text, "Consent to act isn't verified for 2 active directors (1 with no basis recorded, 1 awaiting review).");
 assert.equal(ruleFlag.citationId, "BC-SOC-DIRECTOR-CONSENT", "citation kept");
 assert.ok(consentRule.passFail(ruleContext(["legacy_flag_only"])), "a legacy flag alone is flagged");
 const companyRule = dashboardComplianceRulePackForOrganization(BC_COMPANY).rules.find((rule) => rule.id === "LEGAL-bc_company-DIRECTOR-CONSENT")!;
 const companyFlag = companyRule.passFail(ruleContext(["awaiting_review"]))!;
-assert.match(companyFlag.text, /^1 active director's consent basis has not been verified \(1 awaiting review\)\. /);
+assert.match(companyFlag.text, /^Consent to act isn't verified for 1 active director \(awaiting review\)\. /);
 assert.deepEqual(companyFlag.citationIds, ["BC-BCA-DIRECTOR-CONSENT"]);
 assert.equal(companyRule.passFail(ruleContext(["verified"])), null);
 

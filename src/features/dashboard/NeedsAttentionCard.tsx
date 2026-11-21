@@ -266,6 +266,8 @@ function AttentionRow({ item }: { item: AttentionItem }) {
             <div className="attention-pop">
               {item.prose && <p>{item.title}. {item.detail}</p>}
               {item.status && <p className="attention-pop__status">{item.status}</p>}
+              {/* Actions before the reference lists, so a tall popover on a phone shows them without scrolling. */}
+              {item.actions}
               {item.sources.length > 0 && (
                 <div>
                   <p className="attention-pop__label">Legal source</p>
@@ -287,7 +289,6 @@ function AttentionRow({ item }: { item: AttentionItem }) {
                   </ul>
                 </div>
               )}
-              {item.actions}
             </div>
           </InfoPopover>
         </span>

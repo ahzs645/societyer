@@ -245,12 +245,17 @@ export function describeUnverifiedConsents(states: readonly (DirectorConsentStat
 }
 
 /**
- * "2 active directors' consent basis has not been verified (1 awaiting review,
+ * "Consent to act isn't verified for 2 active directors (1 awaiting review,
  * 1 with no basis recorded)." Undefined when every state is verified.
  */
 export function unverifiedConsentSentence(states: readonly (DirectorConsentState | undefined)[], noun = "active"): string | undefined {
   const unverified = states.filter((state) => state !== "verified");
   if (!unverified.length) return undefined;
-  const subject = unverified.length === 1 ? `1 ${noun} director's` : `${unverified.length} ${noun} directors'`;
-  return `${subject} consent basis has not been verified (${describeUnverifiedConsents(unverified)}).`;
+  const kinds = new Set(unverified.map((state) => state ?? "none"));
+  // One kind needs no count: "(awaiting review)", not "(1 awaiting review)".
+  const detail = kinds.size === 1
+    ? UNVERIFIED_PHRASES[[...kinds][0] as Exclude<DirectorConsentState, "verified">]
+    : describeUnverifiedConsents(unverified);
+  const directors = `${unverified.length} ${noun} director${unverified.length === 1 ? "" : "s"}`;
+  return `Consent to act isn't verified for ${directors} (${detail}).`;
 }
