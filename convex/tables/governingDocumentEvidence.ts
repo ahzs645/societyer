@@ -40,6 +40,9 @@ export const governingDocumentEvidenceValidators = {
     versionOrEffectiveDate: v.optional(v.string()),
     maintainedAt: v.optional(v.string()),
     unresolvedFindings: v.optional(v.string()),
+    // False when the findings are minor follow-ups with the program in place;
+    // absent on older reviews, which count as blocking.
+    findingsBlocking: v.optional(v.boolean()),
     reviewedOn: v.string(),
     reviewedAtISO: v.string(),
     reviewedByUserId: v.optional(v.string()),

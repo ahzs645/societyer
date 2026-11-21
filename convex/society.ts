@@ -533,6 +533,7 @@ export const recordPrivacyReview = authorizedMutation("society:recordPrivacyRevi
     maintainedAt: v.optional(v.string()),
     reviewedOn: v.string(),
     unresolvedFindings: v.optional(v.string()),
+    findingsBlocking: v.optional(v.boolean()),
   },
   returns: v.any(),
   handler: async (ctx, args) => recordPrivacyReviewPortable(await toPortableMutationCtx(ctx), args),

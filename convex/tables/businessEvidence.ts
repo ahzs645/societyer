@@ -52,6 +52,10 @@ export const businessEvidenceTables = {
     reviewedByName: v.optional(v.string()),
     reviewedAt: v.optional(v.string()),
     reviewNote: v.optional(v.string()),
+    // On a review version: who recorded the particulars it reviews (the row's
+    // own recordedBy is the reviewer), and whether that is the reviewer too.
+    enteredBy: v.optional(v.id("users")),
+    selfReviewed: v.optional(v.boolean()),
   }).index("by_society", ["societyId"]).index("by_previous", ["previousId"]),
   businessChannels: defineTable({
     ...evidenceFields,

@@ -9,8 +9,9 @@
  *
  * From here a director's consent basis is recorded (written consent, the
  * meeting at which they were elected or appointed, or evidence held
- * elsewhere), and then reviewed: "Mark reviewed" / "Mark disputed" write a new
- * version of the entry stamped with the reviewer and date.
+ * elsewhere), and then reviewed (ConsentReviewForm.tsx): "Mark reviewed" /
+ * "Mark disputed" write a new version of the entry stamped with the reviewer
+ * and date.
  *
  * The consent form itself is the "Consent to act as director" packet
  * (shared/corporationReportPackets.ts, shared/societyDocumentPackets.ts),
@@ -37,11 +38,13 @@ import { CORPORATION_DOCUMENT_PACKETS } from "../../../shared/corporationDocumen
 import { SOCIETY_DOCUMENT_PACKETS } from "../../../shared/societyDocumentPackets";
 import { directorConsentPacketKey } from "../../../shared/corporationReportPackets";
 import { pathwayForPacket } from "../../../shared/pathways/registry";
+import { ConsentReviewForm } from "./ConsentReviewForm";
 import {
   CONSENT_STATE_LABELS,
   CONSENT_TO_ACT_SCOPE,
   consentBasisOptions,
   consentReviewProblem,
+  consentTimingNote,
   type ConsentBasisOption,
   type DirectorConsentRow,
   type DirectorConsentState,
@@ -63,6 +66,8 @@ export type DirectorConsentStateRow = {
   upcomingId?: string;
   upcomingEffectiveDate?: string;
   basisNotAccepted?: boolean;
+  /** Why the basis isn't accepted, when more specific (a CBCA consent signed too late). */
+  basisNotAcceptedReason?: string;
 };
 
 type ConsentOrganization = GovernanceOrganization & { _id: string };
@@ -161,12 +166,13 @@ function directorName(director: ConsentDirector) {
   return `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim() || "this director";
 }
 
-function stateLine(state: DirectorConsentState, entry: ConsentRegisterRow | undefined, upcomingDate: string | undefined, basisNotAccepted: boolean): string {
+function stateLine(state: DirectorConsentState, entry: ConsentRegisterRow | undefined, upcomingDate: string | undefined, notAccepted: { basisNotAccepted?: boolean; basisNotAcceptedReason?: string }): string {
   switch (state) {
     case "none": return "No consent or other basis is recorded. Record how this director consented to act.";
-    case "awaiting_review": return basisNotAccepted
-      ? "The recorded basis isn't one the governing Act accepts. Correct it, then review the evidence."
-      : "A basis is recorded but nobody has reviewed its evidence yet.";
+    case "awaiting_review": return notAccepted.basisNotAcceptedReason
+      ?? (notAccepted.basisNotAccepted
+        ? "The recorded basis isn't one the governing Act accepts. Correct it, then review the evidence."
+        : "A basis is recorded but nobody has reviewed its evidence yet.");
     case "verified": return entry?.reviewedAt
       ? `Reviewed by ${entry.reviewedByName ?? "a workspace member"} on ${formatDate(entry.reviewedAt)}.`
       : "Reviewed.";
@@ -250,17 +256,17 @@ export function DirectorConsentSection({
         <p className="muted director-consent__empty">Loading consent records…</p>
       ) : (
         <>
-          <p className="director-consent__state">{stateLine(consentState.state, current, consentState.upcomingEffectiveDate, Boolean(consentState.basisNotAccepted))}</p>
+          <p className="director-consent__state">{stateLine(consentState.state, current, consentState.upcomingEffectiveDate, consentState)}</p>
           {consentState.currentId && !current && (
             <p className="muted director-consent__empty">The entry in effect cites a document your role can't open.</p>
           )}
-          {current && <ConsentFacts organizationId={organization._id} entry={current} bases={bases} />}
+          {current && <ConsentFacts organizationId={organization._id} entry={current} bases={bases} timingNote={consentState.basisNotAcceptedReason ? undefined : consentTimingNote(current, organization)} />}
           {upcoming && consentState.state !== "scheduled" && (
             <p className="muted director-consent__empty">
               {upcoming.event === "Withdrawn" ? "A withdrawal" : "A new entry"} takes effect {upcoming.effectiveDate ? formatDate(upcoming.effectiveDate) : "later"}.
             </p>
           )}
-          {consentState.state === "scheduled" && upcoming && <ConsentFacts organizationId={organization._id} entry={upcoming} bases={bases} />}
+          {consentState.state === "scheduled" && upcoming && <ConsentFacts organizationId={organization._id} entry={upcoming} bases={bases} timingNote={consentTimingNote(upcoming, organization)} />}
         </>
       )}
 
@@ -278,6 +284,7 @@ export function DirectorConsentSection({
           consentId={consentState.currentId}
           decision={reviewing}
           readiness={current ? consentReviewProblem({ ...current, documentId: current.documentMissing ? undefined : current.documentId }, organization) : undefined}
+          enteredBy={current ? current.enteredBy ?? current.recordedBy : undefined}
           onDone={() => setReviewing(null)}
         />
       ) : (
@@ -327,7 +334,13 @@ export function DirectorConsentSection({
 }
 
 /** The particulars of one register entry: basis, dates, evidence and review. */
-function ConsentFacts({ organizationId, entry, bases }: { organizationId: string; entry: ConsentRegisterRow; bases: ConsentBasisOption[] }) {
+function ConsentFacts({ organizationId, entry, bases, timingNote }: {
+  organizationId: string;
+  entry: ConsentRegisterRow;
+  bases: ConsentBasisOption[];
+  /** When the consent was signed relative to the appointment, if the Act cares (CBCA, OBCA). */
+  timingNote?: string;
+}) {
   const { can } = usePermissions();
   const canReadDocuments = can("documents:read");
   const linkedDocuments = useQuery(
@@ -348,9 +361,11 @@ function ConsentFacts({ organizationId, entry, bases }: { organizationId: string
       <div className="director-consent__fact--wide"><dt>Basis</dt><dd>{basisLabel}{entry.event === "Withdrawn" ? " (withdrawn)" : entry.event === "Corrected" ? " (corrected)" : ""}</dd></div>
       <div><dt>Effective</dt><dd>{entry.effectiveDate ? formatDate(entry.effectiveDate) : "Not recorded"}</dd></div>
       {entry.signedOn && <div><dt>Signed</dt><dd>{formatDate(entry.signedOn)}</dd></div>}
-      <div><dt>Review</dt><dd>{entry.reviewStatus === "Reviewed" || entry.reviewStatus === "Disputed"
+      {timingNote && <div className="director-consent__fact--wide"><dt>Timing</dt><dd>{timingNote}</dd></div>}
+      <div className={entry.selfReviewed ? "director-consent__fact--wide" : undefined}><dt>Review</dt><dd>{entry.reviewStatus === "Reviewed" || entry.reviewStatus === "Disputed"
         ? `${entry.reviewStatus}${entry.reviewedAt ? ` ${formatDate(entry.reviewedAt)}` : ""}`
-        : "Awaiting review"}</dd></div>
+        : "Awaiting review"}
+        {entry.selfReviewed && <span className="muted"> · Recorded and reviewed by the same person</span>}</dd></div>
       {entry.meetingId && (
         <div className="director-consent__fact--wide"><dt>Meeting</dt><dd><Link to={`/app/meetings/${entry.meetingId}`}>{meetingLabel}</Link></dd></div>
       )}
@@ -399,6 +414,7 @@ function ConsentRecordForm({ organizationId, director, mode, bases, onDone }: {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const basisOption = bases.find((option) => option.value === draft.basis);
+  const writtenBasis = bases.find((option) => option.value === "Written consent");
   const withdrawing = draft.event === "Withdrawn";
 
   const submit = async () => {
@@ -444,7 +460,7 @@ function ConsentRecordForm({ organizationId, director, mode, bases, onDone }: {
         <Field label="Event">
           <Select value={draft.event} onChange={(value) => setDraft({ ...draft, event: value })} options={optionsFor("event").map((value) => ({ value, label: value }))} />
         </Field>
-        <Field label="Effective date" required>
+        <Field label="Effective date" required hint={withdrawing ? undefined : "The date they were elected or appointed."}>
           <DatePicker value={draft.effectiveDate} onChange={(value) => setDraft({ ...draft, effectiveDate: value })} />
         </Field>
       </div>
@@ -454,7 +470,7 @@ function ConsentRecordForm({ organizationId, director, mode, bases, onDone }: {
         </Field>
       )}
       {mode === "written" && !withdrawing && (
-        <Field label="Signed on">
+        <Field label="Signed on" hint={writtenBasis?.evidence}>
           <DatePicker value={draft.signedOn} clearable max={todayDateOnly()} onChange={(value) => setDraft({ ...draft, signedOn: value })} />
         </Field>
       )}
@@ -500,59 +516,6 @@ function ConsentRecordForm({ organizationId, director, mode, bases, onDone }: {
       <div className="director-consent__actions">
         <button type="button" className="btn btn--accent btn--sm" disabled={saving} onClick={submit}>
           {saving ? "Saving…" : withdrawing ? "Save withdrawal" : MODE_COPY[mode].save}
-        </button>
-        <button type="button" className="btn btn--sm" disabled={saving} onClick={onDone}>Cancel</button>
-      </div>
-    </div>
-  );
-}
-
-/** Marks the entry in effect Reviewed or Disputed; the server records who and when. */
-function ConsentReviewForm({ organizationId, consentId, decision, readiness, onDone }: {
-  organizationId: string;
-  consentId: string;
-  decision: "Reviewed" | "Disputed";
-  /** Why the entry can't be marked reviewed yet, when known. */
-  readiness: string | undefined;
-  onDone: () => void;
-}) {
-  const toast = useToast();
-  const review = useMutation(api.businessEvidence.reviewDirectorConsent);
-  const [note, setNote] = useState("");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const blocked = decision === "Reviewed" ? readiness : undefined;
-
-  const submit = async () => {
-    if (saving || blocked) return;
-    if (decision === "Disputed" && !note.trim()) return setError("Say what is wrong with the recorded basis.");
-    setSaving(true);
-    setError("");
-    try {
-      await review({ societyId: organizationId, consentId, decision, ...(note.trim() ? { note: note.trim() } : {}) });
-      toast.success(decision === "Reviewed" ? "Consent basis verified" : "Consent basis marked disputed");
-      onDone();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not record the review.");
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="director-consent__form">
-      {error && <Banner tone="danger">{error}</Banner>}
-      {blocked && <Banner tone="warn">{blocked}</Banner>}
-      <p className="director-consent__note">
-        {decision === "Reviewed"
-          ? "You're confirming that you checked the evidence and it supports this basis. Your name and today's date are recorded with the entry."
-          : "The entry stays in the history, marked disputed with your name, today's date and your note."}
-      </p>
-      <Field label={decision === "Reviewed" ? "Review note" : "What is wrong"} required={decision === "Disputed"}>
-        <textarea className="input" rows={2} value={note} onChange={(event) => setNote(event.target.value)} />
-      </Field>
-      <div className="director-consent__actions">
-        <button type="button" className={decision === "Reviewed" ? "btn btn--accent btn--sm" : "btn btn--danger btn--sm"} disabled={saving || Boolean(blocked)} onClick={submit}>
-          {saving ? "Saving…" : decision === "Reviewed" ? "Mark reviewed" : "Mark disputed"}
         </button>
         <button type="button" className="btn btn--sm" disabled={saving} onClick={onDone}>Cancel</button>
       </div>

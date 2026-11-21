@@ -68,8 +68,14 @@ export type PrivacyProgramReview = {
   versionOrEffectiveDate?: string;
   /** Where the policy and practices are maintained. */
   maintainedAt?: string;
-  /** Unresolved findings; any text keeps the program outstanding. */
+  /** Unresolved findings; blocking ones keep the program outstanding. */
   unresolvedFindings?: string;
+  /**
+   * Whether the findings keep the program from counting as documented. False
+   * when the reviewer judged them minor follow-ups with the program in place.
+   * Stored when there are findings; an older review without it is blocking.
+   */
+  findingsBlocking?: boolean;
   /** The day the review took place (YYYY-MM-DD). */
   reviewedOn: string;
   reviewedAtISO: string;
@@ -146,7 +152,9 @@ export function governingDocumentCurrentness(facts: EvidenceFacts | null | undef
 export type PrivacyProgramState =
   /** A review is recorded with a location and no unresolved findings, and the program is marked documented. */
   | "documented"
-  /** The latest review left unresolved findings. */
+  /** As documented, with minor follow-ups the reviewer said don't block the program. */
+  | "follow-ups"
+  /** The latest review left unresolved findings that keep the program outstanding. */
   | "findings"
   /** The latest review didn't say where the policy is maintained, and no policy evidence is identified. */
   | "no-location"
@@ -166,18 +174,29 @@ export function privacyPolicyLocationRecorded(facts: EvidenceFacts | null | unde
   return Boolean(review?.maintainedAt?.trim()) || hasIdentifiedEvidence(facts, "privacyPolicyDocId");
 }
 
+/** The review's unresolved findings, if any. */
+export function privacyReviewFindings(review: PrivacyProgramReview | null | undefined): string | undefined {
+  return review?.unresolvedFindings?.trim() || undefined;
+}
+
+/** Findings keep the program outstanding unless the reviewer said they are minor follow-ups. */
+export function privacyFindingsBlocking(review: PrivacyProgramReview | null | undefined): boolean {
+  return Boolean(privacyReviewFindings(review)) && review?.findingsBlocking !== false;
+}
+
 /**
  * The privacy program's standing. The review is an attestation by a named
  * person, not an automated conclusion: Societyer records what they reviewed,
- * where it is kept and what is unresolved.
+ * where it is kept and what is unresolved, and whether the reviewer judged
+ * the findings minor follow-ups with the program in place.
  */
 export function privacyProgramAssessment(facts: EvidenceFacts | null | undefined): PrivacyProgramAssessment {
   const status = facts?.privacyProgramStatus ?? (facts?.privacyPolicyDocId ? "Documented" : "Unknown");
   const review = facts?.privacyProgramReview ?? undefined;
   if (review) {
-    if (review.unresolvedFindings?.trim()) return { state: "findings", status, review };
+    if (privacyFindingsBlocking(review)) return { state: "findings", status, review };
     if (!privacyPolicyLocationRecorded(facts, review)) return { state: "no-location", status, review };
-    if (status === "Documented") return { state: "documented", status, review };
+    if (status === "Documented") return { state: privacyReviewFindings(review) ? "follow-ups" : "documented", status, review };
     return { state: "outstanding", status, review };
   }
   return { state: status === "Documented" ? "unattested" : "outstanding", status };

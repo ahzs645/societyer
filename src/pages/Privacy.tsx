@@ -54,7 +54,7 @@ import { useIsMobile } from "../lib/useIsMobile";
 import type { ResolvedPrivacyProfile } from "../../shared/privacyRuleProfiles";
 import { LegalRecordsRequirements } from "../components/LegalRecordsRequirements";
 import { PrivacyReviewDialog } from "../features/governingDocuments/EvidenceDialogs";
-import { attestationLine, governingEvidenceHref, hasIdentifiedEvidence, heldElsewhereEntry, privacyProgramAssessment, shortText } from "../../shared/governingDocumentEvidence";
+import { attestationLine, governingEvidenceHref, hasIdentifiedEvidence, heldElsewhereEntry, privacyFindingsBlocking, privacyProgramAssessment, shortText } from "../../shared/governingDocumentEvidence";
 import { privacyRecordTemplate, type PrivacyRecordTemplateKind } from "../../shared/privacyRecordTemplates";
 
 type StepTone = "success" | "warn" | "info" | "neutral";
@@ -174,8 +174,8 @@ export function PrivacyPage() {
     ? documentRows.find((document) => String(document._id) === String(society.privacyPolicyDocId))
     : null;
   const privacyProgramStatus = privacyAssessment.status;
-  // A review's unresolved findings keep the program outstanding whatever the status says.
-  const privacyProgramDocumented = privacyAssessment.state === "documented" || privacyAssessment.state === "unattested";
+  // Blocking review findings keep the program outstanding whatever the status says; minor follow-ups don't.
+  const privacyProgramDocumented = privacyAssessment.state === "documented" || privacyAssessment.state === "follow-ups" || privacyAssessment.state === "unattested";
   const memberDataAccessStatus = society.memberDataAccessStatus ?? "Unknown";
   const memberDataGapDocumented = !!society.memberDataGapDocumented;
   const memberDataReady = isMemberDataReady(memberDataAccessStatus, memberDataGapDocumented);
@@ -721,7 +721,7 @@ export function PrivacyPage() {
                   {`: ${shortText(privacyReview.policiesReviewed, 160)}`}
                   {privacyReview.versionOrEffectiveDate ? ` (${privacyReview.versionOrEffectiveDate})` : ""}.
                   {privacyReview.maintainedAt ? ` Maintained at ${privacyReview.maintainedAt}.` : ""}
-                  {privacyReview.unresolvedFindings ? <> <strong>Unresolved findings:</strong> {shortText(privacyReview.unresolvedFindings, 240)}</> : ""}
+                  {privacyReview.unresolvedFindings ? <> <strong>{privacyFindingsBlocking(privacyReview) ? "Unresolved findings:" : "Follow-ups:"}</strong> {shortText(privacyReview.unresolvedFindings, 240)}</> : ""}
                   {" "}This is the reviewer&rsquo;s attestation, not an automated check.
                 </>
               ) : privacyProgramDocumented ? (
