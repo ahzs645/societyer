@@ -50,7 +50,9 @@ import {
   useConsentRegisterReadable,
   useDirectorConsentForms,
   type ConsentRegisterRow,
+  type DirectorConsentStateRow,
 } from "../features/people/DirectorConsentSection";
+import { describeUnverifiedConsents, unverifiedConsentSentence, type DirectorConsentState } from "../../shared/directorConsentRecords";
 
 const CURRENT_DIRECTORS_VIEW = "Current directors";
 
@@ -71,6 +73,13 @@ export function DirectorsPage() {
     api.businessEvidence.list,
     society && consentRegisterReadable ? { societyId: society._id, register: "directorConsents" } : "skip",
   ) as ConsentRegisterRow[] | undefined;
+  // Each director's consent evidence state, derived on the server from the
+  // register; only "verified" counts as consent on file.
+  const consentStates = useQuery(
+    api.directors.consentStates,
+    society && loaded && can("directors:read") ? { societyId: society._id } : "skip",
+  ) as DirectorConsentStateRow[] | undefined;
+  const consentStateById = useMemo(() => new Map((consentStates ?? []).map((row) => [row.directorId, row])), [consentStates]);
   const consentForms = useDirectorConsentForms(society);
   const create = useMutation(api.directors.create);
   const update = useMutation(api.directors.update);
@@ -78,6 +87,7 @@ export function DirectorsPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [selected, setSelected] = useState<any>(null);
+  const directorFieldsRef = useRef<HTMLDivElement>(null);
   // A new record's "Required before saving" note waits until a field has
   // been left or Save was pressed, so an empty form doesn't open in red.
   const [problemsRevealed, setProblemsRevealed] = useState(false);
@@ -85,28 +95,28 @@ export function DirectorsPage() {
   const [open, setOpen] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
-  // ?intent=consent (dashboard "Update consent") opens the first active
-  // director without consent on file instead of the generic list (G-24).
+  // ?intent=consent (dashboard "Review consents") opens the first active
+  // director whose consent basis isn't verified instead of the generic list (G-24).
   const [params, setParams] = useSearchParams();
   useEffect(() => {
-    if (params.get("intent") !== "consent" || directors === undefined) return;
+    if (params.get("intent") !== "consent" || directors === undefined || consentStates === undefined) return;
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("intent");
       return next;
     }, { replace: true });
-    const missing = (directors ?? []).filter((director: any) => director.status === "Active" && !director.consentOnFile);
+    const missing = (directors ?? []).filter((director: any) => director.status === "Active" && consentStateById.get(String(director._id))?.state !== "verified");
     if (!missing.length) {
-      toast.info("Every active director has consent on file");
+      toast.info("Every active director's consent basis is verified");
       return;
     }
     setSelected(missing[0]);
     setOpen(true);
     toast.info(
-      `${missing.length} active director${missing.length === 1 ? "" : "s"} without consent on file`,
+      `${missing.length} active director${missing.length === 1 ? "'s" : "s'"} consent basis not verified`,
       missing.map((director: any) => `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim()).join(", "),
     );
-  }, [directors, params, setParams, toast]);
+  }, [directors, consentStates, consentStateById, params, setParams, toast]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -135,7 +145,13 @@ export function DirectorsPage() {
 
   const active = (directors ?? []).filter((d: any) => d.status === "Active");
   const bcResidents = active.filter((d: any) => d.isBCResident).length;
-  const missingConsent = active.filter((d: any) => !d.consentOnFile);
+  const consentStatesLoaded = consentStates !== undefined;
+  const activeConsentStates: DirectorConsentState[] = active.map((d: any) => consentStateById.get(String(d._id))?.state ?? "none");
+  const missingConsent = consentStatesLoaded ? active.filter((d: any) => consentStateById.get(String(d._id))?.state !== "verified") : [];
+  // Directors with no usable basis on record get a consent form to sign;
+  // those awaiting review or disputed need the evidence checked instead.
+  const needsConsentForm = missingConsent.filter((d: any) => ["none", "withdrawn", "legacy_flag_only"].includes(consentStateById.get(String(d._id))?.state ?? "none"));
+  const unverifiedConsentText = consentStatesLoaded ? unverifiedConsentSentence(activeConsentStates) : undefined;
   const canadianResidents = active.filter((d: any) => d.residentCanadianStatus === "yes").length;
   const canadianRequired = requiredResidentCanadianDirectors(active.length);
   const canadianUnknown = active.filter((d: any) => !d.residentCanadianStatus || d.residentCanadianStatus === "unknown").length;
@@ -184,7 +200,7 @@ export function DirectorsPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  // Opens the first active director without consent, as ?intent=consent does.
+  // Opens the first active director whose consent isn't verified, as ?intent=consent does.
   const reviewMissingConsent = () => {
     if (!missingConsent.length) return;
     setProblemsRevealed(false);
@@ -192,16 +208,23 @@ export function DirectorsPage() {
     setOpen(true);
   };
 
-  // One draft with a consent form per director, each effective from their term start.
+  // One draft with a consent form per director with no basis on record, each effective from their term start.
   const prepareMissingConsentForms = async () => {
-    const names = missingConsent.map((director: DirectorName) => `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim() || "Unnamed director");
+    const names = needsConsentForm.map((director: DirectorName) => `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim() || "Unnamed director");
     const ok = await confirm({
-      title: missingConsent.length === 1 ? "Prepare a consent form?" : `Prepare ${missingConsent.length} consent forms?`,
+      title: needsConsentForm.length === 1 ? "Prepare a consent form?" : `Prepare ${needsConsentForm.length} consent forms?`,
       message: `One editable draft with a "Consent to act as director" form for ${names.join(", ")}, each effective from the director's term start. Review it, then have each director sign their own form.`,
       confirmLabel: "Prepare",
     });
     if (!ok) return;
-    await consentForms.prepare(missingConsent.map((director: DirectorName) => String(director._id)), todayDateOnly());
+    await consentForms.prepare(needsConsentForm.map((director: DirectorName) => String(director._id)), todayDateOnly());
+  };
+
+  // "Correct director record" in the consent section moves focus to the director's own fields.
+  const focusDirectorFields = () => {
+    const input = directorFieldsRef.current?.querySelector("input");
+    input?.scrollIntoView({ block: "center", behavior: "smooth" });
+    input?.focus({ preventScroll: true });
   };
 
   const openNew = () => {
@@ -302,10 +325,10 @@ export function DirectorsPage() {
           sub={directorProfile.residencyMetricSubtext}
         />
         <StatTile
-          label="Consent to act"
-          value={directorsLoaded ? `${active.length - missingConsent.length}/${active.length}` : "—"}
+          label="Consent verified"
+          value={directorsLoaded && consentStatesLoaded ? `${active.length - missingConsent.length}/${active.length}` : "—"}
           tone={directorsLoaded && missingConsent.length ? "warn" : undefined}
-          sub={!directorsLoaded ? undefined : missingConsent.length ? `${missingConsent.length} active ${missingConsent.length === 1 ? "director has" : "directors have"} none recorded.` : "Every active director has consent on file."}
+          sub={!directorsLoaded || !consentStatesLoaded ? undefined : missingConsent.length ? describeUnverifiedConsents(activeConsentStates) : "Every active director's consent basis is verified."}
         />
         <StatTile
           label="Change of directors"
@@ -326,15 +349,15 @@ export function DirectorsPage() {
               actions={
                 <>
                   <button type="button" className="btn btn--sm" onClick={reviewMissingConsent}>Review</button>
-                  {consentForms.available && (
+                  {consentForms.available && needsConsentForm.length > 0 && (
                     <button type="button" className="btn btn--sm" disabled={consentForms.busy} onClick={prepareMissingConsentForms}>
-                      {consentForms.busy ? "Preparing…" : missingConsent.length === 1 ? "Generate consent form" : "Generate consent forms"}
+                      {consentForms.busy ? "Preparing…" : needsConsentForm.length === 1 ? "Generate consent form" : "Generate consent forms"}
                     </button>
                   )}
                 </>
               }
             >
-              {missingConsent.length === 1 ? "1 active director has" : `${missingConsent.length} active directors have`} no consent recorded. {directorProfile.consentRule}
+              {unverifiedConsentText} {directorProfile.consentRule}
             </Flag>
           )}
         </div>
@@ -480,7 +503,7 @@ export function DirectorsPage() {
                   has no general 15- or 30-day director-change deadline. */}
               Keep this register current. {directorProfile.directorChangeNote}
             </InspectorNote>
-            <div className="row" style={{ gap: 12 }}>
+            <div className="row" style={{ gap: 12 }} ref={directorFieldsRef}>
               <Field label="First name"><input className="input" value={selected.firstName} onChange={(e) => setSelected({ ...selected, firstName: e.target.value })} /></Field>
               <Field label="Last name"><input className="input" value={selected.lastName} onChange={(e) => setSelected({ ...selected, lastName: e.target.value })} /></Field>
             </div>
@@ -552,6 +575,8 @@ export function DirectorsPage() {
                 organization={society}
                 director={(directors ?? []).find((director: DirectorName) => director._id === selected._id) ?? selected}
                 consentRows={consentRows}
+                consentState={consentStateById.get(String(selected._id))}
+                onCorrectRecord={canManage ? focusDirectorFields : undefined}
                 registerReadable={consentRegisterReadable}
                 canManage={canManage}
               />
@@ -751,7 +776,7 @@ function ArchivedRoleEvidenceView({
  * director drawer), so the table and preview panel show it read-only.
  */
 function consentFieldFromRegister<T extends { label: string; isReadOnly: boolean }>(field: T): T {
-  return { ...field, label: "Consent to act", isReadOnly: true };
+  return { ...field, label: "Consent verified", isReadOnly: true };
 }
 
 function cleanAliases(value: unknown) {

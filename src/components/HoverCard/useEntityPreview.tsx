@@ -239,7 +239,7 @@ function buildDirector(ref: EntityRef, directors: any[], members: any[]): Entity
     initials: initialsOf(name || "D"),
     badges: [
       { label: sentence(String(director.status ?? "")), tone: statusTone(String(director.status ?? "")) },
-      ...(director.consentOnFile ? [] : [{ label: "No consent on file", tone: "warn" as const }]),
+      ...(director.consentOnFile ? [] : [{ label: "Consent not verified", tone: "warn" as const }]),
     ].filter((badge) => badge.label),
     facts: [
       { label: "Term", value: termText(director) },
