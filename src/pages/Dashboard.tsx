@@ -35,7 +35,8 @@ import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { automatedComplianceChecksLabel } from "../../shared/entityRuleScope";
-import { ContinuityChecksCard, type ContinuityCheck } from "../features/gaps/ContinuityChecksCard";
+import { ContinuityChecksCard, continuityDismissTarget, type ContinuityCheck } from "../features/gaps/ContinuityChecksCard";
+import { canDismissItem, DismissButton, DismissedItems, useDashboardDismissals, type DismissedEntry, type DismissTarget } from "../features/dashboard/DashboardDismissals";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
 import { RollingNumber } from "../components/RollingNumber";
@@ -81,6 +82,7 @@ export function Dashboard() {
   const markMemberDataAccessReviewed = useMutation(api.dashboardRemediation.markMemberDataAccessReviewed);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
+  const dismissals = useDashboardDismissals(society?._id);
   // Setup progress comes from the same source as the setup view and the
   // shell's setup pill; hiding the summary here hides the pill too, live.
   const { hidden: onboardingFlowHidden, setHidden: setOnboardingFlowHidden } = useSetupGuideHidden(society?._id ? String(society._id) : null);
@@ -105,7 +107,11 @@ export function Dashboard() {
   const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks } = data;
   const todayISO = organizationTodayISO(society);
   const canRead = (permission: string) => data.readAccess?.includes(permission) ?? can(permission);
-  const actionableComplianceFlags = complianceFlags.filter((flag: any) => flag.level !== "ok" && flag.level !== "info");
+  // Dismissed recommendations leave the list and every count; they sit under
+  // "Dismissed (n)" at the foot of the card.
+  const openComplianceFlags = (complianceFlags as DashboardComplianceFlag[]).filter((flag) => !flag.dismissal);
+  const dismissedComplianceFlags = (complianceFlags as DashboardComplianceFlag[]).filter((flag) => flag.dismissal);
+  const actionableComplianceFlags = openComplianceFlags.filter((flag) => flag.level !== "ok" && flag.level !== "info");
   const completeComplianceAccess = ["directors:read", "members:read", "documents:read"].every(canRead);
   const currentRoleHolders = (roleHolders ?? []).filter((row: any) => (row.status ?? "current") === "current");
   const roleHolderCounts = {
@@ -135,6 +141,13 @@ export function Dashboard() {
       undo: () => showModule(id),
       undoneMessage: false,
     });
+
+  const flagDismissTarget = (flag: DashboardComplianceFlag): DismissTarget => ({ id: flag.ruleId, level: flag.level, text: pluralizeCounts(flag.text) });
+  const canDismissFlag = (flag: DashboardComplianceFlag) => dismissals.canDismiss && canDismissItem(flag);
+  const dismissedEntries = (flags: DashboardComplianceFlag[], checks: ContinuityCheck[] = []): DismissedEntry[] => [
+    ...flags.flatMap((flag) => flag.dismissal ? [{ ...flagDismissTarget(flag), dismissal: flag.dismissal }] : []),
+    ...checks.flatMap((check) => check.dismissal ? [{ ...continuityDismissTarget(check), dismissal: check.dismissal }] : []),
+  ];
 
   const remediationPermission = (action: DashboardRemediationAction) =>
     action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write";
@@ -234,7 +247,7 @@ export function Dashboard() {
           <div className="dashboard-compliance__summary">
             <div>
               <div className="dashboard-compliance__count">
-                {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : isPreparingIncorporation(society) ? "Checks start after incorporation" : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
+                {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : isPreparingIncorporation(society) ? "Checks start after incorporation" : dismissedComplianceFlags.length ? "Nothing open to resolve" : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
               </div>
               {!completeComplianceAccess && (
                 <div className="muted">Some checks need an administrator. The items below use records available to your role.</div>
@@ -252,23 +265,26 @@ export function Dashboard() {
           </div>
 
           <ul className="dashboard-compliance__todo">
-            {complianceFlags.slice(0, showComplianceDetails ? complianceFlags.length : 3).map((f: any, i: number) => (
-              <li key={i}>{pluralizeCounts(f.text)}</li>
+            {openComplianceFlags.slice(0, showComplianceDetails ? openComplianceFlags.length : 3).map((f, i) => (
+              <li key={f.ruleId ?? i}>{pluralizeCounts(f.text)}</li>
             ))}
           </ul>
 
-          {!showComplianceDetails && complianceFlags.length > 3 && (
+          {!showComplianceDetails && openComplianceFlags.length > 3 && (
             <button
               type="button"
               className="dashboard-compliance__more"
               onClick={() => setShowComplianceDetails(true)}
             >
-              Show {complianceFlags.length - 3} more
+              Show {openComplianceFlags.length - 3} more
             </button>
           )}
 
           <div className={`dashboard-compliance__details${showComplianceDetails ? " is-open" : ""}`}>
-            {complianceFlags.map((f: any, i: number) => {
+            {openComplianceFlags.length === 0 && dismissedComplianceFlags.length > 0 && (
+              <div className="muted">Nothing open here. Dismissed recommendations are listed below.</div>
+            )}
+            {openComplianceFlags.map((f: any, i: number) => {
               const evidenceInfo = f.evidenceRequired?.length > 0 ? (
                 <InfoPopover label="Evidence that resolves this">
                   <p><strong>Evidence that resolves this</strong></p>
@@ -280,7 +296,9 @@ export function Dashboard() {
               const actionDisabled = (action: any) => remediationActionDisabled(f, action);
               // One primary action per row; the rest sit in a ⋯ menu.
               const [primary, ...secondary] = visibleRemediationActions(f);
-              const actions = f.remediationStatus || primary || evidenceInfo ? (
+              // Recommendations add "Dismiss" to the ⋯ menu, or a × when the row has none.
+              const dismissable = canDismissFlag(f);
+              const actions = f.remediationStatus || primary || evidenceInfo || dismissable ? (
                 <>
                   {f.remediationStatus && (
                     <Badge tone={f.remediationStatus === "resolved" ? "success" : "info"}>
@@ -305,15 +323,21 @@ export function Dashboard() {
                     <MoreActionsMenu
                       label=""
                       align="left"
-                      items={secondary.map((action: any) => ({
-                        id: action.id,
-                        label: busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label,
-                        disabled: actionDisabled(action),
-                        onSelect: () => runRemediationAction(f, action),
-                      }))}
+                      items={[
+                        ...secondary.map((action: any) => ({
+                          id: action.id,
+                          label: busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label,
+                          disabled: actionDisabled(action),
+                          onSelect: () => runRemediationAction(f, action),
+                        })),
+                        ...(dismissable ? [{ id: "dismiss", label: "Dismiss", onSelect: () => void dismissals.dismiss(flagDismissTarget(f)) }] : []),
+                      ]}
                     />
                   )}
                   {evidenceInfo}
+                  {dismissable && secondary.length === 0 && (
+                    <DismissButton label={pluralizeCounts(f.text)} onDismiss={() => void dismissals.dismiss(flagDismissTarget(f))} />
+                  )}
                 </>
               ) : null;
               return (
@@ -329,6 +353,12 @@ export function Dashboard() {
               );
             })}
           </div>
+
+          <DismissedItems
+            items={dismissedEntries(dismissedComplianceFlags)}
+            canRestore={dismissals.canDismiss}
+            onRestore={(item) => void dismissals.restore(item)}
+          />
         </div>
       </div>
     ),
@@ -593,7 +623,8 @@ export function Dashboard() {
         flagLink: (flag) => visibleRemediationActions(flag).find((action) => action.intent === "navigate" && action.to)?.to,
         flagActions: (flag, rowLink) => {
           const others = visibleRemediationActions(flag).filter((action) => !(action.intent === "navigate" && action.to === rowLink));
-          if (!others.length) return null;
+          const dismissable = canDismissFlag(flag);
+          if (!others.length && !dismissable) return null;
           return (
             <div className="attention-pop__actions">
               {others.map((action) =>
@@ -611,10 +642,30 @@ export function Dashboard() {
                   </button>
                 ),
               )}
+              {dismissable && (
+                <button type="button" className="btn btn--sm btn--ghost" onClick={() => void dismissals.dismiss(flagDismissTarget(flag))}>
+                  Dismiss
+                </button>
+              )}
             </div>
           );
         },
+        checkActions: (check) => dismissals.canDismiss && canDismissItem(check) ? (
+          <div className="attention-pop__actions">
+            <button type="button" className="btn btn--sm btn--ghost" onClick={() => void dismissals.dismiss(continuityDismissTarget(check))}>
+              Dismiss
+            </button>
+          </div>
+        ) : null,
       })
+    : [];
+  // The phone list's dismissed items: the recommendations it would list
+  // (it leaves out "info" notes).
+  const dismissedAttentionEntries = attentionVisible
+    ? dismissedEntries(
+        visibleModules.includes("compliance") ? dismissedComplianceFlags.filter((flag) => flag.level === "warn") : [],
+        visibleModules.includes("continuity") ? (continuity?.checks ?? []).filter((check) => check.dismissal && check.level === "warn") : [],
+      )
     : [];
   const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
   const expiringAgreements = agreementsSummary?.expiring?.length;
@@ -661,6 +712,14 @@ export function Dashboard() {
               note={visibleModules.includes("compliance") && !completeComplianceAccess
                 ? "Some checks need an administrator. This list uses records your role can see."
                 : undefined}
+              dismissed={dismissedAttentionEntries.length > 0 ? (
+                <DismissedItems
+                  className="needs-attention__dismissed"
+                  items={dismissedAttentionEntries}
+                  canRestore={dismissals.canDismiss}
+                  onRestore={(item) => void dismissals.restore(item)}
+                />
+              ) : undefined}
             />
           }
         />
