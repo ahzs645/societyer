@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { FileSearch, Lock } from "lucide-react";
@@ -42,9 +42,10 @@ function where(locator: ProvenanceRow["locator"]) {
  *
  *   <SourceProvenanceButton table="meetings" id={meeting._id} />
  *
- * For a meeting it also covers the meeting's minutes and motions.
+ * For a meeting it also covers the meeting's minutes and motions. Spacing
+ * goes in `style`, so nothing is left behind when the button renders nothing.
  */
-export function SourceProvenanceButton({ table, id, label = "View source" }: { table: string; id: string | undefined | null; label?: string }) {
+export function SourceProvenanceButton({ table, id, label = "View source", style }: { table: string; id: string | undefined | null; label?: string; style?: CSSProperties }) {
   const society = useSociety();
   const { can } = usePermissions();
   const [open, setOpen] = useState(false);
@@ -65,7 +66,7 @@ export function SourceProvenanceButton({ table, id, label = "View source" }: { t
     files.set(key, entry);
   }
   return (
-    <span className="source-provenance" style={{ display: "inline-flex" }}>
+    <span className="source-provenance" style={{ display: "inline-flex", ...style }}>
       <button type="button" className="badge badge--info" onClick={() => setOpen(true)} aria-haspopup="dialog" title={`${pluralize(rows.length, "field")} came from ${pluralize(files.size, "source file")} through AI intake review`} style={{ display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer", border: 0 }} data-testid="view-source">
         <FileSearch size={12} aria-hidden="true" /> {label}
       </button>

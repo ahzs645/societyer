@@ -19,7 +19,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Archive, ChevronRight, Plus, Trash2, UserCog } from "lucide-react";
+import { Archive, ChevronRight, FileSignature, Plus, Trash2, UserCog } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { entityHref } from "../components/HoverCard/entityRefs";
@@ -44,8 +44,18 @@ import { directorComplianceProfile } from "../../shared/directorCompliance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { StatStrip, StatTile } from "../components/StatTile";
+import {
+  DIRECTOR_CONSENT_HISTORY_HREF,
+  DirectorConsentSection,
+  useConsentRegisterReadable,
+  useDirectorConsentForms,
+  type ConsentRegisterRow,
+} from "../features/people/DirectorConsentSection";
 
 const CURRENT_DIRECTORS_VIEW = "Current directors";
+
+/** The parts of a director row the consent actions read. */
+type DirectorName = { _id: string; firstName?: string; lastName?: string };
 
 export function DirectorsPage() {
   const society = useSociety();
@@ -55,6 +65,13 @@ export function DirectorsPage() {
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
+  // The consent register backs the drawer's "Consent to act" section.
+  const consentRegisterReadable = useConsentRegisterReadable(society);
+  const consentRows = useQuery(
+    api.businessEvidence.list,
+    society && consentRegisterReadable ? { societyId: society._id, register: "directorConsents" } : "skip",
+  ) as ConsentRegisterRow[] | undefined;
+  const consentForms = useDirectorConsentForms(society);
   const create = useMutation(api.directors.create);
   const update = useMutation(api.directors.update);
   const remove = useMutation(api.directors.remove);
@@ -153,6 +170,26 @@ export function DirectorsPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  // Opens the first active director without consent, as ?intent=consent does.
+  const reviewMissingConsent = () => {
+    if (!missingConsent.length) return;
+    setProblemsRevealed(false);
+    setSelected(missingConsent[0]);
+    setOpen(true);
+  };
+
+  // One draft with a consent form per director, each effective from their term start.
+  const prepareMissingConsentForms = async () => {
+    const names = missingConsent.map((director: DirectorName) => `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim() || "Unnamed director");
+    const ok = await confirm({
+      title: missingConsent.length === 1 ? "Prepare a consent form?" : `Prepare ${missingConsent.length} consent forms?`,
+      message: `One editable draft with a "Consent to act as director" form for ${names.join(", ")}, each effective from the director's term start. Review it, then have each director sign their own form.`,
+      confirmLabel: "Prepare",
+    });
+    if (!ok) return;
+    await consentForms.prepare(missingConsent.map((director: DirectorName) => String(director._id)), todayDateOnly());
+  };
+
   const openNew = () => {
     setProblemsRevealed(false);
     setSelected({
@@ -171,7 +208,7 @@ export function DirectorsPage() {
     const name = `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() || "this unnamed director";
     const ok = await confirm({
       title: `Delete ${name}?`,
-      message: `${name} will be removed from the director register and from active-director and residency counts. To record that a real director left office, use Resign instead so the term history is kept.`,
+      message: `${name} will be removed from the director register and from active-director and residency counts. To record that a real director left office, set Status to Resigned or Removed and Term end to the day they left instead, so the term history is kept.`,
       confirmLabel: "Delete director",
       tone: "danger",
     });
@@ -192,7 +229,9 @@ export function DirectorsPage() {
     }
     try {
     if (selected._id) {
-      const { _id, _creationTime, societyId, directoryPersonId, entityId, ...patch } = selected;
+      // Consent on file follows the consent register (set when a consent is
+      // recorded), so the drawer never writes back the copy it opened with.
+      const { _id, _creationTime, societyId, directoryPersonId, entityId, consentOnFile, ...patch } = selected;
       patch.aliases = cleanAliases(patch.aliases);
       await update({ id: _id, patch });
     } else {
@@ -221,13 +260,19 @@ export function DirectorsPage() {
           </>
         }
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
-            <Plus size={12} /> New director
-          </button>
+          <>
+            {consentRegisterReadable && (
+              <Link className="btn-action" to={DIRECTOR_CONSENT_HISTORY_HREF}>
+                <FileSignature size={12} /> Consent history
+              </Link>
+            )}
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
+              <Plus size={12} /> New director
+            </button>
+          </>
         }
       />
 
-      <div><Link className="btn btn--sm" to="/app/business-records?register=directorConsents">Director consent history</Link></div>
       <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
       <StatStrip ariaLabel="Director summary">
         <StatTile
@@ -243,10 +288,10 @@ export function DirectorsPage() {
           sub={directorProfile.residencyMetricSubtext}
         />
         <StatTile
-          label="Consent evidence"
+          label="Consent to act"
           value={directorsLoaded ? `${active.length - missingConsent.length}/${active.length}` : "—"}
           tone={directorsLoaded && missingConsent.length ? "warn" : undefined}
-          sub={directorProfile.consentExplanation}
+          sub={!directorsLoaded ? undefined : missingConsent.length ? `${missingConsent.length} active ${missingConsent.length === 1 ? "director has" : "directors have"} none recorded.` : "Every active director has consent on file."}
         />
         <StatTile
           label="Change of directors"
@@ -260,7 +305,24 @@ export function DirectorsPage() {
           {minimumMissing && <Flag level="err" citationId={directorProfile.citationIds[0]}>Fewer than {directorProfile.minimumActiveDirectors} active legal directors are recorded.</Flag>}
           {residencyMissing && <Flag level="err" citationId="BC-SOC-DIRECTORS-BC-RESIDENT">Record at least one director ordinarily resident in BC.</Flag>}
           {canadianMissing && <Flag level={canadianUnknown ? "warn" : "err"} citationId={directorProfile.citationIds[0]}>{canadianResidents} confirmed resident Canadians; at least {canadianRequired} required for this board. {canadianUnknown} {canadianUnknown === 1 ? "assessment" : "assessments"} outstanding. Check regulated-sector exceptions.</Flag>}
-          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length === 1 ? "1 director lacks" : `${missingConsent.length} directors lack`} linked consent evidence. {directorProfile.consentExplanation}</Flag>}
+          {missingConsent.length > 0 && (
+            <Flag
+              level="warn"
+              citationIds={[...directorProfile.consentCitationIds]}
+              actions={
+                <>
+                  <button type="button" className="btn btn--sm" onClick={reviewMissingConsent}>Review</button>
+                  {consentForms.available && (
+                    <button type="button" className="btn btn--sm" disabled={consentForms.busy} onClick={prepareMissingConsentForms}>
+                      {consentForms.busy ? "Preparing…" : missingConsent.length === 1 ? "Generate consent form" : "Generate consent forms"}
+                    </button>
+                  )}
+                </>
+              }
+            >
+              {missingConsent.length === 1 ? "1 active director has" : `${missingConsent.length} active directors have`} no consent recorded. {directorProfile.consentRule}
+            </Flag>
+          )}
         </div>
       )}
 
@@ -364,7 +426,7 @@ export function DirectorsPage() {
           </>
         }
       >
-        {selected?._id && <div style={{ marginBottom: 8 }}><SourceProvenanceButton table="directors" id={selected._id} /></div>}
+        {selected?._id && <SourceProvenanceButton table="directors" id={selected._id} style={{ marginBottom: 8 }} />}
         {selected && (
           <fieldset disabled={!canManage} {...revealProblemsOnLeave} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             {showSelectedProblems && (
@@ -397,11 +459,10 @@ export function DirectorsPage() {
                 This director's term ended {selected.termEnd} but the record is still Active. Record the re-election (new term end) or the date they left office.
               </InspectorNote>
             )}
-            {selected._id&&<PersonRecordLinks societyId={society._id} recordTable="directors" recordId={selected._id} personName={`${selected.firstName} ${selected.lastName}`} observedDate={selected.termStart}/>}
-            <InspectorNote tone="warn" title="Director register">
+            <InspectorNote tone="info" title="Director register">
               {/* Timing comes from the governing-Act profile: the Societies Act
                   has no general 15- or 30-day director-change deadline. */}
-              Keep this register current. Director-change filing: {directorProfile.directorChangeSubtext}
+              Keep this register current. {directorProfile.directorChangeNote}
             </InspectorNote>
             <div className="row" style={{ gap: 12 }}>
               <Field label="First name"><input className="input" value={selected.firstName} onChange={(e) => setSelected({ ...selected, firstName: e.target.value })} /></Field>
@@ -413,7 +474,7 @@ export function DirectorsPage() {
                 className="input"
                 value={(selected.aliases ?? []).join(", ")}
                 onChange={(e) => setSelected({ ...selected, aliases: e.target.value.split(",") })}
-                placeholder="Bruce Danesh, Behrouz (Bruce) Danesh"
+                placeholder="Alex Smith, A. J. Smith"
               />
             </Field>
             <Field label="Linked member">
@@ -435,28 +496,28 @@ export function DirectorsPage() {
               <Field label="Position change source URL"><input className="input" value={selected.positionChangeEvidence?.sourceUrl??''} onChange={e=>setSelected({...selected,positionChangeEvidence:{...selected.positionChangeEvidence,sourceUrl:e.target.value,reviewStatus:'verified'}})}/></Field>
               <Field label="Position change citation"><input className="input" value={selected.positionChangeEvidence?.sourceReference??''} onChange={e=>setSelected({...selected,positionChangeEvidence:{...selected.positionChangeEvidence,sourceReference:e.target.value,reviewStatus:'verified'}})}/></Field>
             </div>}
-            <Field label="Position">
+            <Field label="Board position" hint="The title this director holds on the board. Officer appointments are recorded in Role holders.">
               <Select
                 value={selected.position}
                 onChange={(v) => setSelected({ ...selected, position: v })}
                 options={["President", "Vice President", "Treasurer", "Secretary", "Director"].map((p) => ({ value: p, label: p }))}
               />
             </Field>
-            <div className="row" style={{ gap: 12 }}>
+            <div className="row director-drawer__pair">
               <Field label="Term start">
                 <DatePicker value={selected.termStart} onChange={(v) => setSelected({ ...selected, termStart: v })} />
               </Field>
               <Field label="Term end">
                 <DatePicker value={selected.termEnd ?? ""} onChange={(v) => setSelected({ ...selected, termEnd: v })} />
               </Field>
-              <Field label="Status">
-                <Select
-                  value={selected.status}
-                  onChange={(v) => setSelected({ ...selected, status: v })}
-                  options={["Active", "NeedsReview", "Resigned", "Removed"].map((s) => ({ value: s, label: s === "NeedsReview" ? "Needs review (from a source roster)" : s }))}
-                />
-              </Field>
             </div>
+            <Field label="Status" hint={["Resigned", "Removed"].includes(selected.status) && !selected.termEnd ? "Set Term end to the day they left office." : undefined}>
+              <Select
+                value={selected.status}
+                onChange={(v) => setSelected({ ...selected, status: v })}
+                options={["Active", "NeedsReview", "Resigned", "Removed"].map((s) => ({ value: s, label: s === "NeedsReview" ? "Needs review (from a source roster)" : s }))}
+              />
+            </Field>
             {directorProfile.showBcResidentField && (
               <Checkbox
                 checked={!!selected.isBCResident}
@@ -470,11 +531,17 @@ export function DirectorsPage() {
               </Field>
               <Field label="Residency assessment evidence"><input className="input" value={selected.residentCanadianEvidence ?? ""} onChange={e => setSelected({ ...selected, residentCanadianEvidence: e.target.value })} /></Field>
             </>}
-            <Checkbox
-              checked={!!selected.consentOnFile}
-              onChange={(v) => setSelected({ ...selected, consentOnFile: v })}
-              label="Director consent evidence on file"
-            />
+            {selected._id ? (
+              <DirectorConsentSection
+                organization={society}
+                director={(directors ?? []).find((director: DirectorName) => director._id === selected._id) ?? selected}
+                consentRows={consentRows}
+                registerReadable={consentRegisterReadable}
+                canManage={canManage}
+              />
+            ) : (
+              <p className="muted director-consent__note">Consent to act can be recorded after the director is saved.</p>
+            )}
             <Field label="Notes"><MarkdownEditor readOnly={!canManage} rows={4} value={selected.notes ?? ""} onChange={(markdown) => setSelected({ ...selected, notes: markdown })} /></Field>
             {selected._id && (
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
@@ -486,6 +553,17 @@ export function DirectorsPage() {
               </div>
             )}
           </fieldset>
+        )}
+        {selected?._id && (
+          <PersonRecordLinks
+            societyId={society._id}
+            recordTable="directors"
+            recordId={selected._id}
+            personName={`${selected.firstName} ${selected.lastName}`}
+            observedDate={selected.termStart}
+            compactConfirmed
+            currentPagePath="/app/directors"
+          />
         )}
       </Drawer>
     </div>

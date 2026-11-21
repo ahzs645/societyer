@@ -3,8 +3,31 @@ import {peopleNamedInFragment,stripRoleAffixes} from '../../shared/personMatchin
 import {useMemo,useState} from 'react';import {Link} from 'react-router-dom';import {useQuery,useMutation} from 'convex/react';import {api} from '@/lib/convexApi';import {usePermissions} from '@/hooks/usePermissions';import {useToast} from './Toast';
 import {PersonPicker,useDirectoryPeople,type DirectoryPersonOption} from './PersonPicker';
 import {PageErrorBoundary} from './PageErrorBoundary';
+import {formatDateTime} from '@/lib/format';
 
 const STATUS_LABELS:Record<string,string>={verified:'Confirmed',suggested:'Suggested',unresolved:'Unresolved',assumed:'Test assumption — identity unconfirmed',rejected:'Rejected',not_person:'Organization / heading'};
+/** Review-history entry kinds as the reader should see them. */
+const REVIEW_KIND_LABELS:Record<string,string>={create_person:'Profile created',split:'Fragment split',person_merge:'Profiles merged',person_unmerge:'Merge undone',relink:'Re-linked',relink_repair:'Link repaired',note:'Note',observation:'Observed'};
+type ReviewHistoryEntry={kind?:string;status?:string;rationale?:string;reviewedAtISO?:string;previous?:{status?:string}|null};
+function reviewKindLabel(kind:string){return REVIEW_KIND_LABELS[kind]??kind.replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());}
+function reviewStatusLabel(status:string){return STATUS_LABELS[status]??status.replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());}
+
+/** Identity review history: readable dates and labels, and a rationale repeated on consecutive entries shown once. */
+function ReviewHistory({entries}:{entries:ReviewHistoryEntry[]}){
+ return <details><summary>Identity review history ({entries.length})</summary><ul className="person-occurrence__history">{entries.map((h,i)=>{
+  const repeated=i>0&&Boolean(h.rationale)&&h.rationale===entries[i-1].rationale;
+  const parts=[h.reviewedAtISO?formatDateTime(h.reviewedAtISO):'Date unknown',h.kind?reviewKindLabel(h.kind):'',h.status?reviewStatusLabel(h.status):''].filter(Boolean);
+  return <li key={i}>{parts.join(' · ')}{h.previous?.status?<span className="muted"> (was {reviewStatusLabel(h.previous.status)})</span>:null}{h.rationale&&!repeated?<div className="muted">{h.rationale}</div>:null}</li>;
+ })}</ul></details>;
+}
+
+/** Display options for the shared review card. */
+type OccurrenceDisplay={
+ /** A confirmed link shows as one line with its review details behind "Review". */
+ compactConfirmed?:boolean;
+ /** Hide the "Related record" link when it points at this page (e.g. "/app/directors"). */
+ currentPagePath?:string;
+};
 
 /** P10: split a merged fragment into people, or create a profile from it. */
 function FragmentTools({row,people}:{row:any;people:DirectoryPersonOption[]}){
@@ -32,16 +55,19 @@ function FragmentTools({row,people}:{row:any;people:DirectoryPersonOption[]}){
  </div></details>;
 }
 
-export function PersonOccurrenceReview({row,people}:{row:any;people:DirectoryPersonOption[]|undefined}){
+export function PersonOccurrenceReview({row,people,display}:{row:any;people:DirectoryPersonOption[]|undefined;display?:OccurrenceDisplay}){
  const {can}=usePermissions();const toast=useToast();const review=useMutation(api.personHistory.reviewMatch);
  const [personId,setPersonId]=useState(row.personId??'');const [rationale,setRationale]=useState('');const [busy,setBusy]=useState(false);const [open,setOpen]=useState(false);
  const submit=async(status:string)=>{setBusy(true);try{await review({societyId:row.societyId,occurrenceId:row._id,personId:personId||undefined,status,rationale,...(status==='assumed'?{testOnly:true}:{}),source:{sourceUrl:row.sourceUrl,sourceReference:row.sourceReference,reviewStatus:status==='verified'?'verified':'pending'}});toast.success(status==='assumed'?'Test assumption saved; source identity remains unconfirmed':row.personId&&personId&&personId!==row.personId?'Identity re-linked; its history moved with it':'Identity review recorded');}catch(e:any){toast.error(e.message);}finally{setBusy(false);}};
  const candidates:any[]=row.candidates??[];const named:any[]=row.namedPeople??[];
- return <div className="card__body col person-occurrence" style={{gap:8,borderBottom:'1px solid var(--border)'}}>
-  <div><strong>{row.personName}</strong> · {STATUS_LABELS[row.matchStatus]??row.matchStatus} · {row.observedDate||'Date unknown'} · {row.context}</div>
+ const compact=Boolean(display?.compactConfirmed)&&row.matchStatus==='verified';
+ const relatedHref=row.href&&display?.currentPagePath&&String(row.href).split(/[?#]/)[0]===display.currentPagePath?undefined:row.href;
+ const heading=<div><strong>{row.personName}</strong> · {STATUS_LABELS[row.matchStatus]??row.matchStatus} · {row.observedDate||'Date unknown'} · {row.context}</div>;
+ const body=<>
+  {compact?<div className="muted">{row.observedDate||'Date unknown'} · {row.context}</div>:heading}
   {(row.roleTitle||row.affiliation)&&<p>Source role: {sourceRoleLabel(row.roleTitle)} · Source affiliation: {row.affiliation||'Unknown'}</p>}
   {row.notes&&<p>{row.notes}</p>}
-  <div className="row" style={{gap:12,flexWrap:'wrap'}}>{row.personId&&<Link to={`/app/people-directory/${row.personId}`}>Person profile {row.matchStatus==='assumed'?'(test assumption)':row.matchStatus!=='verified'?'(suggested identity)':''}</Link>}{row.href&&<Link to={row.href}>Related record</Link>}<a href={row.sourceUrl} target="_blank" rel="noreferrer">Source</a><span className="muted">{row.sourceReference}</span></div>
+  <div className="row" style={{gap:12,flexWrap:'wrap'}}>{row.personId&&<Link to={`/app/people-directory/${row.personId}`}>Person profile {row.matchStatus==='assumed'?'(test assumption)':row.matchStatus!=='verified'?'(suggested identity)':''}</Link>}{relatedHref&&<Link to={relatedHref}>Related record</Link>}<a href={row.sourceUrl} target="_blank" rel="noreferrer">Source</a><span className="muted">{row.sourceReference}</span></div>
   {row.matchStatus==='assumed'&&<p className="muted">This link lets you explore the test interface. Confirm the cited identity before treating related history as verified.</p>}
   {row.originalRoleTitle&&row.originalRoleTitle!==row.roleTitle&&<p className="muted">Role classification checked against the original. Earlier extracted role retained for audit: {row.originalRoleTitle}</p>}
   {row.originalSourceReference&&row.originalSourceReference!==row.sourceReference&&<p className="muted">Original cell citation corrected after checking the workbook. Earlier extraction citation retained: {row.originalSourceReference}</p>}
@@ -55,17 +81,24 @@ export function PersonOccurrenceReview({row,people}:{row:any;people:DirectoryPer
    {row.matchStatus!=='verified'&&<div><button className="btn" disabled={busy||!rationale.trim()||!personId} onClick={()=>submit('assumed')}>Use as test assumption</button><p className="muted">Saves a cited, unconfirmed link for the test interface. Membership, voting rights and verified history remain separate.</p></div>}
    {people&&<FragmentTools row={row} people={people}/>}
   </div>}</details>}
-  {!!row.reviewHistory?.length&&<details><summary>Identity review history ({row.reviewHistory.length})</summary>{row.reviewHistory.map((h:any,i:number)=><p key={i}>{h.reviewedAtISO} · {h.kind?`${h.kind} · `:''}{h.status} · {h.rationale} · previous {h.previous?.status??'—'}</p>)}</details>}
+  {!!row.reviewHistory?.length&&<ReviewHistory entries={row.reviewHistory as ReviewHistoryEntry[]}/>}
+ </>;
+ return <div className="card__body col person-occurrence" style={{gap:8,borderBottom:'1px solid var(--border)'}}>
+  {compact?<>
+   <div className="person-occurrence__summary"><strong>{row.personName}</strong> · {STATUS_LABELS.verified}{row.personId&&<> · <Link to={`/app/people-directory/${row.personId}`}>Person profile</Link></>}</div>
+   <details className="person-occurrence__review"><summary>Review</summary><div className="col" style={{gap:8,marginTop:8}}>{body}</div></details>
+  </>:body}
  </div>;
 }
-type PersonRecordLinksProps={societyId:string;recordTable:string;recordId:string;personName?:string;observedDate?:string;people?:DirectoryPersonOption[]};
+type PersonRecordLinksProps={societyId:string;recordTable:string;recordId:string;personName?:string;observedDate?:string;people?:DirectoryPersonOption[]}&OccurrenceDisplay;
 /** P-O1: a failed lookup shows an error with Retry inside the card, never "Loading linked people…" forever. */
 export function PersonRecordLinks(props:PersonRecordLinksProps){
  return <PageErrorBoundary variant="inline" subject="linked people" resetKey={`${props.societyId}|${props.recordTable}|${props.recordId}`}>
   <PersonRecordLinksPanel {...props}/>
  </PageErrorBoundary>;
 }
-function PersonRecordLinksPanel({societyId,recordTable,recordId,personName,observedDate,people:providedPeople}:PersonRecordLinksProps){
+function PersonRecordLinksPanel({societyId,recordTable,recordId,personName,observedDate,people:providedPeople,compactConfirmed,currentPagePath}:PersonRecordLinksProps){
+ const display:OccurrenceDisplay={compactConfirmed,currentPagePath};
  const {can}=usePermissions();const toast=useToast();const read=can('members:read');
  const data=useQuery(api.personHistory.forRecord,read?{societyId,recordTable,recordId}:'skip') as any[]|undefined;
  // One light directory list (never the full occurrence overview) for the pickers.
@@ -73,11 +106,11 @@ function PersonRecordLinksPanel({societyId,recordTable,recordId,personName,obser
  const stage=useMutation(api.personHistory.stageRecord);const observe=useMutation(api.personHistory.observe);const [sourceUrl,setUrl]=useState('');const [sourceReference,setCitation]=useState('');
  if(!read)return null;
  return <section className="card" style={{marginTop:16}}><div className="card__head"><h2 className="card__title">People linked to this record</h2><Link to="/app/people-history">Review person matches</Link></div>
-  <p className="card__body muted">Each link keeps the name as the source wrote it. Unconfirmed matches are labelled; confirm or correct them here.</p>
+  {!(compactConfirmed&&data?.length&&data.every(row=>row.matchStatus==='verified'||row.matchStatus==='not_person'))&&<p className="card__body muted">Each link keeps the name as the source wrote it. Unconfirmed matches are labelled; confirm or correct them here.</p>}
   {data===undefined&&<p className="card__body muted">Loading linked people…</p>}
-  {(data??[]).filter(row=>row.matchStatus!=='not_person').map(row=><PersonOccurrenceReview key={row._id} row={row} people={people}/>)}
+  {(data??[]).filter(row=>row.matchStatus!=='not_person').map(row=><PersonOccurrenceReview key={row._id} row={row} people={people} display={display}/>)}
   {data&&!data.some(row=>row.matchStatus!=='not_person')&&<p className="card__body muted">No person links recorded yet.</p>}
-  {!!data?.some(row=>row.matchStatus==='not_person')&&<details><summary className="card__body">Source organizations and other fragments ({data.filter(row=>row.matchStatus==='not_person').length})</summary>{data.filter(row=>row.matchStatus==='not_person').map(row=><PersonOccurrenceReview key={row._id} row={row} people={people}/>)}</details>}
+  {!!data?.some(row=>row.matchStatus==='not_person')&&<details><summary className="card__body">Source organizations and other fragments ({data.filter(row=>row.matchStatus==='not_person').length})</summary>{data.filter(row=>row.matchStatus==='not_person').map(row=><PersonOccurrenceReview key={row._id} row={row} people={people} display={display}/>)}</details>}
   {['minutes','organizationSeats'].includes(recordTable)&&can('members:write')&&<details className="card__body"><summary>Check the names in the source against your people</summary><label>Source URL<input className="input" value={sourceUrl} onChange={e=>setUrl(e.target.value)}/></label><label>Attendance / roster citation<input className="input" value={sourceReference} onChange={e=>setCitation(e.target.value)}/></label><button className="btn" disabled={!sourceUrl||!sourceReference} onClick={async()=>{try{await stage({societyId,recordTable,recordId,sourceUrl,sourceReference});toast.success('Source names staged for review');}catch(e:any){toast.error(e.message);}}}>Stage person names</button></details>}
   {personName&&can('members:write')&&data&&!data.length&&<details className="card__body"><summary>Connect this {recordTable==='members'?'member':'director'} to a person profile</summary><label>Source URL<input className="input" value={sourceUrl} onChange={e=>setUrl(e.target.value)}/></label><label>Citation<input className="input" value={sourceReference} onChange={e=>setCitation(e.target.value)}/></label><button className="btn" disabled={!sourceUrl||!sourceReference} onClick={async()=>{try{await observe({societyId,observation:{occurrenceKey:`register:${recordTable}:${recordId}`,recordTable,recordId,personName,context:'Register identity',...(observedDate?{observedDate:observedDate.slice(0,10)}:{}),sourceUrl,sourceReference}});toast.success('Register identity ready for review');}catch(e:any){toast.error(e.message);}}}>Add identity for review</button></details>}
  </section>;
