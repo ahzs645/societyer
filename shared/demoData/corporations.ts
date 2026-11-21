@@ -83,6 +83,7 @@ export const CORPORATION_DEMO_TABLE_ORDER = [
   "serviceProviders",
   "recordsLocation",
   "directors",
+  "directorConsents",
   "roleHolders",
   "rightsClasses",
   "writtenResolutions",
@@ -335,6 +336,13 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
       position: officer ? officeLabel(officer.title) : "Director", isBCResident: row.bcResident, residentCanadianStatus: row.residentCanadian ? "yes" : "no",
       residentCanadianEvidence: row.residentCanadian ? `${row.canadianStatus === "citizen" ? "Canadian citizen" : "Permanent resident"} ordinarily resident in ${row.province}; confirmed on the director's consent.` : `Resides in ${row.city}, ${row.country}; confirmed on the director's consent.`,
       termStart: term.start, termEnd: term.end, consentOnFile: true, resignedAt: term.end, status: term.end && term.end <= asOf ? "Resigned" : "Active", notes: term.endNote,
+    });
+    // The signed consent behind `consentOnFile`, reviewed when it was filed in the minute book.
+    add("directorConsents", {
+      _id: id(`consent_${term.person}_${term.start}`), societyId, directorId, scope: "Consent to act", event: "Given", effectiveDate: term.start,
+      basis: "Written consent", signedOn: term.start, evidenceLocation: "Minute book, Directors' consents tab (records office)",
+      reviewStatus: "Reviewed", reviewedBy: ownerUserId, reviewedByName: fullName(person(ownerKey)), reviewedAt: createdAt(term.start), selfReviewed: true,
+      recordedAt: createdAt(term.start), recordedBy: ownerUserId,
     });
     add("roleHolders", {
       _id: id(`rh_director_${term.person}`), ...roleHolderBase(row), roleType: "director", status: term.end && term.end <= asOf ? "former" : "current",

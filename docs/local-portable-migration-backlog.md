@@ -287,13 +287,13 @@ Every unique function found in the 978 call expressions is listed below. `†` m
 | commitments | `create`, `eventsForSociety`, `list`, `recordEvent`, `remove`, `removeEvent`, `update` |
 | committees | `addMember`, `create`, `detail`, `list`, `remove`, `removeMember`, `update` |
 | communications | `ensureDefaultTemplates`†, `listCampaigns`, `listDeliveries`, `listMemberPrefs`, `listSegments`, `listTemplates`, `removeSegment`, `sendCampaign`†, `sendMeetingNotice`†, `upsertMemberPref`, `upsertSegment`, `upsertTemplate` |
-| complianceObligations | `dismissDecision`, `listDecisions`, `markReviewed`, `reopenDecision` |
+| complianceObligations | `acknowledgeDecision`, `dismissDecision`, `listDecisions`, `markReviewed`, `reopenDecision` |
 | conflicts | `create`, `forMeeting`, `list`, `remove`, `resolve` |
 | constating | `create`, `list`, `narrative`, `remove` |
 | courtOrders | `create`, `list`, `remove`, `update` |
 | customFields | `clearValue`, `createDefinition`, `deleteDefinition`, `listDefinitions`, `listValues`, `setValue`, `updateDefinition` |
 | dashboard | `navCounts`, `summary` |
-| dashboardRemediation | `createComplianceReviewTask`, `createPrivacyReviewTask`, `dismissItem`, `markMemberDataAccessReviewed`, `markPrivacyProgramReviewed`, `restoreItem` |
+| dashboardRemediation | `acknowledgeItem`, `cancelSnooze`, `createComplianceReviewTask`, `createPrivacyReviewTask`, `dismissItem`, `markMemberDataAccessReviewed`, `markPrivacyProgramReviewed` (retired; use `society:recordPrivacyReview`), `restoreItem`, `snoozeItem` |
 | deadlines | `create`, `list`, `remove`, `setStatus`, `update` |
 | directors | `create`, `list`, `remove`, `update` |
 | dividends | `create`, `list`, `remove`, `summary` |

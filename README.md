@@ -363,6 +363,7 @@ The meeting detail UI already uploads audio, tracks transcription jobs, stores t
 - `npx tsx scripts/import-ycn-access.ts --db <file.accdb> --list-entities` — list the entities in a YCN Access database before importing one (see the [corporate records guide](docs/corporate-records.md#ycn-access-importer)).
 - `npm run test:api-contract` — API gateway contract check.
 - `npm run test:dashboard-compliance` — dashboard compliance rule check.
+- `npm run test:governing-document-evidence` — governing-document and privacy-policy evidence, currentness and privacy review.
 - `npm run test:org-details` — organization detail smoke check.
 - `npm run test:pdf-ingestion` — PDF table normalization check.
 - `npm run test:exports` / `npm run test:exports:db` — export coverage and database export validation.

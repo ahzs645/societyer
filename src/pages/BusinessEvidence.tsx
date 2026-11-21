@@ -154,10 +154,16 @@ function SupportingDocument({ row, label }: { row: EvidenceRow; label: string })
   return <Link to={`/app/documents/${row.documentId}`}>{label}</Link>;
 }
 
-/** Cells that draw more than their text: the document link and the version badge. */
+/** A consent review stamped by the server when the reviewer also recorded the entry. */
+const SELF_REVIEWED = "Recorded and reviewed by the same person";
+
+/** Cells that draw more than their text: the document link, the version badge and a self-review stamp. */
 function renderEvidenceCell({ record, field }: { record: EvidenceRecord; field: { name: string } }) {
   if (field.name === DOCUMENT_COLUMN) return <SupportingDocument row={record.row} label={String(record[DOCUMENT_COLUMN])} />;
   if (field.name === VERSION_COLUMN) return <VersionBadge row={record.row} />;
+  if (field.name === "reviewStatus" && record.row.selfReviewed === true) {
+    return <span title={SELF_REVIEWED}>{String(record.reviewStatus)}<span className="muted"> · {SELF_REVIEWED}</span></span>;
+  }
   return undefined;
 }
 
@@ -175,6 +181,7 @@ function EvidencePhoneCard({ register, record, selecting }: { register: Evidence
         documentText ? <SupportingDocument row={record.row} label={documentText} /> : "",
         register.shares ? String(record[PARTICULARS_COLUMN]) : "",
         ...values.slice(3),
+        record.row.selfReviewed === true ? SELF_REVIEWED : "",
       ]}
       selecting={selecting}
     />

@@ -127,6 +127,14 @@ const society = {
   privacyProgramStatus: "Documented",
   privacyProgramReviewedAtISO: "2026-04-21",
   privacyProgramNotes: "Demo privacy program includes a PIPA policy, complaint process, privacy officer contact, and annual training.",
+  privacyProgramReview: {
+    policiesReviewed: "PIPA privacy policy, complaint process, access and correction procedure",
+    versionOrEffectiveDate: "Adopted by the board 2026-03",
+    maintainedAt: "Societyer Documents: PIPA privacy policy",
+    reviewedOn: "2026-04-21",
+    reviewedAtISO: "2026-04-21T17:00:00.000Z",
+    reviewedByName: "Avery Santos",
+  },
   memberDataAccessStatus: "Partially available",
   memberDataGapDocumented: true,
   memberDataAccessReviewedAtISO: "2026-04-21",
@@ -143,6 +151,10 @@ const society = {
   privacyPolicyDocId: DOCUMENT_POLICY_ID,
   constitutionDocId: "static_document_constitution",
   bylawsDocId: DOCUMENT_BYLAWS_ID,
+  governingDocumentVerifications: [
+    { field: "constitutionDocId", verifiedAsOf: "2026-04-21", versionReference: "Constitution as filed on transition", evidenceKind: "document", documentId: "static_document_constitution", recordedAtISO: "2026-04-21T17:00:00.000Z", verifiedByName: "Avery Santos" },
+    { field: "bylawsDocId", verifiedAsOf: "2026-04-21", versionReference: "Bylaws as last amended at the AGM", evidenceKind: "document", documentId: DOCUMENT_BYLAWS_ID, recordedAtISO: "2026-04-21T17:00:00.000Z", verifiedByName: "Avery Santos" },
+  ],
   demoMode: true,
   // Procurement review and AI are off by default; the demo turns them on. Procurement review
   // reads its bundled snapshot (shared/procurementReview/demo.ts); the assistant answers from demo data.
@@ -296,9 +308,53 @@ const directors = [
   director("static_director_jordan", "Jordan", "Lee", "Treasurer", true, true, "2023-06-22"),
   director("static_director_devon", "Devon", "Clarke", "President", true, true, "2022-06-18"),
   director("static_director_sam", "Sam", "Nguyen", "Director", false, false, "2026-03-15"),
-  director("static_director_priya", "Priya", "Sharma", "Vice President", true, true, "2023-06-22"),
+  // `consentOnFile` mirrors a verified current consent in `directorConsents`
+  // below; Devon's is a pre-register mark with no entry behind it.
+  director("static_director_priya", "Priya", "Sharma", "Vice President", true, false, "2023-06-22"),
   director("static_director_hannah", "Hannah", "Goldberg", "Director", true, true, "2024-06-20"),
   director("static_director_grace", "Grace", "Okafor", "Director", true, true, "2025-06-18"),
+];
+
+/**
+ * The consent register: a realistic mix for the demo. Mina and Jordan signed
+ * written consents (reviewed; Mina's by the secretary who recorded it, so it
+ * is stamped as recorded and reviewed by the same person); Hannah and Grace were elected at an AGM they
+ * attended without refusing (reviewed, one against the recorded meeting);
+ * Priya's scanned consent awaits review; Devon is marked on file with no
+ * details; Sam has nothing recorded yet.
+ */
+const MINUTE_BOOK = "Minute book binder, Directors' consents tab (registered office)";
+const directorConsents = [
+  {
+    _id: "static_consent_mina", societyId: SOCIETY_ID, directorId: "static_director_mina", scope: "Consent to act", event: "Given",
+    effectiveDate: "2024-06-20", basis: "Written consent", signedOn: "2024-06-18", evidenceLocation: MINUTE_BOOK, custodian: "Avery Santos",
+    reviewStatus: "Reviewed", reviewedBy: USER_SECRETARY_ID, reviewedByName: "Avery Santos", reviewedAt: "2024-07-02T17:00:00.000Z", selfReviewed: true,
+    recordedAt: "2024-07-02T16:40:00.000Z", recordedBy: USER_SECRETARY_ID,
+  },
+  {
+    _id: "static_consent_jordan", societyId: SOCIETY_ID, directorId: "static_director_jordan", scope: "Consent to act", event: "Given",
+    effectiveDate: "2023-06-22", basis: "Written consent", signedOn: "2023-06-20", evidenceLocation: MINUTE_BOOK, custodian: "Avery Santos",
+    reviewStatus: "Reviewed", reviewedBy: USER_OWNER_ID, reviewedByName: "Mina Patel", reviewedAt: "2024-07-02T17:05:00.000Z",
+    recordedAt: "2024-07-02T16:45:00.000Z", recordedBy: USER_SECRETARY_ID,
+  },
+  {
+    _id: "static_consent_priya", societyId: SOCIETY_ID, directorId: "static_director_priya", scope: "Consent to act", event: "Given",
+    effectiveDate: "2023-06-22", basis: "Written consent", signedOn: "2023-06-21", evidenceLocation: "Scanned copy in the board's shared drive",
+    evidenceReference: "Board/Consents/2023-Sharma.pdf", reviewStatus: "Awaiting review",
+    recordedAt: "2026-03-30T18:10:00.000Z", recordedBy: USER_TREASURER_ID,
+  },
+  {
+    _id: "static_consent_hannah", societyId: SOCIETY_ID, directorId: "static_director_hannah", scope: "Consent to act", event: "Given",
+    effectiveDate: "2024-06-20", basis: "Meeting record", evidenceLocation: MINUTE_BOOK, evidenceReference: "2024 AGM minutes, item 7 (election of directors)",
+    reviewStatus: "Reviewed", reviewedBy: USER_OWNER_ID, reviewedByName: "Mina Patel", reviewedAt: "2024-07-02T17:10:00.000Z",
+    recordedAt: "2024-07-02T16:50:00.000Z", recordedBy: USER_SECRETARY_ID,
+  },
+  {
+    _id: "static_consent_grace", societyId: SOCIETY_ID, directorId: "static_director_grace", scope: "Consent to act", event: "Given",
+    effectiveDate: "2025-06-19", basis: "Meeting record", meetingId: MEETING_AGM_ID, evidenceReference: "Minutes item 6: elected, present, did not refuse",
+    reviewStatus: "Reviewed", reviewedBy: USER_OWNER_ID, reviewedByName: "Mina Patel", reviewedAt: "2025-07-10T18:05:00.000Z",
+    recordedAt: "2025-07-10T17:55:00.000Z", recordedBy: USER_SECRETARY_ID,
+  },
 ];
 
 const orgHistoryBoardTerms = [
@@ -3459,6 +3515,7 @@ const tables: Record<string, any[]> = {
   courtOrders,
   deadlines,
   directors,
+  directorConsents,
   documents,
   documentComments,
   documentVersions,

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { complianceFactsForOrganization, computeComplianceObligations, filterApplicableCompliancePacks } from "../src/lib/compliance";
 import { loadComplianceRulePacks } from "../src/lib/compliance/registry";
 import { filingKindDefinition, jurisdictionModuleContract } from "../shared/jurisdictionWorkspace";
+import { findingPolicy } from "../shared/dashboardFindingPolicy";
 
 const packs = loadComplianceRulePacks();
 
@@ -81,6 +82,19 @@ assert.ok(
   cbcaByRule.get("compliance-ca-fed-cbca-corporation-key-custody")?.creates?.requiredEvidence.includes("keyCustodyRecord"),
   "CBCA corporation key custody review should require key custody evidence",
 );
+// Decisions are per occurrence: the key carries the due date, so dismissing
+// this year's good-practice review leaves next year's to show. Filings and
+// statutory deadlines are requirements (shared/dashboardFindingPolicy.ts).
+{
+  const keyCustody = cbcaByRule.get("compliance-ca-fed-cbca-corporation-key-custody")!;
+  assert.equal(keyCustody.occurrenceKey, `home:${keyCustody.ruleId}:${keyCustody.dueDate}`, "an occurrence key includes its due date");
+  assert.equal(findingPolicy(keyCustody.occurrenceKey).basis, "recommendation", "key custody is a good-practice review");
+  const annualReturn = cbcaByRule.get("compliance-ca-fed-cbca-annual-return-window")!;
+  assert.equal(findingPolicy(annualReturn.occurrenceKey).basis, "statutory", "an annual return is a statutory filing");
+  for (const obligation of cbcaObligations) {
+    if (obligation.creates?.filingKind) assert.ok(findingPolicy(obligation.occurrenceKey).protected, `${obligation.ruleId}: a filing is never dismissable`);
+  }
+}
 
 const cbcaEventObligations = computeComplianceObligations({
   ...cbcaFacts,

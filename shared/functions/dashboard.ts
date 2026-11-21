@@ -28,8 +28,12 @@ import {
 } from "../dashboardComplianceRules";
 import { isHistoricalSourceAction } from "../taskStatus";
 import { todayDateOnly } from "../dateOnly";
-import { activeDismissal, DISMISSED_STATUS, isRecommendationLevel } from "../dashboardDismissals";
+import { activeAcknowledgement, activeDismissal, activeSnooze, ATTENTION_ONLY_STATUSES, DISMISSED_STATUS } from "../dashboardDismissals";
+import { findingPolicy, findingSubjectKey, isDismissableFinding, type GoverningCopyField } from "../dashboardFindingPolicy";
+import { identifiedEvidence, type EvidenceFacts } from "../governingDocumentEvidence";
 import { financeControlFindingsFor } from "./expenseReports";
+import { directorConsentAssessments } from "./businessEvidence";
+import type { DirectorConsentState } from "../directorConsentRecords";
 import { isCorporation, isPreparingIncorporation } from "../organizationDomain";
 
 
@@ -393,7 +397,18 @@ export async function summaryPortable(
     if (rule.id.startsWith("MEMBER-DATA")) return readAccess.has("members:read") && readAccess.has("documents:read");
     return readAccess.has("documents:read");
   });
-  const legalFlags = evaluateDashboardComplianceRules({
+  // Consent evidence state per director (shared/directorConsentRecords.ts):
+  // role-holder-only directors have no register entries and read as "none".
+  const consentAssessments = readAccess.has("directors:read")
+    ? await directorConsentAssessments(ctx, societyId, legalDirectors.map((director: Record<string, any>) => ({ _id: String(director._id), consentOnFile: Boolean(director.consentOnFile) })), society)
+    : new Map<string, { state: DirectorConsentState }>();
+  const toComplianceDirector = (director: Record<string, any>) => ({
+    // Derived from the consent register; only a verified current consent counts.
+    consentState: consentAssessments.get(String(director._id))?.state ?? "none",
+    isBCResident: director.isBCResident,
+    residentCanadianStatus: director.residentCanadianStatus,
+  });
+  const complianceContext = {
     society: society
       ? {
           ...society,
@@ -406,13 +421,26 @@ export async function summaryPortable(
           bylawsDocId: society.bylawsDocId,
         }
       : null,
-    activeDirectors: legalDirectors.map((director: Record<string, any>) => ({
-      consentOnFile: director.consentOnFile,
-      isBCResident: director.isBCResident,
-      residentCanadianStatus: director.residentCanadianStatus,
-    })),
+    activeDirectors: legalDirectors.map(toComplianceDirector),
     rulesConfigured: Boolean(rules?._id),
-  }, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length);
+  };
+  const legalFlags = evaluateDashboardComplianceRules(complianceContext, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length);
+  // What a flag is about, for its subject key: the directors a per-director
+  // rule flags (each director checked on their own through the same rule),
+  // the governing-document copy a currentness note is about, otherwise the
+  // flag's text.
+  const subjectParts = (flag: DashboardComplianceFlag): string[] => {
+    const policy = findingPolicy(flag.ruleId, flag.level);
+    if (policy.subject === "governingCopy" && policy.evidenceField) {
+      return governingCopySubjectParts(complianceContext.society, policy.evidenceField) ?? [flag.text];
+    }
+    const rule = visibleRules.find((candidate) => candidate.id === flag.ruleId);
+    if (!rule || policy.subject !== "directors") return [flag.text];
+    const affected = legalDirectors
+      .filter((director) => rule.passFail({ ...complianceContext, activeDirectors: [toComplianceDirector(director)] }) !== null)
+      .map((director) => `director:${String(director._id)}`);
+    return affected.length ? affected : [flag.text];
+  };
   // Before the certificate there is no legal entity yet: director minimums,
   // residency and the other statutory checks do not apply, so a preparing
   // organization gets one neutral note instead of red flags on day one.
@@ -429,23 +457,46 @@ export async function summaryPortable(
         remediationActions: [{ id: "fix-approval-rules", label: finding.fixLabel, intent: "navigate", to: finding.fixTo }],
       }))
     : [];
+  const openTasksById = new Map(tasks.map((task: Record<string, any>) => [String(task._id), task]));
   const complianceFlags = (financeFlags.length ? [...evidenceFlags.filter((flag) => flag.ruleId !== "DASHBOARD-COMPLIANCE-OK"), ...financeFlags] : evidenceFlags).map((flag) => {
     const remediation = remediationByRuleId.get(flag.ruleId);
-    // Recommendations (warn/info) may be dismissed; requirements (err) may not.
-    const dismissable = isRecommendationLevel(flag.level);
-    const dismissal = activeDismissal(remediation, { level: flag.level, dismissable });
-    const withDismissal: DashboardComplianceFlag = { ...flag, dismissable, ...(dismissal ? { dismissal } : {}) };
-    // A dismissal made at another level no longer applies; the row then
-    // says nothing about this flag beyond any review task it still holds.
-    const staleDismissal = remediation?.status === DISMISSED_STATUS && !dismissal;
-    return remediation
-      ? {
-          ...withDismissal,
-          ...(staleDismissal ? {} : { remediationStatus: remediation.status }),
-          remediationTaskId: remediation.taskId,
-          remediationUpdatedAtISO: remediation.updatedAtISO,
-        }
-      : withDismissal;
+    // Only recommendations at warn/info may be dismissed; statutory, bylaw and
+    // internal-policy findings stay outstanding whatever their level
+    // (shared/dashboardFindingPolicy.ts).
+    const policy = findingPolicy(flag.ruleId, flag.level);
+    const dismissable = isDismissableFinding(policy, flag.level);
+    const subjectKey = findingSubjectKey(flag.ruleId, subjectParts(flag));
+    const dismissal = activeDismissal(remediation, { level: flag.level, dismissable, subjectKey });
+    const acknowledgement = activeAcknowledgement(remediation, { subjectKey });
+    // "Remind me later": still listed and counted; only nudges skip it.
+    const snooze = dismissable ? undefined : activeSnooze(remediation, { level: flag.level, subjectKey }, todayKey);
+    // A requirement can always get a follow-up owner and due date.
+    const needsFollowUpAction = policy.protected && (flag.level === "warn" || flag.level === "err")
+      && !flag.remediationActions.some((action) => action.intent === "createComplianceReviewTask" || action.intent === "createPrivacyReviewTask");
+    const withPolicy: DashboardComplianceFlag = {
+      ...flag,
+      ...(policy.basis ? { requirementBasis: policy.basis } : {}),
+      subjectKey,
+      dismissable,
+      ...(dismissal ? { dismissal } : {}),
+      ...(acknowledgement ? { acknowledgement } : {}),
+      ...(snooze ? { snooze } : {}),
+      ...(needsFollowUpAction ? { remediationActions: [...flag.remediationActions, { id: "assign-follow-up", label: "Assign follow-up", intent: "createComplianceReviewTask" }] } : {}),
+    };
+    if (!remediation) return withPolicy;
+    // A dismissal that no longer applies (another level or subject, or a
+    // now-protected rule), an acknowledgement and a snooze say nothing about
+    // the workflow; the row then only reports any review task it still holds.
+    const silentStatus = (remediation.status === DISMISSED_STATUS && !dismissal) || ATTENTION_ONLY_STATUSES.has(String(remediation.status));
+    const task = remediation.status === "open" && remediation.taskId ? openTasksById.get(String(remediation.taskId)) : undefined;
+    const assignee = task?.assignee ?? remediation.assignedTo;
+    return {
+      ...withPolicy,
+      ...(silentStatus ? {} : { remediationStatus: remediation.status }),
+      remediationTaskId: remediation.taskId,
+      remediationUpdatedAtISO: remediation.updatedAtISO,
+      ...(task && (assignee || task.dueDate) ? { followUp: { ...(assignee ? { assignee } : {}), ...(task.dueDate ? { dueDate: task.dueDate } : {}) } } : {}),
+    };
   });
 
   return {
@@ -472,6 +523,19 @@ export async function summaryPortable(
     complianceFlags,
     evidenceChains,
   };
+}
+
+/**
+ * The identity of the governing-document copy on record: the uploaded
+ * document, or the held-elsewhere entry (its kind, reference and when it was
+ * recorded). Replacing the document or recording another external copy gives
+ * the currentness note a new subject. Undefined when no copy is identified.
+ */
+export function governingCopySubjectParts(society: EvidenceFacts | null | undefined, field: GoverningCopyField): string[] | undefined {
+  const evidence = identifiedEvidence(society, field);
+  if (!evidence) return undefined;
+  if (evidence.kind === "document") return [`${field}:document:${evidence.documentId}`];
+  return [`${field}:${evidence.kind}:${evidence.entry.reference.trim()}`, `${field}:recorded:${evidence.entry.recordedAtISO}`];
 }
 
 function personNameKey(name: string) {

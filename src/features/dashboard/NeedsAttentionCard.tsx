@@ -7,7 +7,7 @@ import type { ContinuityCheck } from "../gaps/ContinuityChecksCard";
 import { InfoPopover } from "../../components/InfoPopover";
 import { getRegulatoryCitation } from "../../lib/regulatoryCitations";
 import { pluralizeCounts } from "../../lib/pluralizeCounts";
-import { formatShortDate, relative } from "../../lib/format";
+import { formatDate, formatShortDate, relative } from "../../lib/format";
 
 /**
  * Phone Dashboard: one "Needs attention" list in place of the Compliance
@@ -16,7 +16,8 @@ import { formatShortDate, relative } from "../../lib/format";
  * those cards already load. Each row is one link to where it gets fixed; the
  * legal source, the evidence that resolves it and any other actions sit
  * behind the row's ⓘ button. Dismissed recommendations stay out of the list;
- * the card's foot lists them under "Dismissed (n)".
+ * the card's foot lists them under "Dismissed (n)". Requirements are never
+ * dismissed: they stay listed, acknowledged or not.
  */
 
 export type AttentionSeverity = "err" | "warn";
@@ -38,6 +39,10 @@ export type AttentionItem = {
   evidence: string[];
   /** Actions other than the row's own link (assign review, drafts, …). */
   actions?: ReactNode;
+  /** What the item rests on and who has acknowledged or owns it (popover). */
+  status?: ReactNode;
+  /** "Snoozed until Dec 5": still listed and counted, after the others in its group, muted. */
+  snoozedLabel?: string;
 };
 
 export type AttentionFiling = { _id: string; kind: string; periodLabel?: string; dueDate: string; status?: string };
@@ -50,8 +55,28 @@ const PROSE_LENGTH = 120;
 const KIND_ORDER: Record<AttentionKind, number> = { filing: 0, compliance: 1, continuity: 2 };
 const SEVERITY_ORDER: Record<AttentionSeverity, number> = { err: 0, warn: 1 };
 
+/**
+ * Continuity checks that repeat a compliance flag: the check is left out only
+ * while its flag is itself listed (not dismissed), so the finding never
+ * disappears from both.
+ */
+const CONTINUITY_TWINS: { checkId: string; isTwin: (ruleId: string) => boolean }[] = [
+  { checkId: "CONTINUITY-DIRECTOR-CONSENT", isTwin: (ruleId) => ruleId === "BC-SOC-DIRECTOR-CONSENT" || /^LEGAL-.+-DIRECTOR-CONSENT$/.test(ruleId) },
+];
+
+/** Ids of continuity checks whose compliance-flag twin is visible in `flags`. */
+export function continuityChecksShownAsFlags(flags: readonly Pick<DashboardComplianceFlag, "ruleId" | "level" | "dismissal">[] | undefined): string[] {
+  const visible = (flags ?? []).filter((flag) => (flag.level === "warn" || flag.level === "err") && !flag.dismissal);
+  return CONTINUITY_TWINS.filter((twin) => visible.some((flag) => twin.isTwin(flag.ruleId))).map((twin) => twin.checkId);
+}
+
 function flagLinkLabel(flag: DashboardComplianceFlag, to: string | undefined) {
   return to ? flag.remediationActions?.find((action) => action.intent === "navigate" && action.to === to)?.label : undefined;
+}
+
+/** "Snoozed until Dec 5" (with the year when it isn't this year). */
+function snoozedUntilLabel(untilISO: string, todayISO: string) {
+  return `Snoozed until ${formatDate(untilISO, untilISO.slice(0, 4) === todayISO.slice(0, 4) ? "MMM d" : "MMM d, yyyy")}`;
 }
 
 /** "First sentence. The rest…" → title and detail. */
@@ -72,6 +97,7 @@ export function buildAttentionItems({
   flagLink,
   flagActions,
   checkActions,
+  findingStatus,
 }: {
   /** Compliance flags, or undefined when the module is hidden. */
   flags?: DashboardComplianceFlag[];
@@ -85,8 +111,10 @@ export function buildAttentionItems({
   canOpen: (to: string) => boolean;
   flagLink: (flag: DashboardComplianceFlag) => string | undefined;
   flagActions: (flag: DashboardComplianceFlag, rowLink: string | undefined) => ReactNode;
-  /** Actions for a continuity check's ⓘ popover (e.g. Dismiss). */
+  /** Actions for a continuity check's ⓘ popover (e.g. Dismiss, Acknowledge). */
   checkActions?: (check: ContinuityCheck) => ReactNode;
+  /** The basis / acknowledgement line for a flag or check's popover. */
+  findingStatus?: (item: DashboardComplianceFlag | ContinuityCheck) => ReactNode;
 }): AttentionItem[] {
   const items: AttentionItem[] = [];
 
@@ -124,11 +152,8 @@ export function buildAttentionItems({
     items.push(filingItem(filing, "warn"));
   }
 
-  const flagRuleIds = new Set<string>();
   for (const flag of flags ?? []) {
     if (flag.level === "ok" || flag.level === "info") continue;
-    // A dismissed flag still stands in for its continuity twin below.
-    flagRuleIds.add(flag.ruleId);
     if (flag.dismissal) continue;
     const text = pluralizeCounts(flag.text);
     const { title, rest } = splitSentence(text);
@@ -151,15 +176,19 @@ export function buildAttentionItems({
       sources,
       evidence: flag.evidenceRequired ?? [],
       actions: flagActions(flag, to),
+      status: findingStatus?.(flag),
+      ...(flag.snooze ? { snoozedLabel: snoozedUntilLabel(flag.snooze.untilISO, todayISO) } : {}),
     });
   }
 
-  // Director consent is already a compliance item, and a listed annual report
-  // filing says more than the continuity check for the same report.
+  // Director consent is already a compliance item while that item is listed,
+  // and a listed annual report filing says more than the continuity check for
+  // the same report.
+  const shownAsFlags = new Set(continuityChecksShownAsFlags(flags));
   const annualReportListed = listedFilings.some((filing) => /annual\s*report/i.test(filing.kind) || /annual report/i.test(filingLabel(filing.kind)));
   for (const check of checks ?? []) {
     if (check.level === "ok" || check.level === "info" || check.dismissal) continue;
-    if (check.id === "CONTINUITY-DIRECTOR-CONSENT" && flagRuleIds.has("BC-SOC-DIRECTOR-CONSENT")) continue;
+    if (shownAsFlags.has(check.id)) continue;
     if (check.id === "CONTINUITY-ANNUAL-REPORT-FILED" && annualReportListed) continue;
     items.push({
       key: `continuity:${check.id}`,
@@ -171,13 +200,17 @@ export function buildAttentionItems({
       sources: check.citation ? [{ label: check.citation }] : [],
       evidence: [],
       actions: checkActions?.(check),
+      status: findingStatus?.(check),
+      ...(check.snooze ? { snoozedLabel: snoozedUntilLabel(check.snooze.untilISO, todayISO) } : {}),
     });
   }
 
+  // Snoozed items stay listed and counted, after the others of their severity.
   return items
     .map((item, index) => ({ item, index }))
     .sort((a, b) =>
       SEVERITY_ORDER[a.item.severity] - SEVERITY_ORDER[b.item.severity]
+      || Number(Boolean(a.item.snoozedLabel)) - Number(Boolean(b.item.snoozedLabel))
       || KIND_ORDER[a.item.kind] - KIND_ORDER[b.item.kind]
       || (a.item.dueDate ?? "").localeCompare(b.item.dueDate ?? "")
       || a.index - b.index)
@@ -226,13 +259,14 @@ function AttentionRow({ item }: { item: AttentionItem }) {
             {item.detail}
           </span>
         )}
+        {item.snoozedLabel && <span className="attention-item__snooze">{item.snoozedLabel}</span>}
       </span>
       {item.to && <ChevronRight size={16} className="attention-item__chevron" aria-hidden="true" />}
     </>
   );
-  const hasDetails = item.sources.length > 0 || item.evidence.length > 0 || Boolean(item.actions);
+  const hasDetails = item.sources.length > 0 || item.evidence.length > 0 || Boolean(item.actions) || Boolean(item.status);
   return (
-    <li className={`attention-item attention-item--${item.severity}`}>
+    <li className={`attention-item attention-item--${item.severity}${item.snoozedLabel ? " attention-item--snoozed" : ""}`}>
       {item.to ? (
         <Link to={item.to} className="attention-item__main">{body}</Link>
       ) : (
@@ -243,6 +277,9 @@ function AttentionRow({ item }: { item: AttentionItem }) {
           <InfoPopover label={item.sources.length ? `Legal source for ${item.title}` : `More about ${item.title}`}>
             <div className="attention-pop">
               {item.prose && <p>{item.title}. {item.detail}</p>}
+              {item.status && <p className="attention-pop__status">{item.status}</p>}
+              {/* Actions before the reference lists, so a tall popover on a phone shows them without scrolling. */}
+              {item.actions}
               {item.sources.length > 0 && (
                 <div>
                   <p className="attention-pop__label">Legal source</p>
@@ -264,7 +301,6 @@ function AttentionRow({ item }: { item: AttentionItem }) {
                   </ul>
                 </div>
               )}
-              {item.actions}
             </div>
           </InfoPopover>
         </span>

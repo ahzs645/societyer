@@ -32,11 +32,24 @@ This is not legal advice.
 
 ## Societyer Fields
 
-On `/app/society`, set:
+Record the review with **Record review** (Privacy page, or the privacy policy
+row on `/app/society?tab=documents`). It saves, under your name and date:
 
-- `Privacy program status`: `Documented` only after the baseline above is true.
-- `Program reviewed`: the date the board/officer last reviewed the privacy
-  program.
+- which policies and practices you reviewed;
+- their version or effective date;
+- where they are maintained (a document in Societyer, a system, or a physical
+  location); and
+- any unresolved findings.
+
+The program is marked `Documented` only when the review records where the
+policy is maintained and leaves no unresolved findings; otherwise it stays
+outstanding and the findings show on the dashboard. If the policy isn't
+uploaded, use **Held elsewhere** on the privacy policy row to record the
+external system or physical location. See
+[governing-document evidence](../governing-document-evidence.md).
+
+Also on the Privacy page:
+
 - `Privacy program notes`: where the policy, complaint process, request process,
   and retention rules are kept.
 - `Member data access`: one of `Society-controlled`, `Partially available`,

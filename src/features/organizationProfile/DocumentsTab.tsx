@@ -1,14 +1,30 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FileDown } from "lucide-react";
-import { Badge } from "../../components/ui";
 import { useToast } from "../../components/Toast";
 import { authenticatedFetch } from "@/lib/authToken";
+import { formatDate } from "../../lib/format";
 import { isModuleEnabled } from "../../lib/modules";
-import { GoverningDocumentPicker, GoverningDocumentRow, useGoverningDocumentActions } from "../governingDocuments/GoverningDocuments";
+import {
+  EvidenceActions,
+  EvidenceBadge,
+  GoverningDocumentPicker,
+  GoverningDocumentRow,
+  HeldElsewhereLine,
+  useGoverningDocumentActions,
+} from "../governingDocuments/GoverningDocuments";
 import { governingDocumentSlots, type GoverningDocumentField } from "../../../shared/governingDocuments";
+import {
+  attestationLine,
+  governingDocumentCurrentness,
+  privacyFindingsBlocking,
+  shortText,
+  type Currentness,
+  type PrivacyProgramReview,
+} from "../../../shared/governingDocumentEvidence";
 import { jurisdictionDisplayCopy, jurisdictionModuleContract } from "../../../shared/jurisdictionWorkspace";
 import { documentUploadHref } from "./detailRows";
+import { EvidenceDialogHost, useEvidenceDialog } from "./EvidenceDialogHost";
 import type { OrganizationRecord, ProfileDocument, ProfileForm } from "./types";
 
 type DocumentsProps = {
@@ -28,11 +44,16 @@ export function DocumentsTab({ society, form, canEdit, documents, registryPackag
   const governingActions = useGoverningDocumentActions(society);
   const [choosingField, setChoosingField] = useState<GoverningDocumentField | null>(null);
   const [importing, setImporting] = useState(false);
+  const evidenceDialog = useEvidenceDialog(canEdit);
+  const open = evidenceDialog.open;
   const jurisdictionCopy = jurisdictionDisplayCopy(form);
   const registryImport = jurisdictionModuleContract(form).registryImportSupported && isModuleEnabled(society, "browserConnectors");
   const slots = governingDocumentSlots(form);
   const choosingSlot = slots.find((slot) => slot.field === choosingField);
+  // Auto-fill looks for uploaded copies only; a copy held elsewhere can still be imported.
   const missingCount = [society.constitutionDocId, society.bylawsDocId, society.privacyPolicyDocId].filter((value) => !value).length;
+  const privacyCurrentness = governingDocumentCurrentness(society, "privacyPolicyDocId");
+  const privacyDocument = society.privacyPolicyDocId ? documents?.find((row) => String(row._id) === String(society.privacyPolicyDocId)) : undefined;
 
   const importGovernanceDocuments = async () => {
     setImporting(true);
@@ -104,11 +125,23 @@ export function DocumentsTab({ society, form, canEdit, documents, registryPackag
                     organization={form}
                     canEdit={canEdit}
                     uploadHref={documentUploadHref(slot.category, slot.categoryLabel)}
+                    currentness={governingDocumentCurrentness(society, slot.field)}
                     onChoose={() => setChoosingField(slot.field)}
                     onUnlink={() => { void governingActions.unlink(slot); }}
+                    onHeldElsewhere={() => open("held-elsewhere", slot.field)}
+                    onVerify={() => open("verify", slot.field)}
                   />
                 ))}
-                <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} docId={society.privacyPolicyDocId} uploadHref="/app/privacy" uploadLabel="Add" />
+                <PrivacyPolicyRow
+                  label={jurisdictionCopy.privacyPolicyLabel}
+                  docId={society.privacyPolicyDocId}
+                  documentTitle={privacyDocument?.title}
+                  currentness={privacyCurrentness}
+                  review={society.privacyProgramReview}
+                  canEdit={canEdit}
+                  onHeldElsewhere={() => open("held-elsewhere", "privacyPolicyDocId")}
+                  onReview={() => open("privacy-review", "privacyPolicyDocId")}
+                />
               </tbody>
             </table>
           </div>
@@ -121,26 +154,68 @@ export function DocumentsTab({ society, form, canEdit, documents, registryPackag
             onClose={() => setChoosingField(null)}
             onChoose={(document, refile) => governingActions.choose(choosingSlot!, document, refile)}
           />
+          <EvidenceDialogHost
+            dialog={evidenceDialog.dialog}
+            onClose={evidenceDialog.close}
+            society={society}
+            documents={documents}
+            slots={slots}
+            privacyPolicyLabel={jurisdictionCopy.privacyPolicyLabel}
+          />
         </div>
       </section>
     </div>
   );
 }
 
-function DocTableRow({ label, docId, uploadHref, uploadLabel = "Upload" }: { label: string; docId?: string; uploadHref: string; uploadLabel?: string }) {
+/**
+ * The privacy policy: where it is held (uploaded or elsewhere) and the latest
+ * review attestation. Its currentness is the review, so it offers Record
+ * review rather than Verify current.
+ */
+function PrivacyPolicyRow({ label, docId, documentTitle, currentness, review, canEdit, onHeldElsewhere, onReview }: {
+  label: string;
+  docId?: string;
+  documentTitle?: string;
+  currentness: Currentness;
+  review?: PrivacyProgramReview;
+  canEdit: boolean;
+  onHeldElsewhere: () => void;
+  onReview: () => void;
+}) {
   const present = Boolean(docId);
+  const heldElsewhere = currentness.evidence?.kind === "document" ? currentness.evidence.heldElsewhere : currentness.evidence?.entry;
   return (
-    <tr className="gov-doc-row">
+    <tr className="gov-doc-row" data-field="privacyPolicyDocId">
       <td>
         <strong>{label}</strong>
+        {documentTitle && <span className="gov-doc-row__title">{documentTitle}</span>}
+        {heldElsewhere && <HeldElsewhereLine entry={heldElsewhere} alsoUploaded={present} />}
+        {review ? (
+          <>
+            <span className={`gov-doc-row__title${privacyFindingsBlocking(review) ? "" : " gov-doc-row__verified"}`}>
+              {attestationLine("Reviewed", review.reviewedByName, formatDate(review.reviewedOn))}
+              {review.versionOrEffectiveDate ? ` · ${review.versionOrEffectiveDate}` : ""}
+            </span>
+            {review.unresolvedFindings && (
+              <span className="gov-doc-row__note">
+                {privacyFindingsBlocking(review) ? "Unresolved findings" : "Follow-ups"}: {shortText(review.unresolvedFindings, 160)}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="gov-doc-row__title">No privacy review recorded.</span>
+        )}
         <div className="gov-doc-row__actions">
           {present
             ? <Link className="btn btn--ghost btn--sm" to={`/app/documents/${docId}`} aria-label={`Open ${label}`}>Open</Link>
-            : <Link className="btn btn--sm" to={uploadHref} aria-label={`${uploadLabel} ${label}`}>{uploadLabel}</Link>}
+            : <Link className="btn btn--sm" to="/app/privacy" aria-label={`Add ${label}`}>Add</Link>}
+          {canEdit && <EvidenceActions label={label} currentness={currentness} uploaded={present} onHeldElsewhere={onHeldElsewhere} />}
+          {canEdit && <button type="button" className="btn btn--ghost btn--sm" onClick={onReview}>Record review</button>}
         </div>
       </td>
       <td>
-        <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
+        <EvidenceBadge currentness={currentness} />
       </td>
     </tr>
   );

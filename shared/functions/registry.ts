@@ -159,6 +159,7 @@ import * as notificationsFns from "./notifications";
 import * as partyPortalsFns from "./partyPortals";
 import * as societyFns from "./society";
 import * as governingDocumentFns from "./governingDocuments";
+import * as governingDocumentEvidenceFns from "./governingDocumentEvidence";
 import * as subscriptionsFns from "./subscriptions";
 import * as transparencyFns from "./transparency";
 import * as usersFns from "./users";
@@ -339,6 +340,9 @@ const BUSINESS_EVIDENCE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "businessEvidence:list", handler: businessEvidenceFns.list }),
   definePortableQuery({ name: "businessEvidence:choices", handler: businessEvidenceFns.choices }),
   definePortableMutation({ name: "businessEvidence:save", handler: businessEvidenceFns.save }),
+  definePortableMutation({ name: "businessEvidence:reviewDirectorConsent", handler: businessEvidenceFns.reviewDirectorConsent }),
+  // Director consent evidence states, derived from the consent register.
+  definePortableQuery({ name: "directors:consentStates", handler: directorsFns.directorConsentStates }),
 ];
 
 // Recording an incorporation and applying a registry-document import (kept
@@ -349,10 +353,22 @@ const ORGANIZATION_REGISTRY_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "organizationDetails:applyRegistryImport", handler: organizationDetailsFns.applyRegistryImportPortable }),
 ];
 
-// Dismissing dashboard recommendations (kept apart for the same reason).
+// Dismissing dashboard recommendations and acknowledging requirements, on the
+// dashboard and the obligations page (kept apart for the same reason).
 const DASHBOARD_DISMISSAL_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "dashboardRemediation:dismissItem", handler: dashboardRemediationFns.dismissItemPortable }),
+  definePortableMutation({ name: "dashboardRemediation:acknowledgeItem", handler: dashboardRemediationFns.acknowledgeItemPortable }),
   definePortableMutation({ name: "dashboardRemediation:restoreItem", handler: dashboardRemediationFns.restoreItemPortable }),
+  definePortableMutation({ name: "dashboardRemediation:snoozeItem", handler: dashboardRemediationFns.snoozeItemPortable }),
+  definePortableMutation({ name: "dashboardRemediation:cancelSnooze", handler: dashboardRemediationFns.cancelSnoozePortable }),
+  definePortableMutation({ name: "complianceObligations:acknowledgeDecision", handler: complianceObligationsFns.acknowledgeDecisionPortable }),
+];
+
+// Governing-document and privacy-policy evidence (kept apart for the same reason).
+const GOVERNING_EVIDENCE_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableMutation({ name: "society:setGoverningDocumentEvidence", handler: governingDocumentEvidenceFns.setGoverningDocumentEvidencePortable }),
+  definePortableMutation({ name: "society:verifyGoverningDocumentCurrent", handler: governingDocumentEvidenceFns.verifyGoverningDocumentCurrentPortable }),
+  definePortableMutation({ name: "society:recordPrivacyReview", handler: governingDocumentEvidenceFns.recordPrivacyReviewPortable }),
 ];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
@@ -853,6 +869,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   ...MEETING_NOTES_FUNCTIONS,
   ...ORGANIZATION_REGISTRY_FUNCTIONS,
   ...DASHBOARD_DISMISSAL_FUNCTIONS,
+  ...GOVERNING_EVIDENCE_FUNCTIONS,
   // invoices
   definePortableMutation({ name: "invoices:upsertTemplate", handler: invoicesFns.upsertTemplatePortable }),
   definePortableMutation({ name: "invoices:upsertPriceList", handler: invoicesFns.upsertPriceListPortable }),

@@ -5131,6 +5131,28 @@
     "idArguments": []
   },
   {
+    "key": "convex:businessEvidence:reviewDirectorConsent",
+    "surface": "convex",
+    "name": "businessEvidence:reviewDirectorConsent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/businessEvidence.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "consentId",
+        "table": "directorConsents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:businessEvidence:save",
     "surface": "convex",
     "name": "businessEvidence:save",
@@ -6509,6 +6531,15 @@
     ]
   },
   {
+    "key": "convex:complianceObligations:acknowledgeDecision",
+    "surface": "convex",
+    "name": "complianceObligations:acknowledgeDecision",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/complianceObligations.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:complianceObligations:dismissDecision",
     "surface": "convex",
     "name": "complianceObligations:dismissDecision",
@@ -7505,6 +7536,38 @@
     ]
   },
   {
+    "key": "convex:dashboardRemediation:acknowledgeItem",
+    "surface": "convex",
+    "name": "dashboardRemediation:acknowledgeItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dashboardRemediation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:dashboardRemediation:cancelSnooze",
+    "surface": "convex",
+    "name": "dashboardRemediation:cancelSnooze",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dashboardRemediation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:dashboardRemediation:createComplianceReviewTask",
     "surface": "convex",
     "name": "dashboardRemediation:createComplianceReviewTask",
@@ -7560,6 +7623,22 @@
     "key": "convex:dashboardRemediation:restoreItem",
     "surface": "convex",
     "name": "dashboardRemediation:restoreItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dashboardRemediation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:dashboardRemediation:snoozeItem",
+    "surface": "convex",
+    "name": "dashboardRemediation:snoozeItem",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/dashboardRemediation.ts",
@@ -7729,6 +7808,22 @@
     "access": "service",
     "source": "convex/developmentMail.ts",
     "idArguments": []
+  },
+  {
+    "key": "convex:directors:consentStates",
+    "surface": "convex",
+    "name": "directors:consentStates",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/directors.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
   },
   {
     "key": "convex:directors:create",
@@ -26809,6 +26904,22 @@
     "idArguments": []
   },
   {
+    "key": "convex:society:recordPrivacyReview",
+    "surface": "convex",
+    "name": "society:recordPrivacyReview",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:society:setDarkLogo",
     "surface": "convex",
     "name": "society:setDarkLogo",
@@ -26825,6 +26936,22 @@
       {
         "path": "storageId",
         "table": "_storage",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:society:setGoverningDocumentEvidence",
+    "surface": "convex",
+    "name": "society:setGoverningDocumentEvidence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -27023,6 +27150,22 @@
         "table": "documents",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:society:verifyGoverningDocumentCurrent",
+    "surface": "convex",
+    "name": "society:verifyGoverningDocumentCurrent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -34891,6 +35034,28 @@
     "idArguments": []
   },
   {
+    "key": "portable:businessEvidence:reviewDirectorConsent",
+    "surface": "portable",
+    "name": "businessEvidence:reviewDirectorConsent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "consentId",
+        "table": "directorConsents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:businessEvidence:save",
     "surface": "portable",
     "name": "businessEvidence:save",
@@ -36092,6 +36257,15 @@
     ]
   },
   {
+    "key": "portable:complianceObligations:acknowledgeDecision",
+    "surface": "portable",
+    "name": "complianceObligations:acknowledgeDecision",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
     "key": "portable:complianceObligations:dismissDecision",
     "surface": "portable",
     "name": "complianceObligations:dismissDecision",
@@ -37088,6 +37262,38 @@
     ]
   },
   {
+    "key": "portable:dashboardRemediation:acknowledgeItem",
+    "surface": "portable",
+    "name": "dashboardRemediation:acknowledgeItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:dashboardRemediation:cancelSnooze",
+    "surface": "portable",
+    "name": "dashboardRemediation:cancelSnooze",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:dashboardRemediation:createComplianceReviewTask",
     "surface": "portable",
     "name": "dashboardRemediation:createComplianceReviewTask",
@@ -37143,6 +37349,22 @@
     "key": "portable:dashboardRemediation:restoreItem",
     "surface": "portable",
     "name": "dashboardRemediation:restoreItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:dashboardRemediation:snoozeItem",
+    "surface": "portable",
+    "name": "dashboardRemediation:snoozeItem",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
@@ -37276,6 +37498,22 @@
         "table": "filings",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:directors:consentStates",
+    "surface": "portable",
+    "name": "directors:consentStates",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -52790,6 +53028,22 @@
     "idArguments": []
   },
   {
+    "key": "portable:society:recordPrivacyReview",
+    "surface": "portable",
+    "name": "society:recordPrivacyReview",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:society:setDarkLogo",
     "surface": "portable",
     "name": "society:setDarkLogo",
@@ -52806,6 +53060,22 @@
       {
         "path": "storageId",
         "table": "_storage",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:society:setGoverningDocumentEvidence",
+    "surface": "portable",
+    "name": "society:setGoverningDocumentEvidence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -52955,6 +53225,22 @@
     "key": "portable:society:updateNotificationSettings",
     "surface": "portable",
     "name": "society:updateNotificationSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:society:verifyGoverningDocumentCurrent",
+    "surface": "portable",
+    "name": "society:verifyGoverningDocumentCurrent",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

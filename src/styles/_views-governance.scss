@@ -301,6 +301,7 @@
   font-weight: token(fw-semibold);
 }
 .director-consent__empty { margin: 0 0 token(s-3); font-size: token(fs-sm); }
+.director-consent__state { margin: 0 0 token(s-3); font-size: token(fs-sm); overflow-wrap: anywhere; }
 .director-consent__note { margin: 0 0 token(s-4); font-size: token(fs-sm); }
 .director-consent__facts {
   display: grid;

@@ -85,7 +85,8 @@ assert.match(getRegulatoryCitation("CBCA-AUDITOR-APPOINTMENT")!.quote, /court ex
 
 // Societies Act s. 51 has no general 15- or 30-day director-change deadline;
 // the Directors page reads the profile's timing instead of a fixed number.
-assert.match(directorComplianceProfile(society).directorChangeSubtext, /^Promptly/);
+assert.equal(directorComplianceProfile(society).directorChangeMetric, "Promptly");
+assert.match(directorComplianceProfile(society).directorChangeSubtext, /^File with the registrar/);
 assert.doesNotMatch(directorComplianceProfile(society).directorChangeSubtext, /\b(15|30)\b/);
 assert.match(directorComplianceProfile(bc).directorChangeSubtext, /15 days/);
 const directorsPage = readFileSync("src/pages/Directors.tsx", "utf8");

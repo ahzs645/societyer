@@ -62,6 +62,14 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     privacyProgramStatus: "Documented",
     privacyProgramReviewedAtISO: "2026-04-21",
     privacyProgramNotes: "Demo privacy program includes a PIPA policy, complaint process, privacy officer contact, and annual training.",
+    privacyProgramReview: {
+      policiesReviewed: "PIPA privacy policy, complaint process, access and correction procedure",
+      versionOrEffectiveDate: "Adopted by the board 2026-03",
+      maintainedAt: "Societyer Documents: PIPA privacy policy",
+      reviewedOn: "2026-04-21",
+      reviewedAtISO: "2026-04-21T17:00:00.000Z",
+      reviewedByName: "Amara Okonkwo",
+    },
     memberDataAccessStatus: "Society-controlled",
     memberDataGapDocumented: false,
     memberDataAccessReviewedAtISO: "2026-04-21",
@@ -155,7 +163,9 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       position,
       isBCResident: bcRes,
       termStart: start,
-      consentOnFile: true,
+      // Mirrors a verified consent in the register below; Theo's is a
+      // pre-register mark, Wei's consent awaits review.
+      consentOnFile: first !== "Wei",
       status: "Active",
     });
     directorIds[`${first} ${last}`] = id;
@@ -591,10 +601,16 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     });
   }
 
+  const verifiedAt = `${demoAsOf}T17:00:00.000Z`;
   await ctx.db.patch(societyId, {
     constitutionDocId: constitutionId,
     bylawsDocId: bylawsId,
     privacyPolicyDocId: privacyId,
+    // The secretary confirmed both against the registry's filing history.
+    governingDocumentVerifications: [
+      { field: "constitutionDocId", verifiedAsOf: demoAsOf, versionReference: "Constitution as filed on transition", evidenceKind: "document", documentId: constitutionId, recordedAtISO: verifiedAt, verifiedByName: "Amara Okonkwo" },
+      { field: "bylawsDocId", verifiedAsOf: demoAsOf, versionReference: "Bylaws as last amended at the AGM", evidenceKind: "document", documentId: bylawsId, recordedAtISO: verifiedAt, verifiedByName: "Amara Okonkwo" },
+    ],
   });
 
   // Commitments
@@ -1297,6 +1313,30 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       createdAtISO: new Date().toISOString(),
     });
     userIdsByName.set(name, userId);
+  }
+
+  // Consent register: written consents and an election-meeting basis reviewed
+  // by the president; Wei's consent awaits review and Theo is marked on file
+  // with no details, so the consent check has something to show.
+  {
+    const reviewer = userIdsByName.get("Elena Vasquez");
+    const recordedAt = new Date().toISOString();
+    const minuteBook = "Minute book, Directors' consents tab (registered office)";
+    const reviewed = { reviewStatus: "Reviewed" as const, reviewedBy: reviewer, reviewedByName: "Elena Vasquez", reviewedAt: recordedAt, selfReviewed: true };
+    const consents: [string, string, Record<string, unknown>][] = [
+      ["Elena Vasquez", "2024-06-15", { basis: "Written consent", signedOn: "2024-06-12", evidenceLocation: minuteBook, ...reviewed }],
+      ["Jordan Nakamura", "2024-06-15", { basis: "Written consent", signedOn: "2024-06-14", evidenceLocation: minuteBook, ...reviewed }],
+      ["Priya Shah", "2024-06-15", { basis: "Written consent", signedOn: "2024-06-15", evidenceLocation: minuteBook, ...reviewed }],
+      ["Amara Okonkwo", "2023-06-10", { basis: "Meeting record", evidenceLocation: minuteBook, evidenceReference: "2023 AGM minutes, election of directors", ...reviewed }],
+      ["Dmitri Petrov", "2025-06-20", { basis: "Written consent", signedOn: "2025-06-18", evidenceLocation: minuteBook, ...reviewed }],
+      ["Wei Chen", "2025-06-20", { basis: "Written consent", signedOn: "2025-06-19", evidenceLocation: "Emailed scan, secretary's inbox", reviewStatus: "Awaiting review" }],
+    ];
+    for (const [name, effectiveDate, details] of consents) {
+      await ctx.db.insert("directorConsents", {
+        societyId, directorId: directorIds[name], scope: "Consent to act", event: "Given", effectiveDate, ...details,
+        recordedAt, recordedBy: reviewer,
+      });
+    }
   }
 
   // Generated workload so every task status, priority, due bucket and owner

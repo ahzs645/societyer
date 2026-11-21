@@ -11,12 +11,14 @@ import { useToast } from "../../components/Toast";
 import { formatDate } from "../../lib/format";
 import { categoryMatchKey, documentCategoryLabel, isInternalDocumentRecord } from "../../../shared/documentCategories";
 import { categoryFitsGoverningField, governingDocumentAudience, type GoverningDocumentSlot } from "../../../shared/governingDocuments";
+import { EVIDENCE_KIND_LABELS, type Currentness, type GoverningDocumentEvidenceEntry, type GoverningDocumentVerification } from "../../../shared/governingDocumentEvidence";
 
 /**
  * Governing documents on the organization profile: each row shows whether
  * the articles / by-laws (constitution / bylaws) are on file, and lets people
  * upload one, choose a document already in the workspace, replace it or
- * unlink it (with Undo).
+ * unlink it (with Undo), record that the authoritative copy is held elsewhere,
+ * and verify that the copy on record is current.
  */
 
 type DocumentRow = { _id: string; title?: string; category?: string; createdAtISO?: string; fileName?: string; archivedAtISO?: string };
@@ -81,8 +83,11 @@ export function GoverningDocumentRow({
   organization,
   canEdit,
   uploadHref,
+  currentness,
   onChoose,
   onUnlink,
+  onHeldElsewhere,
+  onVerify,
 }: {
   slot: GoverningDocumentSlot;
   docId?: string;
@@ -90,8 +95,12 @@ export function GoverningDocumentRow({
   organization: any;
   canEdit: boolean;
   uploadHref: string;
+  /** Whether the authoritative copy is identified and verified current. */
+  currentness: Currentness;
   onChoose: () => void;
   onUnlink: () => void;
+  onHeldElsewhere: () => void;
+  onVerify: () => void;
 }) {
   const present = Boolean(docId);
   const document = present ? documents?.find((row) => String(row._id) === String(docId)) : undefined;
@@ -99,12 +108,15 @@ export function GoverningDocumentRow({
   const refiled = document && !categoryFitsGoverningField(document.category, slot.field, organization)
     ? documentCategoryLabel(document.category, governingDocumentAudience(organization))
     : undefined;
+  const heldElsewhere = currentness.evidence?.kind === "document" ? currentness.evidence.heldElsewhere : currentness.evidence?.entry;
   return (
     <tr className="gov-doc-row" data-field={slot.field}>
       <td>
         <strong>{slot.label}</strong>
         {document?.title && <span className="gov-doc-row__title">{document.title}</span>}
         {refiled && <span className="gov-doc-row__note">This document is now filed as {refiled}.</span>}
+        {heldElsewhere && <HeldElsewhereLine entry={heldElsewhere} alsoUploaded={present} />}
+        <CurrentnessLine currentness={currentness} />
         <div className="gov-doc-row__actions">
           {present ? (
             <>
@@ -119,13 +131,80 @@ export function GoverningDocumentRow({
               {canEdit && <button type="button" className="btn btn--ghost btn--sm" onClick={onChoose} aria-label={`Choose a document for ${slot.label}`}>Choose a document</button>}
             </>
           )}
+          {canEdit && <EvidenceActions label={slot.label} currentness={currentness} uploaded={present} onHeldElsewhere={onHeldElsewhere} onVerify={onVerify} />}
         </div>
       </td>
       <td>
-        <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
+        <EvidenceBadge currentness={currentness} />
       </td>
     </tr>
   );
+}
+
+/** "Held elsewhere" (record or edit where the copy is kept) and "Verify current". */
+export function EvidenceActions({ label, currentness, uploaded, onHeldElsewhere, onVerify, verifyLabel = "Verify current" }: {
+  label: string;
+  currentness: Currentness;
+  uploaded: boolean;
+  onHeldElsewhere: () => void;
+  onVerify?: () => void;
+  verifyLabel?: string;
+}) {
+  const recorded = currentness.evidence?.kind === "document" ? Boolean(currentness.evidence.heldElsewhere) : Boolean(currentness.evidence);
+  return (
+    <>
+      {/* Once a copy is uploaded, "held elsewhere" is still editable but no longer offered. */}
+      {(!uploaded || recorded) && (
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onHeldElsewhere} aria-label={`${recorded ? "Edit where" : "Record where"} ${label} is held`}>
+          {recorded ? "Where it's held" : "Held elsewhere"}
+        </button>
+      )}
+      {onVerify && currentness.evidence && (
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onVerify} aria-label={`${verifyLabel}: ${label}`}>{verifyLabel}</button>
+      )}
+    </>
+  );
+}
+
+export function HeldElsewhereLine({ entry, alsoUploaded }: { entry: GoverningDocumentEvidenceEntry; alsoUploaded?: boolean }) {
+  const details = [entry.custodian && `Custodian: ${entry.custodian}`, entry.version, entry.effectiveDate && `effective ${formatDate(entry.effectiveDate)}`].filter(Boolean).join(" · ");
+  return (
+    <span className="gov-doc-row__title gov-doc-row__evidence">
+      {alsoUploaded ? "Also held: " : `${EVIDENCE_KIND_LABELS[entry.kind]}: `}
+      <EvidenceReference reference={entry.reference} />
+      {details && <span className="gov-doc-row__detail"> · {details}</span>}
+    </span>
+  );
+}
+
+function EvidenceReference({ reference }: { reference: string }) {
+  if (/^https?:\/\//i.test(reference)) {
+    return <a href={reference} target="_blank" rel="noreferrer noopener">{reference}</a>;
+  }
+  return <>{reference}</>;
+}
+
+export function verificationLine(verification: GoverningDocumentVerification) {
+  return `Verified current as of ${formatDate(verification.verifiedAsOf)} by ${verification.verifiedByName?.trim() || "a workspace member"}${verification.versionReference ? ` · ${verification.versionReference}` : ""}`;
+}
+
+export function CurrentnessLine({ currentness }: { currentness: Currentness }) {
+  if (currentness.state === "verified" && currentness.verification) {
+    return <span className="gov-doc-row__title gov-doc-row__verified">{verificationLine(currentness.verification)}</span>;
+  }
+  if (currentness.state === "unverified") {
+    return (
+      <span className="gov-doc-row__title">
+        Currentness not verified{currentness.staleVerification ? "; the copy verified earlier was replaced" : ""}.
+      </span>
+    );
+  }
+  return null;
+}
+
+export function EvidenceBadge({ currentness }: { currentness: Currentness }) {
+  if (!currentness.evidence) return <Badge tone="warn">Not identified</Badge>;
+  return <Badge tone="success">{currentness.evidence.kind === "document" ? "On file" : "Held elsewhere"}</Badge>;
 }
 
 const PICKER_LIMIT = 100;

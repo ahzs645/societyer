@@ -1,7 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { directorsList, directorCreate, directorUpdate, directorRemove } from "../shared/functions/directors";
+import { directorsList, directorConsentStates, directorCreate, directorUpdate, directorRemove } from "../shared/functions/directors";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import * as rosterPromotionModule from "../shared/functions/rosterPromotion";
 
@@ -9,6 +9,12 @@ export const list = authorizedQuery("directors:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => directorsList(await toPortableQueryCtx(ctx), args),
+});
+
+export const consentStates = authorizedQuery("directors:consentStates", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => directorConsentStates(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = authorizedMutation("directors:create", mutation)({
@@ -25,7 +31,8 @@ export const create = authorizedMutation("directors:create", mutation)({
     residentCanadianEvidence: v.optional(v.string()),
     termStart: v.string(),
     termEnd: v.optional(v.string()),
-    consentOnFile: v.boolean(),
+    // Ignored: consent is recorded in the consent register (directorConsents).
+    consentOnFile: v.optional(v.boolean()),
     status: v.string(),
     notes: v.optional(v.string()),
   },

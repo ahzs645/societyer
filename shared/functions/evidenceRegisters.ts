@@ -119,6 +119,7 @@ export async function promoteBoardRoleToDirectorPortable(
     assignmentId: string;
     position?: string;
     isBCResident?: boolean;
+    /** Ignored: consent is recorded in the consent register. */
     consentOnFile?: boolean;
     status?: string;
     notes?: string;
@@ -153,7 +154,8 @@ export async function promoteBoardRoleToDirectorPortable(
     isBCResident: args.isBCResident ?? false,
     termStart: assignment.startDate,
     termEnd: assignment.endDate,
-    consentOnFile: args.consentOnFile ?? false,
+    // Consent is recorded in the consent register, not asserted by promotion.
+    consentOnFile: false,
     status: cleanText(args.status) || "Active",
     notes: appendReviewNote(
       args.notes,

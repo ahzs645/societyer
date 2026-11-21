@@ -58,8 +58,9 @@ const prev = db.dump("shareNotices")[0]._id;
 await owner.runMutation("businessEvidence:save", { ...notice, previousId: prev, values: { ...notice.values, sentOn: "2026-01-03" } });
 await assert.rejects(owner.runMutation("businessEvidence:save", { ...notice, previousId: prev }), /newer version/);
 assert.equal(db.dump("rightsholdingTransfers").length, 1);
-// A "Consent to act" entry that was given keeps the director's consent flag in step with the register.
-assert.equal(db.dump("directors")[0].consentOnFile, true);
+// A "Consent to act" entry that was given but not reviewed doesn't set the
+// director's consent flag: only a verified consent does (check-director-consent-state.ts).
+assert.equal(db.dump("directors")[0].consentOnFile, false);
 await assert.rejects(runtime("member").runQuery("businessEvidence:list", { societyId: "soc", register: "directorConsents" }), /Permission/);
 const shares = businessRegisters[0];
 assert.ok(evidenceRules(company, shares).sources.length);

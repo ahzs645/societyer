@@ -47,6 +47,7 @@ import { workflowTables } from "./tables/workflows";
 import { subscriptionTables } from "./tables/subscriptions";
 import { meetingTables } from "./tables/meetings";
 import { annualDeadlineEvidenceValidators, complianceTables } from "./tables/compliance";
+import { governingDocumentEvidenceValidators } from "./tables/governingDocumentEvidence";
 import { policyTables } from "./tables/policies";
 import { storageTables } from "./tables/storage";
 import { pathwayTables } from "./tables/pathways";
@@ -212,6 +213,7 @@ export default defineSchema({
     privacyProgramStatus: v.optional(v.string()), // Unknown | Documented | Needs review | Not started
     privacyProgramReviewedAtISO: v.optional(v.string()),
     privacyProgramNotes: v.optional(v.string()),
+    ...governingDocumentEvidenceValidators,
     ...privacyAssessmentValidators,
     memberDataAccessStatus: v.optional(v.string()), // Unknown | Society-controlled | Partially available | Institution-held | Not applicable
     memberDataGapDocumented: v.optional(v.boolean()),

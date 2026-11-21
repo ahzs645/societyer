@@ -1,6 +1,6 @@
 import { calendarDateKey } from "../lib/calendarDates";
 import { useMemo } from "react";
-import { BookTemplate, CheckCircle2, ClipboardList, ExternalLink, Plus, RotateCcw, X } from "lucide-react";
+import { AlarmClock, BookTemplate, CheckCheck, CheckCircle2, ClipboardList, ExternalLink, Plus, RotateCcw, X } from "lucide-react";
 import type { MenuItem } from "../components/Menu";
 import { loadComplianceRulePacks } from "../lib/compliance/registry";
 import { Link, useNavigate } from "react-router-dom";
@@ -26,6 +26,10 @@ import { corporationPacketForComplianceObligation } from "../../shared/corporati
 import { isCorporation } from "../../shared/organizationDomain";
 import { annualReportForAgm, dateOnly, deriveAgmFacts, noAgmAnnualReportForYear } from "../../shared/agmEvidence";
 import { useToast } from "../components/Toast";
+import { usePrompt } from "../components/Modal";
+import { activeAcknowledgement, activeSnooze, snoozedLast, type DashboardItemSnooze, type DismissalRecord } from "../../shared/dashboardDismissals";
+import { decisionWaivesFinding, findingPolicy, REQUIREMENT_BASIS_LABEL, type RequirementBasis } from "../../shared/dashboardFindingPolicy";
+import { acknowledgementText, snoozeText, useFindingSnooze } from "../features/dashboard/DashboardDismissals";
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
 import { StatTile } from "../components/StatTile";
@@ -63,7 +67,7 @@ const OBLIGATION_STATUS_TONE: Record<ObligationDisplayStatus, "success" | "warn"
 };
 const TONE_COLOR = { success: "green", warn: "amber", info: "blue", neutral: "gray" } as const;
 
-type ObligationDecision = { status?: string; targetTable?: string; updatedAtISO?: string };
+type ObligationDecision = DismissalRecord & { status?: string; targetTable?: string; updatedAtISO?: string };
 type ObligationFilingMatch = { filing: { _id?: string; status?: string } | null; nominalDaysPastDue: number; timingReviewRequired: boolean };
 
 /** An obligation as the table reads it: its facts as columns, the computed obligation and its filing/decision for cells and actions. */
@@ -81,6 +85,10 @@ type ObligationRecord = {
   details: string;
   filingMatch: ObligationFilingMatch | null;
   decision: ObligationDecision | undefined;
+  /** What the obligation rests on (shared/dashboardFindingPolicy.ts): only a recommendation can be dismissed. */
+  basis: RequirementBasis;
+  /** Set while a requirement's reminders are snoozed; it stays in the counts. */
+  snooze: DashboardItemSnooze | undefined;
   obligation: Obligation;
 };
 
@@ -156,11 +164,14 @@ export function ComplianceObligationsPage() {
   const markReviewed = useMutation(api.complianceObligations.markReviewed);
   const dismissDecision = useMutation(api.complianceObligations.dismissDecision);
   const reopenDecision = useMutation(api.complianceObligations.reopenDecision);
+  const acknowledgeDecision = useMutation(api.complianceObligations.acknowledgeDecision);
   const toast = useToast();
+  const prompt = usePrompt();
   const navigate = useNavigate();
   const undoable = useUndoableAction();
   const permissions = usePermissions();
   const canReview = permissions.loaded && permissions.can("deadlines:write");
+  const snoozing = useFindingSnooze(society?._id, canReview);
   const canTrack = canReview && permissions.can("filings:write");
   const canStage = canReview && permissions.can("documents:write");
 
@@ -218,8 +229,11 @@ export function ComplianceObligationsPage() {
   };
   const filingIsComplete = (obligation: (typeof obligations)[number]) => filingForObligation(obligation)?.filing?.status === "Filed";
   const decisionsByRuleId = new Map((decisions ?? []).map((decision) => [decision.ruleId, decision]));
-  // Dismissed obligations no longer count toward the calculated-date tiles.
-  const isDismissedObligation = (obligation: (typeof obligations)[number]) => decisionsByRuleId.get(obligation.occurrenceKey)?.status === "dismissed";
+  // Only a dismissed recommendation (a good-practice review occurrence) leaves
+  // the calculated-date tiles. A requirement (filings, statutory deadlines)
+  // stays counted when it is acknowledged or snoozed, or when it was
+  // dismissed before it was protected (shared/dashboardFindingPolicy.ts).
+  const isDismissedObligation = (obligation: (typeof obligations)[number]) => decisionWaivesFinding(obligation.occurrenceKey, decisionsByRuleId.get(obligation.occurrenceKey));
   // A review-only obligation (no filing to submit) is done once someone records
   // the review; it leaves the open-workflow count. Filing obligations stay open
   // until the filing itself is marked filed.
@@ -320,11 +334,11 @@ export function ComplianceObligationsPage() {
   };
 
   const dismissObligation = async (obligation: (typeof obligations)[number]) => {
-    // Dismissing only hides this occurrence and reopening is one call, so
-    // act straight away and offer Undo instead of a confirmation.
+    // Dismissing only hides this occurrence (the next one still shows) and
+    // restoring is one call, so act straight away and offer Undo.
     await undoable({
-      message: "Obligation dismissed",
-      description: `${obligation.title} (${formatDate(obligation.dueDate)}) is hidden from the counts. The statutory duty itself is not waived.`,
+      message: "Recommendation dismissed",
+      description: `${obligation.title} (${formatDate(obligation.dueDate)}) leaves the counts. The next one still shows.`,
       errorMessage: "Could not dismiss obligation",
       dedupeKey: `obligation-dismiss-${obligation.obligationKey}`,
       run: () => dismissDecision({
@@ -332,16 +346,63 @@ export function ComplianceObligationsPage() {
         notes: `Dismissed compliance obligation ${obligation.obligationKey}.`,
       }),
       undo: () => reopenDecision(decisionPayload(society._id, obligation)),
-      undoneMessage: "Obligation reopened",
+      undoneMessage: "Recommendation restored",
     });
   };
 
-  const reopenObligation = async (obligation: (typeof obligations)[number]) => {
-    await reopenDecision(decisionPayload(society._id, obligation));
-    toast.success("Obligation reopened", obligation.title);
+  // "Remind me later" on a requirement: it stays in the counts, sorted after the others.
+  const snoozeTarget = (obligation: (typeof obligations)[number]) => ({
+    id: obligation.occurrenceKey,
+    level: decisionPayload(society._id, obligation).flagLevel,
+    text: `${obligation.title} (${formatDate(obligation.dueDate)})`,
+  });
+  const snoozeObligation = (obligation: (typeof obligations)[number]) => snoozing.snooze(snoozeTarget(obligation), obligation.title);
+  const cancelObligationSnooze = (obligation: (typeof obligations)[number]) => snoozing.cancelSnooze(snoozeTarget(obligation));
+
+  const acknowledgeObligation = async (obligation: (typeof obligations)[number]) => {
+    const note = await prompt({
+      title: "Acknowledge this obligation?",
+      message: (
+        <>
+          <p style={{ margin: "0 0 8px" }}>“{obligation.title}” ({formatDate(obligation.dueDate)})</p>
+          <p style={{ margin: 0 }}>This records that you've seen it. It stays in the counts until it's filed or reviewed.</p>
+        </>
+      ),
+      placeholder: "Note (optional)",
+      confirmLabel: "Acknowledge",
+    });
+    if (note === null) return;
+    await undoable({
+      message: "Obligation acknowledged",
+      description: "It stays in the counts until it's filed or reviewed.",
+      errorMessage: "Could not acknowledge the obligation",
+      dedupeKey: `obligation-acknowledge-${obligation.obligationKey}`,
+      run: () => acknowledgeDecision({ ...decisionPayload(society._id, obligation), notes: note.trim() || undefined }),
+      undo: () => reopenDecision(decisionPayload(society._id, obligation)),
+      undoneMessage: "Acknowledgement withdrawn",
+    });
   };
 
-  const obligationRecords: ObligationRecord[] = obligations.map((obligation) => {
+  const withdrawAcknowledgement = async (obligation: (typeof obligations)[number]) => {
+    try {
+      await reopenDecision(decisionPayload(society._id, obligation));
+      toast.success("Acknowledgement withdrawn", obligation.title);
+    } catch (error) {
+      toast.error("Could not withdraw the acknowledgement", error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const restoreObligation = async (obligation: (typeof obligations)[number]) => {
+    try {
+      await reopenDecision(decisionPayload(society._id, obligation));
+      toast.success("Recommendation restored", obligation.title);
+    } catch (error) {
+      toast.error("Could not restore the recommendation", error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  // Snoozed requirements stay in the table and the counts, after the others.
+  const obligationRecords: ObligationRecord[] = snoozedLast(obligations.map((obligation): ObligationRecord => {
     const filingKind = obligation.creates?.filingKind;
     const filingMatch = filingForObligation(obligation);
     const existingFiling = filingMatch?.filing ?? null;
@@ -364,9 +425,14 @@ export function ComplianceObligationsPage() {
     ].filter(Boolean).join("\n");
     const status: ObligationDisplayStatus = existingFiling?.status === "Filed"
       ? (filingMatch?.timingReviewRequired ? "filed_timing" : "filed")
-      : decision?.status === "dismissed" ? "dismissed"
+      : isDismissedObligation(obligation) ? "dismissed"
         : isReviewedWorkflow(obligation) ? "reviewed"
           : obligation.status;
+    const policy = findingPolicy(obligation.occurrenceKey);
+    const open = status === obligation.status;
+    const snooze = policy.protected && open
+      ? activeSnooze(decision, { level: decisionPayload(society._id, obligation).flagLevel, subjectKey: obligation.occurrenceKey }, today)
+      : undefined;
     return {
       _id: obligation.occurrenceKey,
       title: obligation.title,
@@ -381,12 +447,15 @@ export function ComplianceObligationsPage() {
       details,
       filingMatch,
       decision,
+      // Unclassified ids are requirements (fail closed).
+      basis: policy.basis ?? "statutory",
+      snooze,
       obligation,
     };
-  });
+  }));
 
   /** What a row offers: its one main action inline, the rest in its "…" menu. */
-  const obligationActions = ({ obligation, filingMatch, decision }: ObligationRecord) => {
+  const obligationActions = ({ obligation, filingMatch, decision, snooze }: ObligationRecord) => {
     const filingKind = obligation.creates?.filingKind;
     const existingFiling = filingMatch?.filing ?? null;
     // Corporation packets do not apply to societies (staging one
@@ -397,16 +466,31 @@ export function ComplianceObligationsPage() {
       ruleId: obligation.ruleId,
       organization,
     }) : undefined;
-    const isDismissed = decision?.status === "dismissed";
+    const isDismissed = isDismissedObligation(obligation);
     const isReviewed = decision?.status === "resolved" || Boolean(existingFiling);
     const hasStagedPacket = decision?.targetTable === "legalPrecedentRuns";
+    // Requirements (statutory filings, deadlines, anything citing a section)
+    // are acknowledged or snoozed, never dismissed; they stay in the counts.
+    // Good-practice reviews are recommendations: each occurrence can be dismissed.
+    const isRequirement = findingPolicy(obligation.occurrenceKey).protected;
+    const acknowledged = Boolean(activeAcknowledgement(decision, { subjectKey: obligation.occurrenceKey }));
+    const attentionActions: MenuItem[] = isReviewed ? [] : isRequirement
+      ? [
+          acknowledged
+            ? { id: "withdraw-acknowledgement", label: "Withdraw acknowledgement", icon: <RotateCcw size={14} />, disabled: !canReview, onSelect: () => void withdrawAcknowledgement(obligation) }
+            : { id: "acknowledge", label: "Acknowledge", icon: <CheckCheck size={14} />, disabled: !canReview, onSelect: () => void acknowledgeObligation(obligation) },
+          snooze
+            ? { id: "cancel-snooze", label: "Cancel snooze", icon: <RotateCcw size={14} />, disabled: !canReview, onSelect: () => void cancelObligationSnooze(obligation) }
+            : { id: "snooze", label: "Remind me later", icon: <AlarmClock size={14} />, disabled: !canReview, onSelect: () => void snoozeObligation(obligation) },
+        ]
+      : [{ id: "dismiss", label: "Dismiss", icon: <X size={14} />, disabled: !canReview, onSelect: () => void dismissObligation(obligation) }];
     const secondaryActions: MenuItem[] = isDismissed ? [] : [
       ...(hasStagedPacket
         ? [{ id: "packet", label: "Open document packet", icon: <BookTemplate size={14} />, onSelect: () => navigate("/app/template-engine") }]
         : packet
           ? [{ id: "packet", label: "Stage document packet", icon: <BookTemplate size={14} />, disabled: !canStage, onSelect: () => void stageDocumentPacket(obligation, existingFiling?._id) }]
           : []),
-      ...(!isReviewed ? [{ id: "dismiss", label: "Dismiss", icon: <X size={14} />, disabled: !canReview, onSelect: () => void dismissObligation(obligation) }] : []),
+      ...attentionActions,
     ];
     return { filingKind, existingFiling, isDismissed, isReviewed, secondaryActions };
   };
@@ -508,9 +592,11 @@ export function ComplianceObligationsPage() {
           renderCell={({ record: row, field }) => {
             const { obligation } = row;
             if (field.name === "title") return (
-              <div className="record-table__identifier-lines" title={row.details}>
+              <div className={`record-table__identifier-lines${row.snooze ? " obligation--snoozed" : ""}`} title={row.details}>
                 <strong className="record-table__identifier-primary">{obligation.title}</strong>
-                {row.contextSummary && <div className="record-table__identifier-secondary muted">{row.contextSummary}</div>}
+                <div className="record-table__identifier-secondary muted">
+                  {[REQUIREMENT_BASIS_LABEL[row.basis], row.contextSummary].filter(Boolean).join(" · ")}
+                </div>
               </div>
             );
             if (field.name === "dueDate") return (
@@ -524,7 +610,11 @@ export function ComplianceObligationsPage() {
                 row.filingMatch?.timingReviewRequired && row.filingMatch.nominalDaysPastDue > 0
                   ? `${row.filingMatch.nominalDaysPastDue} days after the nominal date; legal calendar review required.`
                   : "",
-                row.decision?.updatedAtISO ? relative(row.decision.updatedAtISO) : "",
+                (() => {
+                  const acknowledgement = activeAcknowledgement(row.decision, { subjectKey: obligation.occurrenceKey });
+                  return acknowledgement ? acknowledgementText(acknowledgement) : row.decision?.updatedAtISO && row.status !== obligation.status ? relative(row.decision.updatedAtISO) : "";
+                })(),
+                row.snooze ? snoozeText(row.snooze, today) : "",
               ].filter(Boolean).join(" · ");
               const badge = <Badge tone={OBLIGATION_STATUS_TONE[row.status]}>{OBLIGATION_STATUS_LABEL[row.status]}</Badge>;
               if (!notes) return badge;
@@ -562,7 +652,7 @@ export function ComplianceObligationsPage() {
                 wrapTitle
                 badge={field("status")}
                 meta={[formatDate(row.obligation.dueDate), `Nominal · ${relative(row.obligation.dueDate)}`]}
-                detail={[row.contextSummary ?? "", row.obligation.authority.displayCitation]}
+                detail={[[REQUIREMENT_BASIS_LABEL[row.basis], row.contextSummary].filter(Boolean).join(" · "), row.obligation.authority.displayCitation]}
                 selecting={selecting}
               />
             );
@@ -571,8 +661,8 @@ export function ComplianceObligationsPage() {
             const { obligation } = record;
             const { filingKind, existingFiling, isDismissed, isReviewed } = obligationActions(record);
             if (isDismissed) return (
-              <button className="btn btn--sm" disabled={!canReview} onClick={() => reopenObligation(obligation)}>
-                <RotateCcw size={12} /> Reopen
+              <button className="btn btn--sm" disabled={!canReview} onClick={() => void restoreObligation(obligation)}>
+                <RotateCcw size={12} /> Restore
               </button>
             );
             if (existingFiling) return <Link className="btn btn--sm" to="/app/filings">Tracked</Link>;
@@ -597,6 +687,7 @@ export function ComplianceObligationsPage() {
           }
         />
       </section>
+      {snoozing.dialog}
     </div>
   );
 }
