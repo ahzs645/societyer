@@ -1,6 +1,6 @@
 import { calendarDateKey } from "../lib/calendarDates";
 import { useMemo } from "react";
-import { BookTemplate, CheckCircle2, ClipboardList, ExternalLink, Plus, RotateCcw, X } from "lucide-react";
+import { BookTemplate, CheckCheck, CheckCircle2, ClipboardList, ExternalLink, Plus, RotateCcw, X } from "lucide-react";
 import type { MenuItem } from "../components/Menu";
 import { loadComplianceRulePacks } from "../lib/compliance/registry";
 import { Link, useNavigate } from "react-router-dom";
@@ -26,6 +26,10 @@ import { corporationPacketForComplianceObligation } from "../../shared/corporati
 import { isCorporation } from "../../shared/organizationDomain";
 import { annualReportForAgm, dateOnly, deriveAgmFacts, noAgmAnnualReportForYear } from "../../shared/agmEvidence";
 import { useToast } from "../components/Toast";
+import { usePrompt } from "../components/Modal";
+import { activeAcknowledgement, type DismissalRecord } from "../../shared/dashboardDismissals";
+import { decisionWaivesFinding, findingPolicy } from "../../shared/dashboardFindingPolicy";
+import { acknowledgementText } from "../features/dashboard/DashboardDismissals";
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
 import { StatTile } from "../components/StatTile";
@@ -63,7 +67,7 @@ const OBLIGATION_STATUS_TONE: Record<ObligationDisplayStatus, "success" | "warn"
 };
 const TONE_COLOR = { success: "green", warn: "amber", info: "blue", neutral: "gray" } as const;
 
-type ObligationDecision = { status?: string; targetTable?: string; updatedAtISO?: string };
+type ObligationDecision = DismissalRecord & { status?: string; targetTable?: string; updatedAtISO?: string };
 type ObligationFilingMatch = { filing: { _id?: string; status?: string } | null; nominalDaysPastDue: number; timingReviewRequired: boolean };
 
 /** An obligation as the table reads it: its facts as columns, the computed obligation and its filing/decision for cells and actions. */
@@ -156,7 +160,9 @@ export function ComplianceObligationsPage() {
   const markReviewed = useMutation(api.complianceObligations.markReviewed);
   const dismissDecision = useMutation(api.complianceObligations.dismissDecision);
   const reopenDecision = useMutation(api.complianceObligations.reopenDecision);
+  const acknowledgeDecision = useMutation(api.complianceObligations.acknowledgeDecision);
   const toast = useToast();
+  const prompt = usePrompt();
   const navigate = useNavigate();
   const undoable = useUndoableAction();
   const permissions = usePermissions();
@@ -218,8 +224,11 @@ export function ComplianceObligationsPage() {
   };
   const filingIsComplete = (obligation: (typeof obligations)[number]) => filingForObligation(obligation)?.filing?.status === "Filed";
   const decisionsByRuleId = new Map((decisions ?? []).map((decision) => [decision.ruleId, decision]));
-  // Dismissed obligations no longer count toward the calculated-date tiles.
-  const isDismissedObligation = (obligation: (typeof obligations)[number]) => decisionsByRuleId.get(obligation.occurrenceKey)?.status === "dismissed";
+  // Only a dismissed recommendation leaves the calculated-date tiles. A
+  // requirement (every statute-based occurrence) stays counted when it is
+  // acknowledged, or when it was dismissed before it was protected
+  // (shared/dashboardFindingPolicy.ts).
+  const isDismissedObligation = (obligation: (typeof obligations)[number]) => decisionWaivesFinding(obligation.occurrenceKey, decisionsByRuleId.get(obligation.occurrenceKey));
   // A review-only obligation (no filing to submit) is done once someone records
   // the review; it leaves the open-workflow count. Filing obligations stay open
   // until the filing itself is marked filed.
@@ -324,7 +333,7 @@ export function ComplianceObligationsPage() {
     // act straight away and offer Undo instead of a confirmation.
     await undoable({
       message: "Obligation dismissed",
-      description: `${obligation.title} (${formatDate(obligation.dueDate)}) is hidden from the counts. The statutory duty itself is not waived.`,
+      description: `${obligation.title} (${formatDate(obligation.dueDate)}) is hidden from the counts. Reopen it any time.`,
       errorMessage: "Could not dismiss obligation",
       dedupeKey: `obligation-dismiss-${obligation.obligationKey}`,
       run: () => dismissDecision({
@@ -334,6 +343,39 @@ export function ComplianceObligationsPage() {
       undo: () => reopenDecision(decisionPayload(society._id, obligation)),
       undoneMessage: "Obligation reopened",
     });
+  };
+
+  const acknowledgeObligation = async (obligation: (typeof obligations)[number]) => {
+    const note = await prompt({
+      title: "Acknowledge this obligation?",
+      message: (
+        <>
+          <p style={{ margin: "0 0 8px" }}>“{obligation.title}” ({formatDate(obligation.dueDate)})</p>
+          <p style={{ margin: 0 }}>This records that you've seen it. It stays in the counts until it's filed or reviewed.</p>
+        </>
+      ),
+      placeholder: "Note (optional)",
+      confirmLabel: "Acknowledge",
+    });
+    if (note === null) return;
+    await undoable({
+      message: "Obligation acknowledged",
+      description: "It stays in the counts until it's filed or reviewed.",
+      errorMessage: "Could not acknowledge the obligation",
+      dedupeKey: `obligation-acknowledge-${obligation.obligationKey}`,
+      run: () => acknowledgeDecision({ ...decisionPayload(society._id, obligation), notes: note.trim() || undefined }),
+      undo: () => reopenDecision(decisionPayload(society._id, obligation)),
+      undoneMessage: "Acknowledgement withdrawn",
+    });
+  };
+
+  const withdrawAcknowledgement = async (obligation: (typeof obligations)[number]) => {
+    try {
+      await reopenDecision(decisionPayload(society._id, obligation));
+      toast.success("Acknowledgement withdrawn", obligation.title);
+    } catch (error) {
+      toast.error("Could not withdraw the acknowledgement", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const reopenObligation = async (obligation: (typeof obligations)[number]) => {
@@ -364,7 +406,7 @@ export function ComplianceObligationsPage() {
     ].filter(Boolean).join("\n");
     const status: ObligationDisplayStatus = existingFiling?.status === "Filed"
       ? (filingMatch?.timingReviewRequired ? "filed_timing" : "filed")
-      : decision?.status === "dismissed" ? "dismissed"
+      : isDismissedObligation(obligation) ? "dismissed"
         : isReviewedWorkflow(obligation) ? "reviewed"
           : obligation.status;
     return {
@@ -397,16 +439,24 @@ export function ComplianceObligationsPage() {
       ruleId: obligation.ruleId,
       organization,
     }) : undefined;
-    const isDismissed = decision?.status === "dismissed";
+    const isDismissed = isDismissedObligation(obligation);
     const isReviewed = decision?.status === "resolved" || Boolean(existingFiling);
     const hasStagedPacket = decision?.targetTable === "legalPrecedentRuns";
+    // Requirements are acknowledged, not dismissed; they stay in the counts.
+    const isRequirement = findingPolicy(obligation.occurrenceKey).protected;
+    const acknowledged = Boolean(activeAcknowledgement(decision, { subjectKey: obligation.occurrenceKey }));
+    const attentionActions: MenuItem[] = isReviewed ? [] : isRequirement
+      ? [acknowledged
+          ? { id: "withdraw-acknowledgement", label: "Withdraw acknowledgement", icon: <RotateCcw size={14} />, disabled: !canReview, onSelect: () => void withdrawAcknowledgement(obligation) }
+          : { id: "acknowledge", label: "Acknowledge", icon: <CheckCheck size={14} />, disabled: !canReview, onSelect: () => void acknowledgeObligation(obligation) }]
+      : [{ id: "dismiss", label: "Dismiss", icon: <X size={14} />, disabled: !canReview, onSelect: () => void dismissObligation(obligation) }];
     const secondaryActions: MenuItem[] = isDismissed ? [] : [
       ...(hasStagedPacket
         ? [{ id: "packet", label: "Open document packet", icon: <BookTemplate size={14} />, onSelect: () => navigate("/app/template-engine") }]
         : packet
           ? [{ id: "packet", label: "Stage document packet", icon: <BookTemplate size={14} />, disabled: !canStage, onSelect: () => void stageDocumentPacket(obligation, existingFiling?._id) }]
           : []),
-      ...(!isReviewed ? [{ id: "dismiss", label: "Dismiss", icon: <X size={14} />, disabled: !canReview, onSelect: () => void dismissObligation(obligation) }] : []),
+      ...attentionActions,
     ];
     return { filingKind, existingFiling, isDismissed, isReviewed, secondaryActions };
   };
@@ -524,7 +574,10 @@ export function ComplianceObligationsPage() {
                 row.filingMatch?.timingReviewRequired && row.filingMatch.nominalDaysPastDue > 0
                   ? `${row.filingMatch.nominalDaysPastDue} days after the nominal date; legal calendar review required.`
                   : "",
-                row.decision?.updatedAtISO ? relative(row.decision.updatedAtISO) : "",
+                (() => {
+                  const acknowledgement = activeAcknowledgement(row.decision, { subjectKey: obligation.occurrenceKey });
+                  return acknowledgement ? acknowledgementText(acknowledgement) : row.decision?.updatedAtISO && row.status !== obligation.status ? relative(row.decision.updatedAtISO) : "";
+                })(),
               ].filter(Boolean).join(" · ");
               const badge = <Badge tone={OBLIGATION_STATUS_TONE[row.status]}>{OBLIGATION_STATUS_LABEL[row.status]}</Badge>;
               if (!notes) return badge;

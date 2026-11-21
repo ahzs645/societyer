@@ -339,6 +339,20 @@ a.attention-item__main:focus-visible {
   gap: token('s-2');
 }
 
+// The quiet line under a finding: its basis ("Statutory requirement") and who
+// acknowledged it or owns its follow-up. Requirements stay listed, so this is
+// how a reader sees that someone is on it.
+.finding-status {
+  display: block;
+  margin-top: 2px;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  overflow-wrap: anywhere;
+}
+.finding-status__basis { font-weight: token('fw-medium'); }
+.attention-pop__status { color: token('text-secondary'); font-size: token('fs-sm'); }
+.attention-pop__status .finding-status { margin-top: 0; font-size: inherit; }
+
 // Dismissed dashboard recommendations: a quiet "Dismissed (n)" link at the
 // foot of the compliance, continuity and phone "Needs attention" cards.
 .dashboard-dismissed {

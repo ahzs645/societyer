@@ -36,7 +36,7 @@ import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { automatedComplianceChecksLabel } from "../../shared/entityRuleScope";
 import { ContinuityChecksCard, continuityDismissTarget, type ContinuityCheck } from "../features/gaps/ContinuityChecksCard";
-import { canDismissItem, DismissButton, DismissedItems, useDashboardDismissals, type DismissedEntry, type DismissTarget } from "../features/dashboard/DashboardDismissals";
+import { canDismissItem, DismissButton, DismissedItems, findingAttentionActions, FindingStatusLine, hasFindingStatus, useDashboardDismissals, type DismissedEntry, type DismissTarget } from "../features/dashboard/DashboardDismissals";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
 import { RollingNumber } from "../components/RollingNumber";
@@ -49,7 +49,7 @@ import { useIsMobile } from "../lib/useIsMobile";
 import { useSetupGuideHidden } from "../hooks/useSetupProgress";
 import { useOrganizationSetup } from "../features/organizationSetup/useOrganizationSetup";
 import { SetupSummaryCard } from "../features/dashboard/SetupSummaryCard";
-import { NeedsAttentionCard, buildAttentionItems } from "../features/dashboard/NeedsAttentionCard";
+import { NeedsAttentionCard, buildAttentionItems, continuityChecksShownAsFlags } from "../features/dashboard/NeedsAttentionCard";
 import { ATTENTION_MODULES, DashboardPhoneLayout, type DashboardDisclosure } from "../features/dashboard/DashboardPhoneLayout";
 import { isModuleEnabled } from "../lib/modules";
 import type { DashboardComplianceFlag, DashboardRemediationAction } from "../../shared/dashboardComplianceRules";
@@ -156,6 +156,9 @@ export function Dashboard() {
       const permission = action.intent === "navigate" && action.to ? interfaceRouteReadPermission(action.to) : null;
       return !permission || canRead(permission);
     });
+  // A review task is how a finding gets an owner and due date.
+  const remediationActionLabel = (action: DashboardRemediationAction) =>
+    action.intent === "createComplianceReviewTask" || action.intent === "createPrivacyReviewTask" ? "Assign follow-up" : action.label;
   const remediationActionDisabled = (flag: DashboardComplianceFlag, action: DashboardRemediationAction) =>
     busyRemediationAction === `${flag.ruleId}:${action.id}` || (action.intent !== "navigate" && !can(remediationPermission(action)));
 
@@ -169,6 +172,11 @@ export function Dashboard() {
       toast.error("Your current workspace role cannot perform this action.");
       return;
     }
+
+    // A review task is the follow-up: ask who owns it and by when first.
+    const isFollowUp = action.intent === "createPrivacyReviewTask" || action.intent === "createComplianceReviewTask";
+    const followUp = isFollowUp ? await dismissals.askFollowUp(flagDismissTarget(flag)) : null;
+    if (isFollowUp && !followUp) return;
 
     const actionKey = `${flag.ruleId}:${action.id}`;
     setBusyRemediationAction(actionKey);
@@ -194,13 +202,13 @@ export function Dashboard() {
         return;
       }
       if (action.intent === "createPrivacyReviewTask") {
-        const result = await createPrivacyReviewTask(payload);
-        toast.success(result?.reused ? "Existing privacy review task reused" : "Privacy review task assigned");
+        const result = await createPrivacyReviewTask({ ...payload, ...followUp });
+        toast.success(result?.reused ? "Existing privacy review task reused" : "Privacy follow-up assigned");
         return;
       }
       if (action.intent === "createComplianceReviewTask") {
-        const result = await createComplianceReviewTask(payload);
-        toast.success(result?.reused ? "Existing review task reused" : "Compliance review task assigned");
+        const result = await createComplianceReviewTask({ ...payload, ...followUp });
+        toast.success(result?.reused ? "Existing follow-up task reused" : "Follow-up assigned");
         return;
       }
       if (action.intent === "markPrivacyProgramReviewed") {
@@ -296,9 +304,20 @@ export function Dashboard() {
               const actionDisabled = (action: any) => remediationActionDisabled(f, action);
               // One primary action per row; the rest sit in a ⋯ menu.
               const [primary, ...secondary] = visibleRemediationActions(f);
-              // Recommendations add "Dismiss" to the ⋯ menu, or a × when the row has none.
+              // Recommendations add "Dismiss" to the ⋯ menu, or a × when the row has none;
+              // requirements add "Acknowledge" and stay listed.
               const dismissable = canDismissFlag(f);
-              const actions = f.remediationStatus || primary || evidenceInfo || dismissable ? (
+              const attentionItems = findingAttentionActions(f, flagDismissTarget(f), dismissals);
+              const menuItems = [
+                ...secondary.map((action: any) => ({
+                  id: action.id,
+                  label: busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : remediationActionLabel(action),
+                  disabled: actionDisabled(action),
+                  onSelect: () => runRemediationAction(f, action),
+                })),
+                ...(dismissable && secondary.length === 0 ? [] : attentionItems),
+              ];
+              const actions = f.remediationStatus || primary || evidenceInfo || menuItems.length || dismissable ? (
                 <>
                   {f.remediationStatus && (
                     <Badge tone={f.remediationStatus === "resolved" ? "success" : "info"}>
@@ -316,24 +335,10 @@ export function Dashboard() {
                       disabled={actionDisabled(primary)}
                       onClick={() => runRemediationAction(f, primary)}
                     >
-                      {busyRemediationAction === `${f.ruleId}:${primary.id}` ? "Working..." : primary.label}
+                      {busyRemediationAction === `${f.ruleId}:${primary.id}` ? "Working..." : remediationActionLabel(primary)}
                     </button>
                   ))}
-                  {secondary.length > 0 && (
-                    <MoreActionsMenu
-                      label=""
-                      align="left"
-                      items={[
-                        ...secondary.map((action: any) => ({
-                          id: action.id,
-                          label: busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label,
-                          disabled: actionDisabled(action),
-                          onSelect: () => runRemediationAction(f, action),
-                        })),
-                        ...(dismissable ? [{ id: "dismiss", label: "Dismiss", onSelect: () => void dismissals.dismiss(flagDismissTarget(f)) }] : []),
-                      ]}
-                    />
-                  )}
+                  {menuItems.length > 0 && <MoreActionsMenu label="" align="left" items={menuItems} />}
                   {evidenceInfo}
                   {dismissable && secondary.length === 0 && (
                     <DismissButton label={pluralizeCounts(f.text)} onDismiss={() => void dismissals.dismiss(flagDismissTarget(f))} />
@@ -349,6 +354,7 @@ export function Dashboard() {
                   actions={actions}
                 >
                   {pluralizeCounts(f.text)}
+                  <FindingStatusLine item={f} todayISO={todayISO} />
                 </Flag>
               );
             })}
@@ -394,11 +400,11 @@ export function Dashboard() {
     ) : null,
     continuity: (
       <>
-        {/* Director consent already shows (with its actions) under Compliance
-          * posture; don't repeat it under Record continuity. */}
+        {/* Director consent shows (with its actions) under Compliance posture
+          * while that card lists it; only then is it left out here. */}
         <ContinuityChecksCard
           societyId={society._id}
-          hideCheckIds={complianceFlags.some((flag: any) => flag.ruleId === "BC-SOC-DIRECTOR-CONSENT") ? ["CONTINUITY-DIRECTOR-CONSENT"] : undefined}
+          hideCheckIds={isModuleHidden("compliance") ? undefined : continuityChecksShownAsFlags(openComplianceFlags)}
         />
       </>
     ),
@@ -623,8 +629,8 @@ export function Dashboard() {
         flagLink: (flag) => visibleRemediationActions(flag).find((action) => action.intent === "navigate" && action.to)?.to,
         flagActions: (flag, rowLink) => {
           const others = visibleRemediationActions(flag).filter((action) => !(action.intent === "navigate" && action.to === rowLink));
-          const dismissable = canDismissFlag(flag);
-          if (!others.length && !dismissable) return null;
+          const attention = findingAttentionActions(flag, flagDismissTarget(flag), dismissals);
+          if (!others.length && !attention.length) return null;
           return (
             <div className="attention-pop__actions">
               {others.map((action) =>
@@ -638,25 +644,31 @@ export function Dashboard() {
                     disabled={remediationActionDisabled(flag, action)}
                     onClick={() => runRemediationAction(flag, action)}
                   >
-                    {busyRemediationAction === `${flag.ruleId}:${action.id}` ? "Working..." : action.label}
+                    {busyRemediationAction === `${flag.ruleId}:${action.id}` ? "Working..." : remediationActionLabel(action)}
                   </button>
                 ),
               )}
-              {dismissable && (
-                <button type="button" className="btn btn--sm btn--ghost" onClick={() => void dismissals.dismiss(flagDismissTarget(flag))}>
-                  Dismiss
+              {attention.map((item) => (
+                <button key={item.id} type="button" className="btn btn--sm btn--ghost" onClick={item.onSelect}>
+                  {item.label}
                 </button>
-              )}
+              ))}
             </div>
           );
         },
-        checkActions: (check) => dismissals.canDismiss && canDismissItem(check) ? (
-          <div className="attention-pop__actions">
-            <button type="button" className="btn btn--sm btn--ghost" onClick={() => void dismissals.dismiss(continuityDismissTarget(check))}>
-              Dismiss
-            </button>
-          </div>
-        ) : null,
+        checkActions: (check) => {
+          const attention = findingAttentionActions(check, continuityDismissTarget(check), dismissals, { followUp: true });
+          return attention.length ? (
+            <div className="attention-pop__actions">
+              {attention.map((item) => (
+                <button key={item.id} type="button" className="btn btn--sm btn--ghost" onClick={item.onSelect}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null;
+        },
+        findingStatus: (item) => hasFindingStatus(item) ? <FindingStatusLine item={item} todayISO={todayISO} /> : null,
       })
     : [];
   // The phone list's dismissed items: the recommendations it would list
@@ -726,6 +738,7 @@ export function Dashboard() {
       ) : (
         <DashboardModuleGrid modules={visibleModules} content={moduleContent} layout={dashboardLayout.layout} />
       )}
+      {dismissals.followUpDialog}
 
       {visibleModules.length === 0 && (
         <EmptyState

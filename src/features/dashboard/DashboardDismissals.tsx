@@ -1,34 +1,54 @@
-import { useCallback, useId, useState, type ReactNode } from "react";
+import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import { useMutation } from "convex/react";
 import { RotateCcw, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
-import { usePrompt } from "../../components/Modal";
+import { Modal, usePrompt } from "../../components/Modal";
+import { Field } from "../../components/ui";
+import { DatePicker } from "../../components/DatePicker";
 import { useToast } from "../../components/Toast";
 import { usePermissions } from "../../hooks/usePermissions";
 import { useUndoableAction } from "../../hooks/useUndoableAction";
 import { formatDate, relative } from "../../lib/format";
-import type { DashboardItemDismissal } from "../../../shared/dashboardDismissals";
+import type { DashboardItemAcknowledgement, DashboardItemDismissal } from "../../../shared/dashboardDismissals";
+import { REQUIREMENT_BASIS_LABEL, type RequirementBasis } from "../../../shared/dashboardFindingPolicy";
 
 /**
- * Dismissing dashboard recommendations: compliance flags and continuity
- * checks at "warn" or "info" that the server marks `dismissable`. A dismissal
- * applies to the whole workspace and lasts while the item keeps the level it
- * was dismissed at (shared/dashboardDismissals.ts). Requirements ("err") and
- * filings are never dismissable.
+ * Dismissing and acknowledging dashboard findings (compliance flags and
+ * continuity checks). The server decides from each finding's requirement basis
+ * (shared/dashboardFindingPolicy.ts): a recommendation at "warn" or "info" is
+ * `dismissable` and may leave the dashboard for the whole workspace; a
+ * statutory, bylaw or internal-policy finding is not, and can instead be
+ * acknowledged or given a follow-up, both of which leave it on the dashboard
+ * and in every count.
  */
 
-/** What a dismiss or restore needs to know about one item. */
+/** What a dismiss, acknowledge or restore needs to know about one item. */
 export type DismissTarget = {
   /** Rule id (compliance flag) or check id (continuity). */
   id: string;
   level: string;
-  /** Plain text naming the item, kept on the record and in the activity log. */
+  /** Plain text naming the item, shown in the dialog. */
   text: string;
 };
 
+/** The policy fields the server puts on every finding. */
+export type FindingPolicyFields = {
+  level: string;
+  requirementBasis?: RequirementBasis;
+  dismissable?: boolean;
+  dismissal?: DashboardItemDismissal;
+  acknowledgement?: DashboardItemAcknowledgement;
+  followUp?: { assignee?: string; dueDate?: string };
+};
+
 /** The item can be dismissed now: a recommendation that isn't dismissed yet. */
-export function canDismissItem(item: { dismissable?: boolean; dismissal?: DashboardItemDismissal }) {
+export function canDismissItem(item: Pick<FindingPolicyFields, "dismissable" | "dismissal">) {
   return Boolean(item.dismissable && !item.dismissal);
+}
+
+/** The item stays until resolved, so it offers Acknowledge and a follow-up instead of Dismiss. */
+export function isOutstandingRequirement(item: FindingPolicyFields) {
+  return !item.dismissable && (item.level === "warn" || item.level === "err");
 }
 
 export function useDashboardDismissals(societyId: string | undefined) {
@@ -37,6 +57,7 @@ export function useDashboardDismissals(societyId: string | undefined) {
   const toast = useToast();
   const undoable = useUndoableAction();
   const dismissItem = useMutation(api.dashboardRemediation.dismissItem);
+  const acknowledgeItem = useMutation(api.dashboardRemediation.acknowledgeItem);
   const restoreItem = useMutation(api.dashboardRemediation.restoreItem);
   // The same permission that gates the remediation actions on these rows.
   const canDismiss = Boolean(societyId) && can("deadlines:write");
@@ -54,7 +75,7 @@ export function useDashboardDismissals(societyId: string | undefined) {
         <>
           <p style={{ margin: "0 0 8px" }}>“{target.text}”</p>
           <p style={{ margin: 0 }}>
-            It leaves the dashboard for everyone in this workspace. It comes back by itself if its severity changes, for example if it becomes a requirement, and you can restore it any time from Dismissed.
+            It leaves the dashboard for everyone in this workspace. It comes back by itself if it changes, for example if it becomes more serious or affects other records, and you can restore it any time from Dismissed.
           </p>
         </>
       ),
@@ -71,13 +92,44 @@ export function useDashboardDismissals(societyId: string | undefined) {
         societyId,
         ruleId: target.id,
         flagLevel: target.level,
-        flagText: target.text,
         reason: reason.trim() || undefined,
       }),
       undo: () => restoreNow(target),
       undoneMessage: "Recommendation restored",
     });
   }, [canDismiss, dismissItem, prompt, restoreNow, societyId, undoable]);
+
+  const acknowledge = useCallback(async (target: DismissTarget) => {
+    if (!societyId || !canDismiss) return;
+    const note = await prompt({
+      title: "Acknowledge this requirement?",
+      message: (
+        <>
+          <p style={{ margin: "0 0 8px" }}>“{target.text}”</p>
+          <p style={{ margin: 0 }}>
+            This records that you've seen it. It stays on the dashboard and in the counts until it's resolved.
+          </p>
+        </>
+      ),
+      placeholder: "Note (optional)",
+      confirmLabel: "Acknowledge",
+    });
+    if (note === null) return;
+    await undoable({
+      message: "Acknowledged",
+      description: "It stays on the dashboard until it's resolved.",
+      errorMessage: "Could not acknowledge the item",
+      dedupeKey: `dashboard-acknowledge-${target.id}`,
+      run: () => acknowledgeItem({
+        societyId,
+        ruleId: target.id,
+        flagLevel: target.level,
+        note: note.trim() || undefined,
+      }),
+      undo: () => restoreNow(target),
+      undoneMessage: "Acknowledgement withdrawn",
+    });
+  }, [acknowledgeItem, canDismiss, prompt, restoreNow, societyId, undoable]);
 
   const restore = useCallback(async (target: DismissTarget) => {
     if (!societyId || !canDismiss) return;
@@ -89,7 +141,76 @@ export function useDashboardDismissals(societyId: string | undefined) {
     }
   }, [canDismiss, restoreNow, societyId, toast]);
 
-  return { canDismiss, dismiss, restore };
+  const withdrawAcknowledgement = useCallback(async (target: DismissTarget) => {
+    if (!societyId || !canDismiss) return;
+    try {
+      await restoreNow(target);
+      toast.success("Acknowledgement withdrawn");
+    } catch (error) {
+      toast.error("Could not withdraw the acknowledgement", error instanceof Error ? error.message : undefined);
+    }
+  }, [canDismiss, restoreNow, societyId, toast]);
+
+  // "Assign follow-up" for items without a rule-specific review action
+  // (continuity checks): the same review-task path, with an owner and date.
+  const followUp = useFollowUpDialog();
+  const askFollowUp = followUp.ask;
+  const createReviewTask = useMutation(api.dashboardRemediation.createComplianceReviewTask);
+  const assignFollowUp = useCallback(async (target: DismissTarget, evidenceRequired: string[] = []) => {
+    if (!societyId || !canDismiss) return;
+    const details = await askFollowUp(target);
+    if (!details) return;
+    try {
+      const result = await createReviewTask({
+        societyId,
+        ruleId: target.id,
+        flagLevel: target.level,
+        flagText: target.text,
+        evidenceRequired,
+        ...details,
+      });
+      toast.success(result?.reused ? "Existing follow-up task reused" : "Follow-up assigned");
+    } catch (error) {
+      toast.error("Could not assign the follow-up", error instanceof Error ? error.message : undefined);
+    }
+  }, [askFollowUp, canDismiss, createReviewTask, societyId, toast]);
+
+  return {
+    canDismiss,
+    dismiss,
+    restore,
+    acknowledge,
+    withdrawAcknowledgement,
+    assignFollowUp,
+    askFollowUp,
+    /** Render once wherever the hook is used, for Assign follow-up. */
+    followUpDialog: followUp.dialog,
+  };
+}
+
+type DashboardDismissals = ReturnType<typeof useDashboardDismissals>;
+
+/**
+ * The attention actions a finding offers in its ⋯ menu or ⓘ popover:
+ * Dismiss for a recommendation; Acknowledge (or Withdraw acknowledgement) and,
+ * when asked, Assign follow-up for a requirement. Empty for people who may
+ * not act on findings.
+ */
+export function findingAttentionActions(
+  item: FindingPolicyFields,
+  target: DismissTarget,
+  dismissals: DashboardDismissals,
+  { followUp = false, evidenceRequired }: { followUp?: boolean; evidenceRequired?: string[] } = {},
+): { id: string; label: string; onSelect: () => void }[] {
+  if (!dismissals.canDismiss) return [];
+  if (canDismissItem(item)) return [{ id: "dismiss", label: "Dismiss", onSelect: () => void dismissals.dismiss(target) }];
+  if (!isOutstandingRequirement(item)) return [];
+  return [
+    item.acknowledgement
+      ? { id: "withdraw-acknowledgement", label: "Withdraw acknowledgement", onSelect: () => void dismissals.withdrawAcknowledgement(target) }
+      : { id: "acknowledge", label: "Acknowledge", onSelect: () => void dismissals.acknowledge(target) },
+    ...(followUp ? [{ id: "assign-follow-up", label: "Assign follow-up", onSelect: () => void dismissals.assignFollowUp(target, evidenceRequired) }] : []),
+  ];
 }
 
 /** A small ghost × for a row that has no ⋯ menu to hold "Dismiss". */
@@ -105,6 +226,111 @@ export function DismissButton({ label, onDismiss }: { label: string; onDismiss: 
       <X size={14} aria-hidden="true" />
     </button>
   );
+}
+
+/**
+ * The quiet line under a finding: what it rests on ("Statutory requirement")
+ * and who has acknowledged it or owns its follow-up. Nothing for a plain
+ * recommendation.
+ */
+export function FindingStatusLine({ item, todayISO }: { item: FindingPolicyFields; todayISO?: string }) {
+  const parts: ReactNode[] = [];
+  if (showsBasis(item)) {
+    parts.push(<span key="basis" className="finding-status__basis">{REQUIREMENT_BASIS_LABEL[item.requirementBasis]}</span>);
+  }
+  if (item.acknowledgement) parts.push(<span key="ack">{acknowledgementText(item.acknowledgement)}</span>);
+  if (item.followUp) parts.push(<span key="follow-up">{followUpText(item.followUp, todayISO)}</span>);
+  if (!parts.length) return null;
+  return (
+    <span className="finding-status" title={item.acknowledgement?.note ? `Note: ${item.acknowledgement.note}` : undefined}>
+      {parts.flatMap((part, index) => (index ? [<span key={`sep-${index}`} aria-hidden="true"> · </span>, part] : [part]))}
+    </span>
+  );
+}
+
+function showsBasis(item: FindingPolicyFields): item is FindingPolicyFields & { requirementBasis: RequirementBasis } {
+  return Boolean(item.requirementBasis && item.requirementBasis !== "recommendation" && item.level !== "ok");
+}
+
+/** True when FindingStatusLine has something to say for this item. */
+export function hasFindingStatus(item: FindingPolicyFields) {
+  return showsBasis(item) || Boolean(item.acknowledgement || item.followUp);
+}
+
+/** "Acknowledged by Mina Patel · 2 days ago". */
+export function acknowledgementText(acknowledgement: DashboardItemAcknowledgement) {
+  const when = acknowledgement.acknowledgedAtISO ? relative(acknowledgement.acknowledgedAtISO) : "";
+  return [
+    "Acknowledged",
+    acknowledgement.acknowledgedByName ? `by ${acknowledgement.acknowledgedByName}` : "",
+    when && when !== "—" ? when : "",
+  ].filter(Boolean).join(" ");
+}
+
+/** "Follow-up: Jordan Lee, due Dec 15". */
+export function followUpText(followUp: { assignee?: string; dueDate?: string }, todayISO?: string) {
+  const due = followUp.dueDate ? `due ${formatDate(followUp.dueDate, todayISO && followUp.dueDate.slice(0, 4) === todayISO.slice(0, 4) ? "MMM d" : "MMM d, yyyy")}` : "";
+  return `Follow-up: ${[followUp.assignee, due].filter(Boolean).join(", ") || "assigned"}`;
+}
+
+export type FollowUpDetails = { assignee?: string; dueDate?: string };
+
+/**
+ * "Assign follow-up": who owns the next step and by when. Returns a function
+ * that opens the dialog and resolves with the details (null when cancelled),
+ * and the dialog element to render.
+ */
+export function useFollowUpDialog() {
+  const [target, setTarget] = useState<DismissTarget | null>(null);
+  const [assignee, setAssignee] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const resolver = useRef<((value: FollowUpDetails | null) => void) | null>(null);
+  const ownerId = useId();
+
+  const ask = useCallback((next: DismissTarget) => new Promise<FollowUpDetails | null>((resolve) => {
+    resolver.current?.(null);
+    resolver.current = resolve;
+    setAssignee("");
+    setDueDate("");
+    setTarget(next);
+  }), []);
+
+  const close = (value: FollowUpDetails | null) => {
+    resolver.current?.(value);
+    resolver.current = null;
+    setTarget(null);
+  };
+
+  const dialog = (
+    <Modal
+      open={Boolean(target)}
+      onClose={() => close(null)}
+      title="Assign follow-up"
+      size="sm"
+      footer={
+        <>
+          <button className="btn" type="button" onClick={() => close(null)}>Cancel</button>
+          <button
+            className="btn btn--accent"
+            type="button"
+            onClick={() => close({ assignee: assignee.trim() || undefined, dueDate: dueDate || undefined })}
+          >
+            Assign
+          </button>
+        </>
+      }
+    >
+      {target && <p className="muted" style={{ marginTop: 0 }}>“{target.text}” stays on the dashboard until it's resolved.</p>}
+      <Field label="Owner" id={ownerId}>
+        <input id={ownerId} data-autofocus="" className="input" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="Name" />
+      </Field>
+      <Field label="Due date">
+        <DatePicker value={dueDate} onChange={setDueDate} />
+      </Field>
+    </Modal>
+  );
+
+  return { ask, dialog };
 }
 
 export type DismissedEntry = DismissTarget & {

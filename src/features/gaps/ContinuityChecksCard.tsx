@@ -3,17 +3,29 @@ import { useQuery } from "convex/react";
 import { ArrowRight } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Flag } from "../../components/ui";
+import { MoreActionsMenu } from "../../components/MoreActionsMenu";
 import { usePermissions } from "../../hooks/usePermissions";
 import { interfaceRouteReadPermission } from "../../../shared/interfaceRouteAccess";
 import { InfoPopover } from "../../components/InfoPopover";
 import { pluralizeCounts } from "../../lib/pluralizeCounts";
-import type { DashboardItemDismissal } from "../../../shared/dashboardDismissals";
-import { canDismissItem, DismissButton, DismissedItems, useDashboardDismissals, type DismissTarget } from "../dashboard/DashboardDismissals";
+import type { DashboardItemAcknowledgement, DashboardItemDismissal } from "../../../shared/dashboardDismissals";
+import type { RequirementBasis } from "../../../shared/dashboardFindingPolicy";
+import {
+  canDismissItem,
+  DismissButton,
+  DismissedItems,
+  findingAttentionActions,
+  FindingStatusLine,
+  useDashboardDismissals,
+  type DismissTarget,
+} from "../dashboard/DashboardDismissals";
 
 /**
  * `actionLabel` says what the button does ("Add directors"); older servers may
- * omit it. `dismissable` marks a recommendation (warn/info, not resting on a
- * statutory or bylaw duty); `dismissal` is set while it is dismissed.
+ * omit it. `requirementBasis` is what the check rests on; `dismissable` marks
+ * a recommendation (shared/dashboardFindingPolicy.ts); `dismissal` is set while
+ * it is dismissed and `acknowledgement` while someone has acknowledged a
+ * requirement that stays outstanding.
  */
 export type ContinuityCheck = {
   id: string;
@@ -24,11 +36,15 @@ export type ContinuityCheck = {
   actionLabel?: string;
   citation?: string;
   requirement?: string;
+  requirementBasis?: RequirementBasis;
+  subjectKey?: string;
   dismissable?: boolean;
   dismissal?: DashboardItemDismissal;
+  acknowledgement?: DashboardItemAcknowledgement;
+  followUp?: { assignee?: string; dueDate?: string };
 };
 
-/** A check as a dismiss/restore target. */
+/** A check as a dismiss/acknowledge/restore target. */
 export function continuityDismissTarget(check: ContinuityCheck): DismissTarget {
   return { id: check.id, level: check.level, text: `${check.title}. ${pluralizeCounts(check.text)}` };
 }
@@ -63,13 +79,16 @@ export function ContinuityChecksCard({ societyId, hideCheckIds }: { societyId: s
           const permission = interfaceRouteReadPermission(check.to.split("?")[0]);
           const canOpen = !permission || can(permission);
           const dismissable = dismissals.canDismiss && canDismissItem(check);
+          // Requirements: Acknowledge / Assign follow-up in a ⋯ menu; they stay listed.
+          const requirementActions = dismissable ? [] : findingAttentionActions(check, continuityDismissTarget(check), dismissals, { followUp: true });
           return (
             <Flag
               key={check.id}
               level={check.level}
-              actions={canOpen || check.citation || dismissable ? (
+              actions={canOpen || check.citation || dismissable || requirementActions.length ? (
                 <>
                   {canOpen && <Link className="btn btn--sm" to={check.to}>{check.actionLabel ?? "Open"}</Link>}
+                  {requirementActions.length > 0 && <MoreActionsMenu label="" align="left" items={requirementActions} />}
                   {check.citation && (
                     <InfoPopover label={`Legal source for ${check.title}`}>
                       <p>{check.citation}</p>
@@ -82,6 +101,7 @@ export function ContinuityChecksCard({ societyId, hideCheckIds }: { societyId: s
               ) : null}
             >
               <strong>{check.title}.</strong> {pluralizeCounts(check.text)}
+              <FindingStatusLine item={check} />
             </Flag>
           );
         })}
@@ -90,6 +110,7 @@ export function ContinuityChecksCard({ societyId, hideCheckIds }: { societyId: s
           canRestore={dismissals.canDismiss}
           onRestore={(item) => void dismissals.restore(item)}
         />
+        {dismissals.followUpDialog}
       </div>
     </div>
   );
