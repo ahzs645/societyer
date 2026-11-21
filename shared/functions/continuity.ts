@@ -47,6 +47,8 @@ import {
 } from "../continuityRules";
 import { agreementGaps } from "../agreements";
 import { appliesBcSocietyRules } from "../entityRuleScope";
+import { directorConsentAssessments } from "./businessEvidence";
+import { consentStateSatisfied, unverifiedConsentSentence, type DirectorConsentState } from "../directorConsentRecords";
 import { entityMeetingWording } from "../entityMeetingWording";
 import { activeDismissal, isBindingSeverity, isRecommendationLevel, type DashboardItemDismissal, type DismissalRecord } from "../dashboardDismissals";
 
@@ -187,6 +189,9 @@ async function loadSnapshot(ctx: PortableQueryCtx, societyId: string): Promise<{
     bySociety(ctx, "continuityPeriodMarks", societyId),
     bySociety(ctx, "governanceExpectations", societyId),
   ]);
+  const consentAssessments = can("directors:read")
+    ? await directorConsentAssessments(ctx, societyId, directors.map((row: any) => ({ _id: String(row._id), consentOnFile: Boolean(row.consentOnFile) })), society)
+    : new Map<string, { state: DirectorConsentState }>();
   const snapshot: ContinuitySnapshot = {
     today: todayISO(),
     society: society ? { incorporationDate: society.incorporationDate, jurisdictionCode: society.jurisdictionCode, homeJurisdictionCode: society.homeJurisdictionCode, entityType: society.entityType, actFormedUnder: society.actFormedUnder, legalSubtype: society.legalSubtype, distributing: society.distributing, isMemberFunded: society.isMemberFunded, fiscalYearEnd: society.fiscalYearEnd, agmExtensionDate: society.agmExtensionDate, agmExtensionEvidence: society.agmExtensionEvidence, annualMeetingDate: society.annualMeetingDate, annualMeetingYear: society.annualMeetingYear } : null,
@@ -197,7 +202,11 @@ async function loadSnapshot(ctx: PortableQueryCtx, societyId: string): Promise<{
     filings: filings.map((row: any) => ({ _id: String(row._id), kind: String(row.kind ?? ""), periodLabel: row.periodLabel, dueDate: row.dueDate, filedAt: row.filedAt, status: row.status, confirmationNumber: row.confirmationNumber })),
     financials: financials.map((row: any) => ({ _id: String(row._id), fiscalYear: String(row.fiscalYear ?? ""), periodEnd: row.periodEnd, presentedAtMeetingId: row.presentedAtMeetingId ? String(row.presentedAtMeetingId) : undefined, approvedByBoardAt: row.approvedByBoardAt })),
     statementImports: statementImports.map((row: any) => ({ _id: String(row._id), fiscalYear: String(row.fiscalYear ?? ""), periodEnd: row.periodEnd, status: row.status, title: row.title })),
-    directors: directors.map((row: any) => ({ _id: String(row._id), firstName: row.firstName, lastName: row.lastName, termStart: row.termStart, termEnd: row.termEnd, consentOnFile: Boolean(row.consentOnFile), status: row.status })),
+    // Consent comes from the consent register: "on file" means a verified current consent.
+    directors: directors.map((row: any) => {
+      const consentState = consentAssessments.get(String(row._id))?.state ?? "none";
+      return { _id: String(row._id), firstName: row.firstName, lastName: row.lastName, termStart: row.termStart, termEnd: row.termEnd, consentOnFile: consentStateSatisfied(consentState), consentState, status: row.status };
+    }),
     insurance: insurance.map((row: any) => ({ _id: String(row._id), kind: row.kind, policySeriesKey: row.policySeriesKey, policyNumber: row.policyNumber, insurer: row.insurer, startDate: row.startDate, endDate: row.endDate, status: row.status })),
     sourceSignals: gaps
       .filter((row: any) => typeof row.observedDate === "string" && row.bodyKey && String(row.infoType ?? "").startsWith("meeting.") && row.status !== "wont_fix")
@@ -329,15 +338,16 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
   }
   if (snapshot.readable.directors) {
     const active = snapshot.directors.filter((director) => director.status === "Active");
-    const missing = active.filter((director) => !director.consentOnFile);
+    // Only a verified current consent counts (shared/directorConsentRecords.ts).
+    const unverified = unverifiedConsentSentence(active.map((director) => director.consentState ?? (director.consentOnFile ? "verified" : "none")));
     const consentSeverity = rows.find((row) => row.expectation.kind === "director_consent")?.expectation.severity;
     checks.push({
       id: "CONTINUITY-DIRECTOR-CONSENT",
-      level: !active.length ? "warn" : missing.length ? "warn" : "ok",
-      title: "Director consent on file",
-      text: !active.length ? "No active directors in the register." : missing.length ? `${missing.length} of ${active.length} active director(s) have no consent evidence.` : `All ${active.length} active directors have consent evidence.`,
-      to: "/app/directors",
-      actionLabel: !active.length ? "Add directors" : missing.length ? "Record consents" : "View directors",
+      level: !active.length ? "warn" : unverified ? "warn" : "ok",
+      title: "Director consent verified",
+      text: !active.length ? "No active directors in the register." : unverified ?? `All ${active.length} active directors have a verified consent basis.`,
+      to: unverified ? "/app/directors?intent=consent" : "/app/directors",
+      actionLabel: !active.length ? "Add directors" : unverified ? "Review consents" : "View directors",
       // Societies Act citation only for a BC society; corporations get the check without it.
       citation: appliesBcSocietyRules(snapshot.society) ? "Societies Act, SBC 2015, c. 18, s. 42(4)" : undefined,
       requirement: consentSeverity === undefined ? undefined : String(consentSeverity),

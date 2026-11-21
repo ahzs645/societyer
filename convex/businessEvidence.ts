@@ -24,3 +24,12 @@ export const save = authorizedMutation("businessEvidence:save", mutation)({
   returns: v.any(),
   handler: async (ctx, args) => records.save(await toPortableMutationCtx(ctx), args),
 });
+
+export const reviewDirectorConsent = authorizedMutation("businessEvidence:reviewDirectorConsent", mutation)({
+  args: {
+    societyId: v.id("societies"), consentId: v.id("directorConsents"),
+    decision: v.union(v.literal("Reviewed"), v.literal("Disputed")), note: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => records.reviewDirectorConsent(await toPortableMutationCtx(ctx), args),
+});

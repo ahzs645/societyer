@@ -29,6 +29,7 @@ financial-statement and auditor waivers as separate decisions.
 - [Dividends](#dividends)
 - [Transparency register](#transparency-register)
 - [Director and officer eligibility](#director-and-officer-eligibility)
+- [Director consent to act](#director-consent-to-act)
 - [Operative articles](#operative-articles)
 - [Resolution packets](#resolution-packets)
 - [Word output](#word-output)
@@ -203,6 +204,69 @@ Code: `shared/registerValidation.ts`.
   them.
 - Every corporation gets warnings for an officer with no office and for two current holders of a
   single office, such as two Presidents.
+
+## Director consent to act
+
+Code: `shared/directorConsentRecords.ts` (pure), the consent register `directorConsents`
+(`shared/businessEvidence.ts`, `shared/functions/businessEvidence.ts`), the director drawer
+(`src/features/people/DirectorConsentSection.tsx`).
+
+The consent register records how each director consented and whether that evidence was checked.
+Every version is kept; a revision points at the entry it replaces through `previousId`. A
+director's **consent evidence state** is derived from the register on the organization's own
+calendar day (`consentToday`: its recorded time zone or home province):
+
+| State | When | Satisfies the requirement |
+| --- | --- | --- |
+| `none` | No "Consent to act" entry and no legacy mark | No: no basis recorded |
+| `awaiting_review` | The entry in effect has no review yet, or was reviewed on a basis the Act doesn't accept | No: verification outstanding |
+| `verified` | The entry in effect is Given/Corrected, marked Reviewed, on an accepted basis | **Yes** |
+| `disputed` | The entry in effect was marked Disputed | No: review outstanding |
+| `scheduled` | Every entry takes effect after today | No: not current yet |
+| `withdrawn` | The entry in effect withdraws consent | No: reassess the director's office |
+| `legacy_flag_only` | `directors.consentOnFile` is set but the register has no entry | No: details need recording |
+
+The entry in effect is the latest one effective on or before today; a later entry (for example a
+withdrawal dated next month) is shown as upcoming and doesn't change today's state.
+
+**Basis per Act** (`consentBasisOptions`). The register's basis values are `Written consent`,
+`Meeting record`, `Conduct` and `Other`; which of them can be verified depends on the governing Act:
+
+| Organization | Accepted bases |
+| --- | --- |
+| BC society, Societies Act s. 42(4) | Written consent; present at the meeting where elected or appointed and did not refuse |
+| BC company, BCA s. 123 | Written consent; present at the meeting and did not refuse; acting as a director (qualifying conduct) |
+| CBCA s. 106(9) | Present at the meeting without refusing; if absent, written consent before or within ten days, or acting under the appointment |
+| OBCA s. 119(9) | Written consent |
+| No reviewed profile | Any basis, including Other |
+
+**Evidence fields.** Besides the dates and an optional document, an entry can name the meeting
+(`meetingId`), and where evidence held outside Societyer is kept (`evidenceLocation`,
+`evidenceReference`, `custodian`).
+
+**Review.** Marking an entry Reviewed or Disputed is the accountable step. `businessEvidence:
+reviewDirectorConsent` writes a new version with the decision, and the server stamps
+`reviewedBy`, `reviewedByName` and `reviewedAt` (a client can't supply them). Saving an entry as
+Reviewed or Disputed through the generic register form stamps the reviewer the same way. A review
+needs the consent register's write permission (`directors:write`). Marking Reviewed is refused
+unless the entry has a basis the Act accepts and something pointing at its evidence: a document,
+the meeting, or where the evidence is held. A meeting basis needs the meeting or the minutes
+reference. Disputing needs a note.
+
+**The legacy flag.** `directors.consentOnFile` is a cache: the register's write path sets it to
+true only while the director's consent is `verified`, and the readers that decide compliance
+(dashboard rules, continuity, the Directors page, the drawer) derive the state from the register
+directly (`directors:consentStates`). Director create and update can't assert consent:
+`directors.create` stores `false`, `directors.update` ignores `consentOnFile: true`, and
+`consentOnFile: false` (the drawer's "Clear mark" for a pre-register flag) resets the flag to what
+the register supports. Promoting a board-role assignment to a director doesn't set it either. A
+source import or intake can still mark a director with no register entry as "on file", which reads
+as `legacy_flag_only` until someone records the basis.
+
+**Dashboard and continuity.** `BC-SOC-DIRECTOR-CONSENT`, the `LEGAL-<profile>-DIRECTOR-CONSENT`
+rules and the `CONTINUITY-DIRECTOR-CONSENT` check flag every active director whose state isn't
+`verified`, for example "2 active directors' consent basis has not been verified (1 with no basis
+recorded, 1 awaiting review)." The citations are unchanged.
 
 ## Operative articles
 
@@ -485,6 +549,7 @@ The legal regression runner (`npm run test:legal`) includes:
 | Share capital | `check-share-ledger-rules.ts` |
 | Dividends | `check-dividend-declarations.ts` |
 | Transparency and eligibility | `check-transparency-register.ts`, `check-director-officer-eligibility.ts` |
+| Director consent | `check-director-consent-state.ts` (also `npm run test:director-consent`, with `check-business-evidence.ts`) |
 | Articles and retention | `check-operative-articles.ts`, `check-register-retention.ts` |
 | Packets | `check-packet-instruments.ts`, `check-packet-grammar.ts`, `check-packet-operative-data.ts` |
 | Reports | `check-minute-book-reports.ts` |

@@ -40,6 +40,18 @@ export const businessEvidenceTables = {
     receivedOn: v.optional(v.string()),
     documentDate: v.optional(v.string()),
     reviewStatus: v.optional(v.union(v.literal("Awaiting review"), v.literal("Reviewed"), v.literal("Disputed"))),
+    // Meeting basis: the meeting at which the director was elected or appointed.
+    meetingId: v.optional(v.id("meetings")),
+    // Evidence held elsewhere (paper minute book, counsel's records, another system).
+    evidenceLocation: v.optional(v.string()),
+    evidenceReference: v.optional(v.string()),
+    custodian: v.optional(v.string()),
+    // The accountable review, stamped by the server when an entry is saved as
+    // Reviewed or Disputed (shared/functions/businessEvidence.ts).
+    reviewedBy: v.optional(v.id("users")),
+    reviewedByName: v.optional(v.string()),
+    reviewedAt: v.optional(v.string()),
+    reviewNote: v.optional(v.string()),
   }).index("by_society", ["societyId"]).index("by_previous", ["previousId"]),
   businessChannels: defineTable({
     ...evidenceFields,

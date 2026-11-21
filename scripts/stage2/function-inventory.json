@@ -5131,6 +5131,28 @@
     "idArguments": []
   },
   {
+    "key": "convex:businessEvidence:reviewDirectorConsent",
+    "surface": "convex",
+    "name": "businessEvidence:reviewDirectorConsent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/businessEvidence.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "consentId",
+        "table": "directorConsents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:businessEvidence:save",
     "surface": "convex",
     "name": "businessEvidence:save",
@@ -7729,6 +7751,22 @@
     "access": "service",
     "source": "convex/developmentMail.ts",
     "idArguments": []
+  },
+  {
+    "key": "convex:directors:consentStates",
+    "surface": "convex",
+    "name": "directors:consentStates",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/directors.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
   },
   {
     "key": "convex:directors:create",
@@ -34891,6 +34929,28 @@
     "idArguments": []
   },
   {
+    "key": "portable:businessEvidence:reviewDirectorConsent",
+    "surface": "portable",
+    "name": "businessEvidence:reviewDirectorConsent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "consentId",
+        "table": "directorConsents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:businessEvidence:save",
     "surface": "portable",
     "name": "businessEvidence:save",
@@ -37276,6 +37336,22 @@
         "table": "filings",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:directors:consentStates",
+    "surface": "portable",
+    "name": "directors:consentStates",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },

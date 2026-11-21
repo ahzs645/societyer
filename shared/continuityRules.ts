@@ -38,7 +38,7 @@ export const EXPECTATION_KIND_LABELS: Record<ExpectationKind, string> = {
   agm: "Annual general meeting",
   annual_filing: "Annual report filed",
   financial_statement: "Financial statements presented",
-  director_consent: "Director consent on file",
+  director_consent: "Director consent verified",
   director_count: "Minimum number of directors",
   role_term: "Role term renewed",
   insurance_term: "Insurance in force",

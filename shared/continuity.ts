@@ -20,6 +20,7 @@ import {
 } from "./continuityRules";
 import { legalGovernanceProfile, type GovernanceOrganization } from "./legalGovernanceProfiles";
 import { annualReportForAgm, noAgmAnnualReportForYear, isHeldMeeting } from "./agmEvidence";
+import type { DirectorConsentState } from "./directorConsentRecords";
 
 export const CONTINUITY_STATUSES = [
   "satisfied",
@@ -108,7 +109,8 @@ export type SnapshotMinutes = { _id: string; meetingId: string; heldAt?: string;
 export type SnapshotFiling = { _id: string; kind: string; periodLabel?: string; dueDate?: string; filedAt?: string; status?: string; confirmationNumber?: string };
 export type SnapshotFinancial = { _id: string; fiscalYear: string; periodEnd?: string; presentedAtMeetingId?: string; approvedByBoardAt?: string };
 export type SnapshotStatementImport = { _id: string; fiscalYear: string; periodEnd?: string; status?: string; title?: string };
-export type SnapshotDirector = { _id: string; firstName?: string; lastName?: string; termStart?: string; termEnd?: string; consentOnFile?: boolean; status?: string };
+/** `consentOnFile` here means a verified current consent; `consentState` is the full register-derived state. */
+export type SnapshotDirector = { _id: string; firstName?: string; lastName?: string; termStart?: string; termEnd?: string; consentOnFile?: boolean; consentState?: DirectorConsentState; status?: string };
 export type SnapshotInsurance = { _id: string; kind?: string; policySeriesKey?: string; policyNumber?: string; insurer?: string; startDate?: string; endDate?: string; status?: string };
 export type SnapshotSourceSignal = { table: string; id: string; date: string; bodyKey?: string; infoType?: string; label: string };
 export type SnapshotMark = { _id: string; expectationKey: string; periodKey: string; status: string; reason?: string; evidenceDocumentIds?: string[]; meetingId?: string };

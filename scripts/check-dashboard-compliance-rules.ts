@@ -50,9 +50,9 @@ const okFlags = evaluateDashboardComplianceRules({
     bylawsDocId: "doc_bylaws",
   },
   activeDirectors: [
-    { consentOnFile: true, isBCResident: true },
-    { consentOnFile: true, isBCResident: false },
-    { consentOnFile: true, isBCResident: false },
+    { consentState: "verified", isBCResident: true },
+    { consentState: "verified", isBCResident: false },
+    { consentState: "verified", isBCResident: false },
   ],
   rulesConfigured: true,
 });

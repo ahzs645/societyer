@@ -30,6 +30,8 @@ import { isHistoricalSourceAction } from "../taskStatus";
 import { todayDateOnly } from "../dateOnly";
 import { activeDismissal, DISMISSED_STATUS, isRecommendationLevel } from "../dashboardDismissals";
 import { financeControlFindingsFor } from "./expenseReports";
+import { directorConsentAssessments } from "./businessEvidence";
+import type { DirectorConsentState } from "../directorConsentRecords";
 import { isCorporation, isPreparingIncorporation } from "../organizationDomain";
 
 
@@ -393,6 +395,11 @@ export async function summaryPortable(
     if (rule.id.startsWith("MEMBER-DATA")) return readAccess.has("members:read") && readAccess.has("documents:read");
     return readAccess.has("documents:read");
   });
+  // Consent evidence state per director (shared/directorConsentRecords.ts):
+  // role-holder-only directors have no register entries and read as "none".
+  const consentAssessments = readAccess.has("directors:read")
+    ? await directorConsentAssessments(ctx, societyId, legalDirectors.map((director: Record<string, any>) => ({ _id: String(director._id), consentOnFile: Boolean(director.consentOnFile) })), society)
+    : new Map<string, { state: DirectorConsentState }>();
   const legalFlags = evaluateDashboardComplianceRules({
     society: society
       ? {
@@ -407,7 +414,8 @@ export async function summaryPortable(
         }
       : null,
     activeDirectors: legalDirectors.map((director: Record<string, any>) => ({
-      consentOnFile: director.consentOnFile,
+      // Derived from the consent register; only a verified current consent counts.
+      consentState: consentAssessments.get(String(director._id))?.state ?? "none",
       isBCResident: director.isBCResident,
       residentCanadianStatus: director.residentCanadianStatus,
     })),

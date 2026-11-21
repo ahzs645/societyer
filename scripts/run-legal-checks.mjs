@@ -34,7 +34,7 @@ const scripts = [
   'check-share-ledger-rules.ts',
   'check-operative-articles.ts', 'check-register-retention.ts',
   'check-dividend-declarations.ts', 'check-transparency-register.ts',
-  'check-director-officer-eligibility.ts',
+  'check-director-officer-eligibility.ts', 'check-director-consent-state.ts',
 ];
 // --after-utc-midnight runs every check with the clock just past 00:00 UTC.
 const clockShift = process.argv.includes('--after-utc-midnight');
