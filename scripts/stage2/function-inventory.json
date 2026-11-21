@@ -7523,6 +7523,22 @@
     "idArguments": []
   },
   {
+    "key": "convex:dashboardRemediation:dismissItem",
+    "surface": "convex",
+    "name": "dashboardRemediation:dismissItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dashboardRemediation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:dashboardRemediation:markMemberDataAccessReviewed",
     "surface": "convex",
     "name": "dashboardRemediation:markMemberDataAccessReviewed",
@@ -7539,6 +7555,22 @@
     "access": "authenticated",
     "source": "convex/dashboardRemediation.ts",
     "idArguments": []
+  },
+  {
+    "key": "convex:dashboardRemediation:restoreItem",
+    "surface": "convex",
+    "name": "dashboardRemediation:restoreItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dashboardRemediation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
   },
   {
     "key": "convex:deadlines:backfillStatus",
@@ -37074,6 +37106,22 @@
     "idArguments": []
   },
   {
+    "key": "portable:dashboardRemediation:dismissItem",
+    "surface": "portable",
+    "name": "dashboardRemediation:dismissItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:dashboardRemediation:markMemberDataAccessReviewed",
     "surface": "portable",
     "name": "dashboardRemediation:markMemberDataAccessReviewed",
@@ -37090,6 +37138,22 @@
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
     "idArguments": []
+  },
+  {
+    "key": "portable:dashboardRemediation:restoreItem",
+    "surface": "portable",
+    "name": "dashboardRemediation:restoreItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
   },
   {
     "key": "portable:deadlines:backfillStatus",

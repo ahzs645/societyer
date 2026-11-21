@@ -1,7 +1,8 @@
 /**
  * PORTABLE FUNCTIONS: the dashboard-remediation domain
  * (createComplianceReviewTask / createPrivacyReviewTask /
- *  markPrivacyProgramReviewed / markMemberDataAccessReviewed).
+ *  markPrivacyProgramReviewed / markMemberDataAccessReviewed /
+ *  dismissItem / restoreItem).
  *
  * Reads/writes `society / tasks / complianceRemediations / activity` over
  * `ctx.db`. Each handler runs unchanged on hosted Convex, the local Dexie
@@ -9,6 +10,8 @@
  */
 
 import type { PortableMutationCtx } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
+import { DISMISSED_STATUS, isRecommendationLevel, normalizeDismissalReason } from "../dashboardDismissals";
 
 export async function createComplianceReviewTaskPortable(
   ctx: PortableMutationCtx,
@@ -126,6 +129,127 @@ export async function markMemberDataAccessReviewedPortable(
     createdAtISO: nowISO,
   });
   return { remediationId, reviewedAtISO: nowISO };
+}
+
+/**
+ * Dismiss a dashboard recommendation (a "warn" or "info" compliance flag or
+ * continuity check) for the whole workspace. The row keeps the level it was
+ * dismissed at, so the item shows again if it escalates; the dashboard reads
+ * decide whether an item is dismissable at all (shared/dashboardDismissals.ts).
+ */
+export async function dismissItemPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    societyId: string;
+    ruleId: string;
+    flagLevel: string;
+    flagText: string;
+    reason?: string;
+  },
+) {
+  if (!isRecommendationLevel(args.flagLevel)) {
+    throw new Error("Only recommendations can be dismissed. Requirements stay on the dashboard until they are resolved.");
+  }
+  const ruleId = dashboardItemId(args.ruleId);
+  const user = await requireSocietyMembership(ctx, args.societyId);
+  const dismissedByName = typeof user.displayName === "string" && user.displayName.trim() ? user.displayName.trim() : undefined;
+  const reason = normalizeDismissalReason(args.reason);
+  const flagText = String(args.flagText ?? "").trim().slice(0, 1000);
+  const nowISO = new Date().toISOString();
+  const existing = await ctx.db
+    .query("complianceRemediations")
+    .withIndex("by_society_rule", (q) => q.eq("societyId", args.societyId).eq("ruleId", ruleId))
+    .first();
+  const fields = {
+    flagLevel: args.flagLevel,
+    flagText,
+    status: DISMISSED_STATUS,
+    dismissedAtISO: nowISO,
+    dismissedByUserId: user._id,
+    dismissedByName,
+    dismissalReason: reason,
+    updatedAtISO: nowISO,
+  };
+  let remediationId: string;
+  if (existing) {
+    // Re-dismissing keeps the status the row had before its first dismissal.
+    const previous = existing.status === DISMISSED_STATUS ? existing.statusBeforeDismissal : existing.status;
+    await ctx.db.patch(existing._id, { ...fields, statusBeforeDismissal: previous });
+    remediationId = existing._id;
+  } else {
+    remediationId = await ctx.db.insert("complianceRemediations", {
+      societyId: args.societyId,
+      ruleId,
+      evidenceRequired: [],
+      createdAtISO: nowISO,
+      ...withoutUndefined(fields),
+    });
+  }
+  await ctx.db.insert("activity", {
+    societyId: args.societyId,
+    actor: dismissedByName ?? "You",
+    entityType: "society",
+    subjectId: args.societyId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+    entityId: args.societyId,
+    action: "dashboard-item-dismissed",
+    summary: `Dismissed dashboard recommendation: ${flagText || ruleId}${reason ? ` (${reason})` : ""}`,
+    createdAtISO: nowISO,
+  });
+  return { remediationId, dismissedAtISO: nowISO };
+}
+
+/** Bring a dismissed dashboard recommendation back. */
+export async function restoreItemPortable(
+  ctx: PortableMutationCtx,
+  args: { societyId: string; ruleId: string },
+) {
+  const ruleId = dashboardItemId(args.ruleId);
+  const user = await requireSocietyMembership(ctx, args.societyId);
+  const existing = await ctx.db
+    .query("complianceRemediations")
+    .withIndex("by_society_rule", (q) => q.eq("societyId", args.societyId).eq("ruleId", ruleId))
+    .first();
+  if (!existing || existing.status !== DISMISSED_STATUS) return { restored: false };
+  const nowISO = new Date().toISOString();
+  if (typeof existing.statusBeforeDismissal === "string" && existing.statusBeforeDismissal) {
+    // The row held a review task or decision before: return to it.
+    await ctx.db.patch(existing._id, {
+      status: existing.statusBeforeDismissal,
+      statusBeforeDismissal: undefined,
+      dismissedAtISO: undefined,
+      dismissedByUserId: undefined,
+      dismissedByName: undefined,
+      dismissalReason: undefined,
+      updatedAtISO: nowISO,
+    });
+  } else {
+    // The dismissal made the row; the activity log keeps its history.
+    await ctx.db.delete(existing._id);
+  }
+  const actor = typeof user.displayName === "string" && user.displayName.trim() ? user.displayName.trim() : "You";
+  await ctx.db.insert("activity", {
+    societyId: args.societyId,
+    actor,
+    entityType: "society",
+    subjectId: args.societyId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+    entityId: args.societyId,
+    action: "dashboard-item-restored",
+    summary: `Restored dashboard recommendation: ${existing.flagText || ruleId}`,
+    createdAtISO: nowISO,
+  });
+  return { restored: true };
+}
+
+function dashboardItemId(value: unknown): string {
+  const id = typeof value === "string" ? value.trim() : "";
+  if (!id || id.length > 200) throw new Error("Unknown dashboard item.");
+  return id;
+}
+
+function withoutUndefined<T extends Record<string, unknown>>(fields: T): Partial<T> {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as Partial<T>;
 }
 
 async function createReviewTaskForFlag(ctx: PortableMutationCtx, args: {

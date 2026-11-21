@@ -42,6 +42,13 @@ const complianceFlagValidator = validator.object({
   remediationStatus: validator.optional(validator.string()),
   remediationTaskId: validator.optional(validator.id("tasks")),
   remediationUpdatedAtISO: validator.optional(validator.string()),
+  dismissable: validator.optional(validator.boolean()),
+  dismissal: validator.optional(validator.object({
+    level: validator.union(complianceFlagLevels.warn, complianceFlagLevels.info),
+    dismissedAtISO: validator.string(),
+    dismissedByName: validator.optional(validator.string()),
+    reason: validator.optional(validator.string()),
+  })),
 });
 
 const dashboardSocietyValidator = validator.union(

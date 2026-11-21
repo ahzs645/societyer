@@ -349,6 +349,12 @@ const ORGANIZATION_REGISTRY_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "organizationDetails:applyRegistryImport", handler: organizationDetailsFns.applyRegistryImportPortable }),
 ];
 
+// Dismissing dashboard recommendations (kept apart for the same reason).
+const DASHBOARD_DISMISSAL_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableMutation({ name: "dashboardRemediation:dismissItem", handler: dashboardRemediationFns.dismissItemPortable }),
+  definePortableMutation({ name: "dashboardRemediation:restoreItem", handler: dashboardRemediationFns.restoreItemPortable }),
+];
+
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
   definePortableQuery({ name: "personHistory:profile", handler: personHistoryFns.profile }),
@@ -846,6 +852,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   ...TASK_ATTACHMENT_FUNCTIONS,
   ...MEETING_NOTES_FUNCTIONS,
   ...ORGANIZATION_REGISTRY_FUNCTIONS,
+  ...DASHBOARD_DISMISSAL_FUNCTIONS,
   // invoices
   definePortableMutation({ name: "invoices:upsertTemplate", handler: invoicesFns.upsertTemplatePortable }),
   definePortableMutation({ name: "invoices:upsertPriceList", handler: invoicesFns.upsertPriceListPortable }),

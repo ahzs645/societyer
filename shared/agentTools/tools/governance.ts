@@ -122,7 +122,7 @@ export const getGovernanceSnapshot = defineAgentTool({
           .sort((a, b) => (dateOnly(a.dueDate) || "9999").localeCompare(dateOnly(b.dueDate) || "9999"))
           .slice(0, maxItems)
           .map((row) => item(row, "dueDate")),
-        complianceFlags: asRows(summary.complianceFlags).slice(0, maxItems).map((flag) => ({
+        complianceFlags: asRows(summary.complianceFlags).filter((flag) => !flag.dismissal).slice(0, maxItems).map((flag) => ({
           ruleId: label(flag.ruleId),
           level: label(flag.level),
           text: label(flag.text, 400),
