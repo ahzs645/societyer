@@ -473,6 +473,14 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
         switch (assessment.state) {
           case "documented":
             return null;
+          case "follow-ups":
+            // The reviewer judged the findings minor with the program in
+            // place: a note to follow up, not a gap.
+            return flag(this, {
+              level: "info",
+              text: `Privacy program is documented, with follow-ups from the review (${by}): ${shortText(review?.unresolvedFindings)}`,
+              citationId: "PIPA-POLICY",
+            });
           case "findings":
             return flag(this, {
               level: "warn",
@@ -517,6 +525,13 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
             society: { ...compliantSociety, privacyProgramStatus: "Needs review", privacyProgramReview: { ...compliantPrivacyReview, unresolvedFindings: "Complaint process not published." } },
           }),
           expectedLevel: "warn",
+        },
+        {
+          name: "notes minor follow-ups on a documented program without blocking it",
+          context: baseFixture({
+            society: { ...compliantSociety, privacyProgramReview: { ...compliantPrivacyReview, unresolvedFindings: "Update the retention schedule's contact name.", findingsBlocking: false } },
+          }),
+          expectedLevel: "info",
         },
         {
           name: "notes a program marked documented without a review attestation",
@@ -748,10 +763,10 @@ export function dashboardComplianceRulePackForOrganization(
 }
 
 
-/** Non-BC privacy laws: marked documented and no unresolved review findings. */
+/** Non-BC privacy laws: marked documented and no blocking review findings (minor follow-ups are fine). */
 function privacyProgramSettled(society: (EvidenceFacts & { privacyProgramStatus?: string }) | null | undefined) {
   const state = privacyProgramAssessment(society).state;
-  return state === "documented" || state === "unattested";
+  return state === "documented" || state === "follow-ups" || state === "unattested";
 }
 
 /** Corporate profiles reuse one evaluator; source IDs, minima and exceptions are data. */

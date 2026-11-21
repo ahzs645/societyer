@@ -7,9 +7,10 @@
  *   policy evidence rules on the dashboard;
  * - "Verify current" is separate from linking and tied to the copy it
  *   verified; replacing that copy leaves the new one unverified;
- * - the privacy review is an attestation: unresolved findings (or no policy
- *   location) keep the program outstanding; a review with a location and no
- *   findings marks it documented;
+ * - the privacy review is an attestation: blocking findings (the default) or
+ *   no policy location keep the program outstanding; a review with a location
+ *   and no findings, or only minor follow-ups, marks it documented, and the
+ *   follow-ups show as an info note; an older review without the flag blocks;
  * - the old one-click "Mark reviewed" route writes nothing;
  * - only the fields an organization keeps, and only people who may edit the
  *   profile.
@@ -21,7 +22,7 @@ import { MemoryDb } from "../shared/portable/memoryDb";
 import { makeCapabilities } from "../shared/portable/capabilities";
 import { actionPermission } from "../shared/functions/actionPolicy";
 import { betterAuthIssuer } from "../convex/lib/authIdentity";
-import { governingDocumentCurrentness, privacyProgramAssessment, type EvidenceFacts } from "../shared/governingDocumentEvidence";
+import { governingDocumentCurrentness, privacyFindingsBlocking, privacyProgramAssessment, type EvidenceFacts } from "../shared/governingDocumentEvidence";
 import { dashboardComplianceRulePackForOrganization, evaluateDashboardComplianceRules, type ComplianceSociety } from "../shared/dashboardComplianceRules";
 import { todayDateOnly } from "../shared/dateOnly";
 import type { recordPrivacyReviewPortable, setGoverningDocumentEvidencePortable, verifyGoverningDocumentCurrentPortable } from "../shared/functions/governingDocumentEvidence";
@@ -168,6 +169,43 @@ const findingsFlag = await flag("PIPA-POLICY-DOCUMENTED");
 assert.equal(findingsFlag?.level, "warn");
 assert.match(findingsFlag!.text, /Reviewed by Pat Secretary/);
 assert.match(findingsFlag!.text, /Complaint process is not published/);
+assert.equal((await society()).privacyProgramReview?.findingsBlocking, true, "findings block unless the reviewer says otherwise");
+
+// Saying they block is the same as leaving the default.
+const explicitBlocking = (await owner.runMutation("society:recordPrivacyReview", {
+  societyId: "soc", policiesReviewed: "Privacy policy", maintainedAt: "Staff handbook site", reviewedOn: today,
+  unresolvedFindings: "No retention schedule.", findingsBlocking: true,
+})) as ReviewResult;
+assert.equal(explicitBlocking.documented, false);
+assert.equal((await flag("PIPA-POLICY-DOCUMENTED"))?.level, "warn");
+
+// Minor follow-ups: the program is documented, and the dashboard notes them at info.
+const followUps = (await owner.runMutation("society:recordPrivacyReview", {
+  societyId: "soc", policiesReviewed: "Privacy policy, complaint process", maintainedAt: "Staff handbook site", reviewedOn: today,
+  unresolvedFindings: "Update the privacy officer's phone number.", findingsBlocking: false,
+})) as ReviewResult;
+assert.equal(followUps.documented, true);
+const withFollowUps = await society();
+assert.equal(withFollowUps.privacyProgramStatus, "Documented");
+assert.equal(withFollowUps.privacyProgramReview?.findingsBlocking, false);
+assert.equal(privacyProgramAssessment(withFollowUps).state, "follow-ups");
+const followUpFlag = await flag("PIPA-POLICY-DOCUMENTED");
+assert.equal(followUpFlag?.level, "info", "follow-ups are a note, not a gap");
+assert.match(followUpFlag!.text, /documented, with follow-ups/);
+assert.match(followUpFlag!.text, /privacy officer's phone number/);
+assert.equal(privacyFindingsBlocking(withFollowUps.privacyProgramReview), false);
+// Non-blocking findings still need a location.
+const followUpsNoLocation = (await owner.runMutation("society:recordPrivacyReview", {
+  societyId: "soc", policiesReviewed: "Privacy policy", reviewedOn: today, unresolvedFindings: "Minor wording.", findingsBlocking: false,
+})) as ReviewResult;
+assert.equal(followUpsNoLocation.documented, false);
+assert.equal(followUpsNoLocation.missingLocation, true);
+// An older review stored before the flag existed counts its findings as blocking.
+const legacyReview = { policiesReviewed: "Privacy policy", maintainedAt: "Binder", unresolvedFindings: "Something", reviewedOn: today, reviewedAtISO: `${today}T00:00:00.000Z` };
+assert.equal(privacyFindingsBlocking(legacyReview), true);
+assert.equal(privacyProgramAssessment({ privacyProgramStatus: "Documented", privacyProgramReview: legacyReview }).state, "findings");
+// The flag means nothing without findings, and isn't stored.
+assert.equal(privacyFindingsBlocking({ ...legacyReview, unresolvedFindings: undefined }), false);
 
 // Location and no findings: documented, attributed to the reviewer.
 const clean = (await owner.runMutation("society:recordPrivacyReview", {
@@ -176,9 +214,11 @@ const clean = (await owner.runMutation("society:recordPrivacyReview", {
   versionOrEffectiveDate: "v3",
   maintainedAt: "Staff handbook site",
   reviewedOn: today,
+  findingsBlocking: false,
 })) as ReviewResult;
 assert.equal(clean.documented, true);
 const reviewed = await society();
+assert.equal(reviewed.privacyProgramReview?.findingsBlocking, undefined, "no findings, no flag stored");
 assert.equal(reviewed.privacyProgramStatus, "Documented");
 assert.equal(reviewed.privacyProgramReviewedAtISO, today);
 assert.equal(reviewed.privacyProgramReview?.reviewedByName, "Pat Secretary");

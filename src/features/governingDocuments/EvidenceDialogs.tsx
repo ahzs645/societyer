@@ -3,7 +3,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Banner, Field } from "../../components/ui";
 import { Modal } from "../../components/Modal";
-import { RadioGroup } from "../../components/Controls";
+import { Checkbox, RadioGroup } from "../../components/Controls";
 import { DatePicker } from "../../components/DatePicker";
 import { useToast } from "../../components/Toast";
 import { formatDate } from "../../lib/format";
@@ -273,6 +273,8 @@ export function PrivacyReviewDialog({
   const [maintainedAt, setMaintainedAt] = useState("");
   const [reviewedOn, setReviewedOn] = useState(todayDateOnly());
   const [unresolvedFindings, setUnresolvedFindings] = useState("");
+  // Unchecked by default: findings block the program unless the reviewer says otherwise.
+  const [minorFollowUps, setMinorFollowUps] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -284,6 +286,8 @@ export function PrivacyReviewDialog({
     setReviewedOn(todayDateOnly());
     // Findings carry over until a review says they are resolved.
     setUnresolvedFindings(previous?.unresolvedFindings ?? "");
+    // Carried-over findings keep the earlier judgement; new findings start blocking.
+    setMinorFollowUps(Boolean(previous?.unresolvedFindings) && previous?.findingsBlocking === false);
     setBusy(false);
     setError("");
     // Reset only when the dialog opens.
@@ -301,9 +305,9 @@ export function PrivacyReviewDialog({
         reviewedOn,
         ...(versionOrEffectiveDate.trim() ? { versionOrEffectiveDate: versionOrEffectiveDate.trim() } : {}),
         ...(maintainedAt.trim() ? { maintainedAt: maintainedAt.trim() } : {}),
-        ...(unresolvedFindings.trim() ? { unresolvedFindings: unresolvedFindings.trim() } : {}),
+        ...(unresolvedFindings.trim() ? { unresolvedFindings: unresolvedFindings.trim(), findingsBlocking: !minorFollowUps } : {}),
       }) as { documented?: boolean; missingLocation?: boolean };
-      if (result?.documented) toast.success("Privacy review recorded", "The privacy program is marked documented.");
+      if (result?.documented) toast.success("Privacy review recorded", unresolvedFindings.trim() ? "The privacy program is marked documented, with follow-ups noted." : "The privacy program is marked documented.");
       else toast.warn("Privacy review recorded", result?.missingLocation ? "Add where the policy is maintained to mark the program documented." : "The program stays outstanding until the findings are resolved.");
       onClose();
     } catch (cause) {
@@ -329,7 +333,7 @@ export function PrivacyReviewDialog({
     >
       <div className="evidence-dialog">
         <p className="evidence-dialog__intro">
-          Your attestation of what you reviewed, recorded with your name. The program is marked documented only when you record where the policy is maintained and leave no unresolved findings.
+          Your attestation of what you reviewed, recorded with your name. The program is marked documented only when you record where the policy is maintained and leave no unresolved findings, or say the findings are minor follow-ups.
         </p>
         {error && <Banner tone="danger">{error}</Banner>}
         <Field label="Policies and practices reviewed" required>
@@ -356,6 +360,14 @@ export function PrivacyReviewDialog({
         <Field label="Unresolved findings" hint="Anything still to fix. Leave empty only when nothing is outstanding.">
           <textarea className="textarea" rows={3} value={unresolvedFindings} onChange={(event) => setUnresolvedFindings(event.target.value)} />
         </Field>
+        {unresolvedFindings.trim() && (
+          <Checkbox
+            checked={minorFollowUps}
+            onChange={setMinorFollowUps}
+            label="These are minor follow-ups — the program is in place"
+            hint="Leave unchecked if any finding means the policy or practices aren't in place yet."
+          />
+        )}
         {previous && (
           <p className="evidence-dialog__meta">Last review: {attestationLine("Reviewed", previous.reviewedByName, formatDate(previous.reviewedOn))}</p>
         )}

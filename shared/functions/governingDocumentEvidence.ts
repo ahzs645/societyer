@@ -10,7 +10,9 @@
  * - `society:recordPrivacyReview` records an accountable privacy review: what
  *   was reviewed, its version, where it is maintained, who reviewed it and
  *   when, and unresolved findings. The program is marked Documented only when
- *   the review records a location and leaves no findings.
+ *   the review records a location and leaves no blocking findings: findings
+ *   are blocking unless the reviewer says they are minor follow-ups with the
+ *   program in place (`findingsBlocking: false`).
  *
  * Each writes the society row and an activity entry. Model and rules:
  * shared/governingDocumentEvidence.ts.
@@ -24,6 +26,7 @@ import {
   isEvidenceField,
   isHeldElsewhereKind,
   optionalText,
+  privacyFindingsBlocking,
   privacyPolicyLocationRecorded,
   requiredText,
   shortText,
@@ -165,21 +168,28 @@ export async function recordPrivacyReviewPortable(
     maintainedAt?: string;
     reviewedOn: string;
     unresolvedFindings?: string;
+    /** False when the findings are minor follow-ups and the program is in place; defaults to true. */
+    findingsBlocking?: boolean;
   },
 ) {
   const { society, actor } = await loadForWrite(ctx, args.societyId, "privacyPolicyDocId");
+  if (args.findingsBlocking !== undefined && typeof args.findingsBlocking !== "boolean") throw new Error("Say whether the findings block the program.");
+  const unresolvedFindings = optionalText(args.unresolvedFindings, "Unresolved findings", 2000);
   const review: PrivacyProgramReview = withoutUndefined({
     policiesReviewed: requiredText(args.policiesReviewed, "Policies and practices reviewed", 1000),
     versionOrEffectiveDate: optionalText(args.versionOrEffectiveDate, "Version or effective date", 200),
     maintainedAt: optionalText(args.maintainedAt, "Where they are maintained", 500),
-    unresolvedFindings: optionalText(args.unresolvedFindings, "Unresolved findings", 2000),
+    unresolvedFindings,
+    // Only meaningful with findings; blocking unless the reviewer said otherwise.
+    findingsBlocking: unresolvedFindings ? args.findingsBlocking !== false : undefined,
     reviewedOn: pastOrTodayDate(args.reviewedOn, "Reviewed on"),
     reviewedAtISO: new Date().toISOString(),
     reviewedByUserId: actor.userId,
     reviewedByName: actor.name,
   });
   const located = privacyPolicyLocationRecorded(society, review);
-  const documented = located && !review.unresolvedFindings;
+  const blocking = privacyFindingsBlocking(review);
+  const documented = located && !blocking;
   const status = documented ? "Documented" : "Needs review";
   await ctx.db.patch(args.societyId, {
     privacyProgramReview: review,
@@ -190,8 +200,8 @@ export async function recordPrivacyReviewPortable(
   await logActivity(
     ctx, args.societyId, actor.name ?? "You", "privacy-program-reviewed",
     documented
-      ? `Recorded privacy review: ${shortText(review.policiesReviewed, 120)}`
-      : `Recorded privacy review with ${review.unresolvedFindings ? "unresolved findings" : "no policy location"}: ${shortText(review.policiesReviewed, 100)}`,
+      ? `Recorded privacy review${review.unresolvedFindings ? " with minor follow-ups" : ""}: ${shortText(review.policiesReviewed, 100)}`
+      : `Recorded privacy review with ${blocking ? "unresolved findings" : "no policy location"}: ${shortText(review.policiesReviewed, 100)}`,
   );
   return { review, status, documented, missingLocation: !located };
 }

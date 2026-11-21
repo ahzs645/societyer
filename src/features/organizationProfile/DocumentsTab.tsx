@@ -17,6 +17,7 @@ import { governingDocumentSlots, type GoverningDocumentField } from "../../../sh
 import {
   attestationLine,
   governingDocumentCurrentness,
+  privacyFindingsBlocking,
   shortText,
   type Currentness,
   type PrivacyProgramReview,
@@ -192,11 +193,15 @@ function PrivacyPolicyRow({ label, docId, documentTitle, currentness, review, ca
         {heldElsewhere && <HeldElsewhereLine entry={heldElsewhere} alsoUploaded={present} />}
         {review ? (
           <>
-            <span className={`gov-doc-row__title${review.unresolvedFindings ? "" : " gov-doc-row__verified"}`}>
+            <span className={`gov-doc-row__title${privacyFindingsBlocking(review) ? "" : " gov-doc-row__verified"}`}>
               {attestationLine("Reviewed", review.reviewedByName, formatDate(review.reviewedOn))}
               {review.versionOrEffectiveDate ? ` · ${review.versionOrEffectiveDate}` : ""}
             </span>
-            {review.unresolvedFindings && <span className="gov-doc-row__note">Unresolved findings: {shortText(review.unresolvedFindings, 160)}</span>}
+            {review.unresolvedFindings && (
+              <span className="gov-doc-row__note">
+                {privacyFindingsBlocking(review) ? "Unresolved findings" : "Follow-ups"}: {shortText(review.unresolvedFindings, 160)}
+              </span>
+            )}
           </>
         ) : (
           <span className="gov-doc-row__title">No privacy review recorded.</span>
