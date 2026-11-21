@@ -168,6 +168,7 @@ export function DirectorConsentSection({
       <div className="director-consent__head">
         <h3 className="director-consent__title" id={titleId}>Consent to act</h3>
         {latest ? <Badge tone={eventTone(latest.event)}>{eventLabel(latest.event)}</Badge> : null}
+        {registerReadable && <Link className="director-consent__history" to={DIRECTOR_CONSENT_HISTORY_HREF}>Consent history</Link>}
       </div>
 
       <ConsentSummary
@@ -200,7 +201,6 @@ export function DirectorConsentSection({
           {canManage && legacyFlag && (
             <button type="button" className="btn btn--ghost btn--sm" onClick={clearLegacyFlag}>Clear flag</button>
           )}
-          {registerReadable && <Link className="director-consent__history" to={DIRECTOR_CONSENT_HISTORY_HREF}>Consent history</Link>}
         </div>
       )}
     </section>

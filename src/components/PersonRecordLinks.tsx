@@ -105,7 +105,7 @@ function PersonRecordLinksPanel({societyId,recordTable,recordId,personName,obser
  const loadedPeople=useDirectoryPeople(read&&!providedPeople?societyId:undefined);const people=providedPeople??loadedPeople;
  const stage=useMutation(api.personHistory.stageRecord);const observe=useMutation(api.personHistory.observe);const [sourceUrl,setUrl]=useState('');const [sourceReference,setCitation]=useState('');
  if(!read)return null;
- return <section className="card" style={{marginTop:16}}><div className="card__head"><h2 className="card__title">People linked to this record</h2><Link to="/app/people-history">Review person matches</Link></div>
+ return <section className="card person-record-links" style={{marginTop:16}}><div className="card__head"><h2 className="card__title">People linked to this record</h2><Link className="person-record-links__review" to="/app/people-history">Review person matches</Link></div>
   {!(compactConfirmed&&data?.length&&data.every(row=>row.matchStatus==='verified'||row.matchStatus==='not_person'))&&<p className="card__body muted">Each link keeps the name as the source wrote it. Unconfirmed matches are labelled; confirm or correct them here.</p>}
   {data===undefined&&<p className="card__body muted">Loading linked people…</p>}
   {(data??[]).filter(row=>row.matchStatus!=='not_person').map(row=><PersonOccurrenceReview key={row._id} row={row} people={people} display={display}/>)}

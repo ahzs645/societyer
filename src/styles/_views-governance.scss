@@ -319,7 +319,14 @@
   flex-wrap: wrap;
   gap: token(s-2);
 }
-.director-consent__history { margin-left: auto; font-size: token(fs-sm); }
+.director-consent__history { margin-left: auto; font-size: token(fs-sm); font-weight: token(fw-regular); }
+
+/* People linked to a record: one padded block per paragraph, no stacked
+ * paragraph margins on top of the card padding. */
+.person-record-links > p.card__body { margin: 0; }
+.person-record-links > p.card__body + p.card__body { padding-top: 0; }
+.person-record-links__review { font-size: token(fs-sm); }
+.person-record-links__review:first-of-type { margin-left: auto; }
 
 /* People linked to a record: a confirmed link reads as one line. */
 .person-occurrence__summary { overflow-wrap: anywhere; }

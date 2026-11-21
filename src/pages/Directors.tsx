@@ -151,9 +151,23 @@ export function DirectorsPage() {
   const showBcResidentField = directorProfile.showBcResidentField;
   const directorsView = useMemo(() => {
     const view = tableData.hydratedView;
-    if (!view || showBcResidentField) return view;
-    return { ...view, columns: view.columns.map((column) => column.field?.name === "isBCResident" ? { ...column, isVisible: false } : column) };
+    if (!view) return view;
+    return {
+      ...view,
+      columns: view.columns.map((column) => {
+        if (column.field?.name === "consentOnFile") return { ...column, field: consentFieldFromRegister(column.field) };
+        if (!showBcResidentField && column.field?.name === "isBCResident") return { ...column, isVisible: false };
+        return column;
+      }),
+    };
   }, [tableData.hydratedView, showBcResidentField]);
+  // The preview panel reads fields from the object metadata, so the same
+  // read-only consent field is applied there too.
+  const directorsObjectMetadata = useMemo(() => {
+    const metadata = tableData.objectMetadata;
+    if (!metadata) return metadata;
+    return { ...metadata, fields: metadata.fields.map((field) => field.name === "consentOnFile" ? consentFieldFromRegister(field) : field) };
+  }, [tableData.objectMetadata]);
   const roleTerms = useMemo(() => {
     return (orgHistory?.boardTerms ?? [])
       .slice()
@@ -331,7 +345,7 @@ export function DirectorsPage() {
         ) : tableData.objectMetadata ? (
           <RecordTableScope
             tableId="directors"
-            objectMetadata={tableData.objectMetadata}
+            objectMetadata={directorsObjectMetadata ?? tableData.objectMetadata}
             hydratedView={directorsView}
             records={records}
             onRecordClick={(_, record) => {
@@ -339,6 +353,8 @@ export function DirectorsPage() {
               setOpen(true);
             }}
             onUpdate={canManage ? async ({ recordId, fieldName, value }) => {
+              // Consent follows the consent register; it is recorded in the drawer.
+              if (fieldName === "consentOnFile") return;
               await update({
                 id: recordId as Id<"directors">,
                 patch: { [fieldName]: value } as any,
@@ -728,6 +744,14 @@ function ArchivedRoleEvidenceView({
       ) : null}
     </details>
   );
+}
+
+/**
+ * Consent to act is kept in step with the consent register (recorded from the
+ * director drawer), so the table and preview panel show it read-only.
+ */
+function consentFieldFromRegister<T extends { label: string; isReadOnly: boolean }>(field: T): T {
+  return { ...field, label: "Consent to act", isReadOnly: true };
 }
 
 function cleanAliases(value: unknown) {

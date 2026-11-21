@@ -270,7 +270,7 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
         if (missingConsent.length > 0) {
           return flag(this, {
             level: "warn",
-            text: `${missingConsent.length} ${missingConsent.length === 1 ? "director is" : "directors are"} missing consent evidence.`,
+            text: `${missingConsent.length} active ${missingConsent.length === 1 ? "director has" : "directors have"} no consent to act recorded.`,
             citationId: "BC-SOC-DIRECTOR-CONSENT",
           });
         }
@@ -615,7 +615,7 @@ function extendedDashboardRules(organization?: LegalEntityLike | null): Dashboar
     }));
     out.push(make(`LEGAL-${profile.id}-DIRECTOR-CONSENT`, 'Director consent evidence', profile.directors.consentSourceIds, audience, ctx => {
       const missing = ctx.activeDirectors.filter(d => !d.consentOnFile).length;
-      return missing ? { level: 'warn', text: `${missing} director${missing === 1 ? '' : 's'} lack linked consent evidence. ${profile.directors.consent}` } : null;
+      return missing ? { level: 'warn', text: `${missing} active director${missing === 1 ? ' has' : 's have'} no consent to act recorded. ${profile.directors.consent}` } : null;
     }));
     if (profile.directors.residency === 'canadian_25_percent') out.push(make(`LEGAL-${profile.id}-DIRECTORS-RESIDENCY`, 'Resident Canadian director requirement', profile.directors.sourceIds, audience, ctx => {
       const required = requiredResidentCanadianDirectors(ctx.activeDirectors.length);

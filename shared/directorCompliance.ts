@@ -27,7 +27,7 @@ export type DirectorComplianceProfile = {
 const PLAIN_DIRECTOR_RULES: Record<string, { consentRule: string; changeSubtext: string; changeNote: string }> = {
   bc_society: {
     consentRule: 'Under the Societies Act, a director consents in writing, or by attending the meeting that elects or appoints them and not refusing.',
-    changeSubtext: 'Promptly. Changes made at an AGM can go in the annual report instead.',
+    changeSubtext: 'File with the registrar. Changes made at an AGM can go in the annual report instead.',
     changeNote: 'File director changes with the registrar promptly. Changes made at an AGM can be reported in the annual report instead.',
   },
   bc_company: {

@@ -204,7 +204,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         },
       },
       { name: "isBCResident", label: "BC resident", fieldType: FIELD_TYPES.BOOLEAN, icon: "MapPin" },
-      { name: "consentOnFile", label: "Consent evidence", fieldType: FIELD_TYPES.BOOLEAN, icon: "FileCheck" },
+      { name: "consentOnFile", label: "Consent to act", fieldType: FIELD_TYPES.BOOLEAN, icon: "FileCheck", isReadOnly: true },
       { name: "termStart", label: "Term start", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "termEnd", label: "Term end", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "resignedAt", label: "Resigned", fieldType: FIELD_TYPES.DATE, icon: "LogOut" },

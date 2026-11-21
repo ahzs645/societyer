@@ -957,6 +957,12 @@ select.select:hover:not(:disabled) {
     flex-basis: 100%;
   }
 
+  /* Stacked field pairs: each field's own bottom margin spaces them, so the
+   * row's (often inline) gap would double it once the pair wraps. */
+  .drawer__body .row:has(> .field) {
+    row-gap: 0 !important;
+  }
+
   .signature-list-row {
     align-items: flex-start !important;
     flex-wrap: wrap;
