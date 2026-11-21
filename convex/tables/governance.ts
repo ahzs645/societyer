@@ -21,6 +21,12 @@ export const governanceTables = {
     resolvedAtISO: v.optional(v.string()),
     resolvedByUserId: v.optional(v.id("users")),
     dismissedAtISO: v.optional(v.string()),
+    // Dashboard dismissals (shared/dashboardDismissals.ts): who dismissed a
+    // recommendation, why, and the status to return to on restore.
+    dismissedByUserId: v.optional(v.string()),
+    dismissedByName: v.optional(v.string()),
+    dismissalReason: v.optional(v.string()),
+    statusBeforeDismissal: v.optional(v.string()),
     snoozedUntilISO: v.optional(v.string()),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),

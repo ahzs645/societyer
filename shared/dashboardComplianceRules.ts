@@ -16,6 +16,7 @@ import { legalGovernanceProfile, LEGAL_GOVERNANCE_PROFILES, minimumLegalDirector
 import { resolvePrivacyProfile, hasApplicablePrivacyLaw, PRIVACY_LAWS, type PrivacyAssessmentFacts } from "./privacyRuleProfiles";
 import type { LegalEntityLike } from "./organizationDomain";
 import { audienceAppliesToOrganization, type RuleAudience } from "./entityRuleScope";
+import type { DashboardItemDismissal } from "./dashboardDismissals";
 
 /** `info` is a neutral status note (e.g. "isn't incorporated yet"): not a pass and not a gap. */
 export type ComplianceFlagLevel = "ok" | "info" | "warn" | "err";
@@ -38,6 +39,10 @@ export type DashboardComplianceFlag = {
   remediationStatus?: string;
   remediationTaskId?: string;
   remediationUpdatedAtISO?: string;
+  /** A recommendation ("warn"/"info") this workspace may dismiss; see shared/dashboardDismissals.ts. */
+  dismissable?: boolean;
+  /** Set while the flag is dismissed at its current level. */
+  dismissal?: DashboardItemDismissal;
 };
 
 export type ComplianceSociety = GovernanceOrganization & PrivacyAssessmentFacts & {

@@ -7,6 +7,8 @@ import {
   createPrivacyReviewTaskPortable,
   markPrivacyProgramReviewedPortable,
   markMemberDataAccessReviewedPortable,
+  dismissItemPortable,
+  restoreItemPortable,
 } from "../shared/functions/dashboardRemediation";
 import { toPortableMutationCtx } from "./lib/portable";
 
@@ -49,4 +51,23 @@ export const markMemberDataAccessReviewed = authorizedMutation("dashboardRemedia
   args: remediationArgs,
   returns: v.any(),
   handler: async (ctx, args) => markMemberDataAccessReviewedPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Recommendations only ("warn"/"info"); the handler refuses any other level.
+export const dismissItem = authorizedMutation("dashboardRemediation:dismissItem", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    ruleId: v.string(),
+    flagLevel: v.string(),
+    flagText: v.string(),
+    reason: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => dismissItemPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const restoreItem = authorizedMutation("dashboardRemediation:restoreItem", mutation)({
+  args: { societyId: v.id("societies"), ruleId: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => restoreItemPortable(await toPortableMutationCtx(ctx), args),
 });

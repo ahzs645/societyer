@@ -28,6 +28,7 @@ import {
 } from "../dashboardComplianceRules";
 import { isHistoricalSourceAction } from "../taskStatus";
 import { todayDateOnly } from "../dateOnly";
+import { activeDismissal, DISMISSED_STATUS, isRecommendationLevel } from "../dashboardDismissals";
 import { financeControlFindingsFor } from "./expenseReports";
 import { isCorporation, isPreparingIncorporation } from "../organizationDomain";
 
@@ -430,14 +431,21 @@ export async function summaryPortable(
     : [];
   const complianceFlags = (financeFlags.length ? [...evidenceFlags.filter((flag) => flag.ruleId !== "DASHBOARD-COMPLIANCE-OK"), ...financeFlags] : evidenceFlags).map((flag) => {
     const remediation = remediationByRuleId.get(flag.ruleId);
+    // Recommendations (warn/info) may be dismissed; requirements (err) may not.
+    const dismissable = isRecommendationLevel(flag.level);
+    const dismissal = activeDismissal(remediation, { level: flag.level, dismissable });
+    const withDismissal: DashboardComplianceFlag = { ...flag, dismissable, ...(dismissal ? { dismissal } : {}) };
+    // A dismissal made at another level no longer applies; the row then
+    // says nothing about this flag beyond any review task it still holds.
+    const staleDismissal = remediation?.status === DISMISSED_STATUS && !dismissal;
     return remediation
       ? {
-          ...flag,
-          remediationStatus: remediation.status,
+          ...withDismissal,
+          ...(staleDismissal ? {} : { remediationStatus: remediation.status }),
           remediationTaskId: remediation.taskId,
           remediationUpdatedAtISO: remediation.updatedAtISO,
         }
-      : flag;
+      : withDismissal;
   });
 
   return {

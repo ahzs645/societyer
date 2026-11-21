@@ -115,6 +115,8 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "dashboardRemediation:createPrivacyReviewTask": ["ruleId"],
   "dashboardRemediation:markPrivacyProgramReviewed": ["ruleId"],
   "dashboardRemediation:markMemberDataAccessReviewed": ["ruleId"],
+  "dashboardRemediation:dismissItem": ["ruleId"],
+  "dashboardRemediation:restoreItem": ["ruleId"],
   "legalOperations:stageCorporationDocumentPacket": ["obligationRuleId"],
   "waveCache:sync": ["businessId"],
   "waveCache:healthCheck": ["businessId"],

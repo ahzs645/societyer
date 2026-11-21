@@ -15,7 +15,8 @@ import { formatShortDate, relative } from "../../lib/format";
  * narrow screen (director consent, the annual report). Built only from data
  * those cards already load. Each row is one link to where it gets fixed; the
  * legal source, the evidence that resolves it and any other actions sit
- * behind the row's ⓘ button.
+ * behind the row's ⓘ button. Dismissed recommendations stay out of the list;
+ * the card's foot lists them under "Dismissed (n)".
  */
 
 export type AttentionSeverity = "err" | "warn";
@@ -70,6 +71,7 @@ export function buildAttentionItems({
   canOpen,
   flagLink,
   flagActions,
+  checkActions,
 }: {
   /** Compliance flags, or undefined when the module is hidden. */
   flags?: DashboardComplianceFlag[];
@@ -83,6 +85,8 @@ export function buildAttentionItems({
   canOpen: (to: string) => boolean;
   flagLink: (flag: DashboardComplianceFlag) => string | undefined;
   flagActions: (flag: DashboardComplianceFlag, rowLink: string | undefined) => ReactNode;
+  /** Actions for a continuity check's ⓘ popover (e.g. Dismiss). */
+  checkActions?: (check: ContinuityCheck) => ReactNode;
 }): AttentionItem[] {
   const items: AttentionItem[] = [];
 
@@ -123,7 +127,9 @@ export function buildAttentionItems({
   const flagRuleIds = new Set<string>();
   for (const flag of flags ?? []) {
     if (flag.level === "ok" || flag.level === "info") continue;
+    // A dismissed flag still stands in for its continuity twin below.
     flagRuleIds.add(flag.ruleId);
+    if (flag.dismissal) continue;
     const text = pluralizeCounts(flag.text);
     const { title, rest } = splitSentence(text);
     const to = flagLink(flag);
@@ -152,7 +158,7 @@ export function buildAttentionItems({
   // filing says more than the continuity check for the same report.
   const annualReportListed = listedFilings.some((filing) => /annual\s*report/i.test(filing.kind) || /annual report/i.test(filingLabel(filing.kind)));
   for (const check of checks ?? []) {
-    if (check.level === "ok" || check.level === "info") continue;
+    if (check.level === "ok" || check.level === "info" || check.dismissal) continue;
     if (check.id === "CONTINUITY-DIRECTOR-CONSENT" && flagRuleIds.has("BC-SOC-DIRECTOR-CONSENT")) continue;
     if (check.id === "CONTINUITY-ANNUAL-REPORT-FILED" && annualReportListed) continue;
     items.push({
@@ -164,6 +170,7 @@ export function buildAttentionItems({
       to: canOpen(check.to) ? check.to : undefined,
       sources: check.citation ? [{ label: check.citation }] : [],
       evidence: [],
+      actions: checkActions?.(check),
     });
   }
 
@@ -284,10 +291,13 @@ function AttentionRow({ item }: { item: AttentionItem }) {
 export function NeedsAttentionCard({
   items,
   note,
+  dismissed,
 }: {
   items: AttentionItem[];
   /** A muted line under the list (e.g. checks that need an administrator). */
   note?: ReactNode;
+  /** The "Dismissed (n)" footer for dismissed recommendations. */
+  dismissed?: ReactNode;
 }) {
   const [showAll, setShowAll] = useState(false);
   const shown = showAll ? items : items.slice(0, PREVIEW_COUNT);
@@ -310,13 +320,14 @@ export function NeedsAttentionCard({
           {shown.map((item) => <AttentionRow key={item.key} item={item} />)}
         </ul>
       )}
-      {(items.length > PREVIEW_COUNT || note) && (
+      {(items.length > PREVIEW_COUNT || note || dismissed) && (
         <div className="needs-attention__foot">
           {items.length > PREVIEW_COUNT && (
             <button type="button" className="needs-attention__toggle" aria-expanded={showAll} onClick={() => setShowAll((value) => !value)}>
               {showAll ? "Show fewer" : `Show all (${items.length})`}
             </button>
           )}
+          {dismissed}
           {note && <p className="needs-attention__note muted">{note}</p>}
         </div>
       )}

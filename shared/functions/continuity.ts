@@ -48,6 +48,7 @@ import {
 import { agreementGaps } from "../agreements";
 import { appliesBcSocietyRules } from "../entityRuleScope";
 import { entityMeetingWording } from "../entityMeetingWording";
+import { activeDismissal, isBindingSeverity, isRecommendationLevel, type DashboardItemDismissal, type DismissalRecord } from "../dashboardDismissals";
 
 const READ_PERMISSIONS = ["meetings:read", "minutes:read", "motions:read", "committees:read", "filings:read", "financials:read", "directors:read", "documents:read", "agreements:read"] as const;
 
@@ -262,7 +263,9 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
   const year = Number(today.slice(0, 4));
   const expectations = effectiveExpectations(stored.map(toEffective), snapshot);
   const rows = evaluateContinuity(expectations, snapshot, { fromYear: year - 1, toYear: year });
-  const checks: { id: string; level: "ok" | "warn" | "err" | "info"; title: string; text: string; to: string; actionLabel: string; citation?: string }[] = [];
+  // `requirement` is the severity of the expectation a check rests on
+  // (statutory | bylaw | practice); binding ones cannot be dismissed.
+  const checks: { id: string; level: "ok" | "warn" | "err" | "info"; title: string; text: string; to: string; actionLabel: string; citation?: string; requirement?: string }[] = [];
   const periodFor = (kind: string, key: string) => rows.find((row) => row.expectation.kind === kind)?.periods.find((period) => period.periodKey === key);
   const agmRow = rows.find((row) => row.expectation.kind === "agm");
   // "AGM" for societies, "annual meeting" for corporations and custom
@@ -284,6 +287,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       to: held ? "/app/coverage?tab=continuity" : "/app/meetings",
       actionLabel: held ? "View coverage" : `Schedule the ${am === "AGM" ? "AGM" : "annual meeting"}`,
       citation: agmRow.expectation.citation,
+      requirement: String(agmRow.expectation.severity),
     });
   }
   const filingRow = rows.find((row) => row.expectation.kind === "annual_filing");
@@ -298,6 +302,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       to: "/app/filings",
       actionLabel: latest?.status === "satisfied" ? "View filings" : "Record the filing",
       citation: filingRow.expectation.citation,
+      requirement: String(filingRow.expectation.severity),
     });
   }
   if (snapshot.readable.meetings) {
@@ -325,6 +330,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
   if (snapshot.readable.directors) {
     const active = snapshot.directors.filter((director) => director.status === "Active");
     const missing = active.filter((director) => !director.consentOnFile);
+    const consentSeverity = rows.find((row) => row.expectation.kind === "director_consent")?.expectation.severity;
     checks.push({
       id: "CONTINUITY-DIRECTOR-CONSENT",
       level: !active.length ? "warn" : missing.length ? "warn" : "ok",
@@ -334,6 +340,7 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       actionLabel: !active.length ? "Add directors" : missing.length ? "Record consents" : "View directors",
       // Societies Act citation only for a BC society; corporations get the check without it.
       citation: appliesBcSocietyRules(snapshot.society) ? "Societies Act, SBC 2015, c. 18, s. 42(4)" : undefined,
+      requirement: consentSeverity === undefined ? undefined : String(consentSeverity),
     });
   }
   if ((await readAccess(ctx, societyId)).has("agreements:read")) {
@@ -352,7 +359,21 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       });
     }
   }
-  return { checks, today };
+  // Recommendations (warn/info checks not resting on a binding duty) may be
+  // dismissed for the workspace; see shared/dashboardDismissals.ts.
+  const remediations = await ctx.db
+    .query<PortableDoc & DismissalRecord & { ruleId?: string }>("complianceRemediations")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const remediationById = new Map(remediations.map((row) => [String(row.ruleId ?? ""), row]));
+  return {
+    checks: checks.map((check): (typeof checks)[number] & { dismissable: boolean; dismissal?: DashboardItemDismissal } => {
+      const dismissable = isRecommendationLevel(check.level) && !isBindingSeverity(check.requirement);
+      const dismissal = activeDismissal(remediationById.get(check.id), { level: check.level, dismissable });
+      return { ...check, dismissable, ...(dismissal ? { dismissal } : {}) };
+    }),
+    today,
+  };
 }
 
 export async function listExpectationsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
