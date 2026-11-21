@@ -17,6 +17,19 @@ import { resolvePrivacyProfile, hasApplicablePrivacyLaw, PRIVACY_LAWS, type Priv
 import type { LegalEntityLike } from "./organizationDomain";
 import { audienceAppliesToOrganization, type RuleAudience } from "./entityRuleScope";
 import type { DashboardItemDismissal } from "./dashboardDismissals";
+import {
+  attestationLine,
+  governingDocumentCurrentness,
+  governingEvidenceHref,
+  hasIdentifiedEvidence,
+  privacyProgramAssessment,
+  shortText,
+  type EvidenceFacts,
+  type EvidenceField,
+  type GoverningDocumentEvidenceEntry,
+  type GoverningDocumentVerification,
+  type PrivacyProgramReview,
+} from "./governingDocumentEvidence";
 
 /** `info` is a neutral status note (e.g. "isn't incorporated yet"): not a pass and not a gap. */
 export type ComplianceFlagLevel = "ok" | "info" | "warn" | "err";
@@ -55,6 +68,10 @@ export type ComplianceSociety = GovernanceOrganization & PrivacyAssessmentFacts 
   memberDataGapDocumented?: boolean;
   constitutionDocId?: string;
   bylawsDocId?: string;
+  /** Authoritative copies held outside Societyer; see shared/governingDocumentEvidence.ts. */
+  governingDocumentEvidence?: GoverningDocumentEvidenceEntry[];
+  governingDocumentVerifications?: GoverningDocumentVerification[];
+  privacyProgramReview?: PrivacyProgramReview;
 };
 
 export type ComplianceDirector = {
@@ -100,14 +117,48 @@ export type DashboardComplianceRulePack = {
   rules: DashboardComplianceRule[];
 };
 
+const heldElsewhereHref = (field: EvidenceField) => governingEvidenceHref("held-elsewhere", field);
+const PRIVACY_REVIEW_HREF = governingEvidenceHref("privacy-review", "privacyPolicyDocId");
+
+const FIXTURE_RECORDED_AT = "2026-01-15T17:00:00.000Z";
+
+const compliantPrivacyReview: PrivacyProgramReview = {
+  policiesReviewed: "Privacy policy, complaint process, access and correction procedure",
+  versionOrEffectiveDate: "v2, effective 2026-01-01",
+  maintainedAt: "Documents > Policies",
+  reviewedOn: "2026-01-15",
+  reviewedAtISO: FIXTURE_RECORDED_AT,
+  reviewedByName: "Fixture reviewer",
+};
+
+function verifiedDocumentFixture(field: EvidenceField, documentId: string): GoverningDocumentVerification {
+  return { field, verifiedAsOf: "2026-01-15", versionReference: "Registry filing 2016-11-28", evidenceKind: "document", documentId, recordedAtISO: FIXTURE_RECORDED_AT, verifiedByName: "Fixture reviewer" };
+}
+
+function heldElsewhereFixture(field: EvidenceField, kind: GoverningDocumentEvidenceEntry["kind"]): GoverningDocumentEvidenceEntry {
+  return {
+    field,
+    kind,
+    reference: kind === "external" ? "BC Registry Societies Online filing history" : "Records office binder, 100 Main St",
+    custodian: "Secretary",
+    recordedAtISO: FIXTURE_RECORDED_AT,
+    recordedByName: "Fixture reviewer",
+  };
+}
+
 const compliantSociety: ComplianceSociety = {
   isMemberFunded: false,
   privacyPolicyDocId: "doc_privacy",
   privacyProgramStatus: "Documented",
+  privacyProgramReview: compliantPrivacyReview,
   memberDataAccessStatus: "Society-controlled",
   memberDataGapDocumented: true,
   constitutionDocId: "doc_constitution",
   bylawsDocId: "doc_bylaws",
+  governingDocumentVerifications: [
+    verifiedDocumentFixture("constitutionDocId", "doc_constitution"),
+    verifiedDocumentFixture("bylawsDocId", "doc_bylaws"),
+  ],
 };
 
 const compliantDirector: ComplianceDirector = {
@@ -149,6 +200,101 @@ function baseFixture(
         : overrides.society,
     activeDirectors:
       overrides.activeDirectors ?? compliantContext.activeDirectors,
+  };
+}
+
+/**
+ * "Current constitution identified and required records accounted for?" (and
+ * the same for bylaws). Satisfied by an uploaded copy or a recorded external
+ * or physical location; a separate, lower-key note asks someone to verify the
+ * identified copy is current. The text never says the society lacks the
+ * document, only that Societyer doesn't have it identified. A BC society
+ * always keeps both, so there is no "not applicable" path.
+ */
+function governingDocumentRule(args: {
+  id: string;
+  field: "constitutionDocId" | "bylawsDocId";
+  label: string;
+  phrase: string;
+}): DashboardComplianceRule {
+  const upload = { id: `upload-${args.phrase}`, label: `Upload ${args.phrase}`, intent: "navigate", to: "/app/society?tab=documents#governing-documents" };
+  const heldElsewhere = { id: "record-held-elsewhere", label: "Held elsewhere", intent: "navigate", to: heldElsewhereHref(args.field) };
+  const verify = { id: "verify-current", label: "Verify current", intent: "navigate", to: governingEvidenceHref("verify", args.field) };
+  const assign = { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" };
+  return {
+    id: args.id,
+    audience: "bc_society",
+    jurisdiction: "BC",
+    societyType: "society",
+    effectiveDate: "2016-11-28",
+    ruleText: `The current ${args.phrase} should be identified (an uploaded copy, an external reference or a physical records location) and verified as current.`,
+    citation: "Societies Act records requirements",
+    evidenceRequired: [
+      `Uploaded ${args.phrase}, external system reference or physical records location`,
+      "Currentness verification: date, reviewer, version or filing reference",
+    ],
+    remediationActions: [upload, heldElsewhere, verify, assign],
+    passFail(context) {
+      if (!context.society) return null;
+      const currentness = governingDocumentCurrentness(context.society, args.field);
+      if (currentness.state === "missing") {
+        return {
+          ...flag(this, {
+            level: "warn",
+            text: `Current ${args.phrase} not yet identified in Societyer. Upload a copy or record where the authoritative copy is held.`,
+            citationId: "BC-SOC-RECORDS",
+          }),
+          remediationActions: [upload, heldElsewhere, assign],
+        };
+      }
+      if (currentness.state === "unverified") {
+        // Info, not warn: the authoritative copy is accounted for; whether it
+        // is still the current version is a review note, not a records gap.
+        return {
+          ...flag(this, {
+            level: "info",
+            text: `${args.label} on record — currentness not verified.${currentness.staleVerification ? " The copy verified earlier has since been replaced." : ""}`,
+            citationId: "BC-SOC-RECORDS",
+          }),
+          remediationActions: [verify, assign],
+        };
+      }
+      return null;
+    },
+    fixtures: [
+      {
+        name: `flags missing ${args.phrase} evidence`,
+        context: baseFixture({ society: { ...compliantSociety, [args.field]: undefined, governingDocumentVerifications: [] } }),
+        expectedLevel: "warn",
+      },
+      {
+        name: `accepts ${args.phrase} held in an external system (currentness still unverified)`,
+        context: baseFixture({ society: { ...compliantSociety, [args.field]: undefined, governingDocumentEvidence: [heldElsewhereFixture(args.field, "external")], governingDocumentVerifications: [] } }),
+        expectedLevel: "info",
+      },
+      {
+        name: `passes ${args.phrase} kept at a physical records location once verified`,
+        context: baseFixture({
+          society: {
+            ...compliantSociety,
+            [args.field]: undefined,
+            governingDocumentEvidence: [heldElsewhereFixture(args.field, "physical")],
+            governingDocumentVerifications: [{ field: args.field, verifiedAsOf: "2026-01-15", evidenceKind: "physical", evidenceRecordedAtISO: FIXTURE_RECORDED_AT, recordedAtISO: FIXTURE_RECORDED_AT, verifiedByName: "Fixture reviewer" }],
+          },
+        }),
+        expectedLevel: null,
+      },
+      {
+        name: `notes uploaded but unverified ${args.phrase}`,
+        context: baseFixture({ society: { ...compliantSociety, governingDocumentVerifications: [] } }),
+        expectedLevel: "info",
+      },
+      {
+        name: `notes ${args.phrase} replaced after verification`,
+        context: baseFixture({ society: { ...compliantSociety, [args.field]: "doc_replacement" } }),
+        expectedLevel: "info",
+      },
+    ],
   };
 }
 
@@ -296,34 +442,78 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       jurisdiction: "BC",
       societyType: "society",
       effectiveDate: "2004-01-01",
-      ruleText: "Privacy policy and practices should be marked documented.",
+      ruleText: "Privacy policies and practices should be reviewed, with who reviewed them, when, their version, where they are maintained and any unresolved findings recorded.",
       citation: "Personal Information Protection Act",
-      evidenceRequired: ["Privacy program status"],
+      evidenceRequired: ["Privacy review attestation (reviewer, date, policies and practices reviewed, version, location)", "Unresolved findings, if any"],
       remediationActions: [
+        { id: "record-privacy-review", label: "Record review", intent: "navigate", to: PRIVACY_REVIEW_HREF },
         { id: "create-policy-template", label: "Create from template", intent: "createPipaPolicyDraft" },
-        { id: "open-privacy-workflow", label: "Open privacy workflow", intent: "navigate", to: "/app/privacy" },
         { id: "assign-review", label: "Assign review", intent: "createPrivacyReviewTask" },
-        { id: "mark-reviewed", label: "Mark reviewed", intent: "markPrivacyProgramReviewed" },
       ],
       passFail(context) {
         if (!context.society) return null;
-        const status = context.society.privacyProgramStatus ?? (context.society.privacyPolicyDocId ? "Documented" : "Unknown");
-        if (status !== "Documented") {
-          return flag(this, {
-            level: "warn",
-            text: "Privacy policy/practices are not marked documented.",
-            citationId: "PIPA-POLICY",
-          });
+        const assessment = privacyProgramAssessment(context.society);
+        const review = assessment.review;
+        const by = review ? attestationLine("Reviewed", review.reviewedByName, review.reviewedOn) : "";
+        switch (assessment.state) {
+          case "documented":
+            return null;
+          case "findings":
+            return flag(this, {
+              level: "warn",
+              text: `Privacy review has unresolved findings (${by}): ${shortText(review?.unresolvedFindings)}`,
+              citationId: "PIPA-POLICY",
+            });
+          case "no-location":
+            return flag(this, {
+              level: "warn",
+              text: `Privacy review recorded (${by}) without where the policy and practices are maintained.`,
+              citationId: "PIPA-POLICY",
+            });
+          case "unattested":
+            // Marked documented by hand (or inferred from a linked policy) with
+            // no review on record: a note, not a gap the organization must fix.
+            return flag(this, {
+              level: "info",
+              text: "Privacy program is marked documented, but no review attestation is recorded in Societyer.",
+              citationId: "PIPA-POLICY",
+            });
+          default:
+            return flag(this, {
+              level: "warn",
+              text: review
+                ? `Privacy program is marked ${assessment.status} since the last review (${by}).`
+                : "Privacy policy and practices have not been reviewed and recorded in Societyer.",
+              citationId: "PIPA-POLICY",
+            });
         }
-        return null;
       },
       fixtures: [
         {
           name: "flags undocumented privacy practices",
           context: baseFixture({
-            society: { ...compliantSociety, privacyProgramStatus: "Needs review" },
+            society: { ...compliantSociety, privacyProgramStatus: "Needs review", privacyProgramReview: undefined },
           }),
           expectedLevel: "warn",
+        },
+        {
+          name: "keeps the program outstanding while a review has unresolved findings",
+          context: baseFixture({
+            society: { ...compliantSociety, privacyProgramStatus: "Needs review", privacyProgramReview: { ...compliantPrivacyReview, unresolvedFindings: "Complaint process not published." } },
+          }),
+          expectedLevel: "warn",
+        },
+        {
+          name: "notes a program marked documented without a review attestation",
+          context: baseFixture({
+            society: { ...compliantSociety, privacyProgramReview: undefined },
+          }),
+          expectedLevel: "info",
+        },
+        {
+          name: "passes a review with a location and no unresolved findings",
+          context: baseFixture({}),
+          expectedLevel: null,
         },
       ],
     },
@@ -333,22 +523,22 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       jurisdiction: "BC",
       societyType: "society",
       effectiveDate: "2004-01-01",
-      ruleText: "Privacy policy evidence should be linked in the document repository.",
+      ruleText: "Societyer should know where the privacy policy is maintained: an uploaded copy, an external system reference or a physical records location.",
       citation: "Personal Information Protection Act",
-      evidenceRequired: ["Linked privacy policy document"],
+      evidenceRequired: ["Uploaded privacy policy, external reference or physical records location"],
       remediationActions: [
-        { id: "upload-policy", label: "Upload policy", intent: "navigate", to: "/app/documents" },
+        { id: "upload-policy", label: "Upload policy", intent: "navigate", to: "/app/privacy" },
+        { id: "record-held-elsewhere", label: "Held elsewhere", intent: "navigate", to: heldElsewhereHref("privacyPolicyDocId") },
         { id: "create-policy-template", label: "Create from template", intent: "createPipaPolicyDraft" },
         { id: "assign-review", label: "Assign review", intent: "createPrivacyReviewTask" },
-        { id: "mark-reviewed", label: "Mark reviewed", intent: "markPrivacyProgramReviewed" },
         { id: "link-board-minutes", label: "Link board approval minutes", intent: "navigate", to: "/app/policies" },
       ],
       passFail(context) {
         if (!context.society) return null;
-        if (!context.society.privacyPolicyDocId) {
+        if (!hasIdentifiedEvidence(context.society, "privacyPolicyDocId")) {
           return flag(this, {
             level: "warn",
-            text: "No PIPA policy evidence linked; this is a document-evidence gap, not a registry requirement.",
+            text: "Societyer doesn't have the privacy policy's location identified. Upload a copy or record where it is maintained.",
             citationId: "PIPA-POLICY",
           });
         }
@@ -361,6 +551,13 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
             society: { ...compliantSociety, privacyPolicyDocId: undefined },
           }),
           expectedLevel: "warn",
+        },
+        {
+          name: "accepts a privacy policy held in an external system",
+          context: baseFixture({
+            society: { ...compliantSociety, privacyPolicyDocId: undefined, governingDocumentEvidence: [heldElsewhereFixture("privacyPolicyDocId", "external")] },
+          }),
+          expectedLevel: null,
         },
       ],
     },
@@ -442,76 +639,18 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
         },
       ],
     },
-    {
+    governingDocumentRule({
       id: "BC-SOC-CONSTITUTION-EVIDENCE",
-      audience: "bc_society",
-      jurisdiction: "BC",
-      societyType: "society",
-      effectiveDate: "2016-11-28",
-      ruleText: "Constitution evidence should be uploaded.",
-      citation: "Societies Act records requirements",
-      evidenceRequired: ["Linked constitution document"],
-      remediationActions: [
-        { id: "upload-constitution", label: "Upload constitution", intent: "navigate", to: "/app/society?tab=documents#governing-documents" },
-        { id: "open-documents", label: "Documents", intent: "navigate", to: "/app/documents" },
-        { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
-      ],
-      passFail(context) {
-        if (!context.society) return null;
-        if (!context.society.constitutionDocId) {
-          return flag(this, {
-            level: "warn",
-            text: "Constitution not uploaded.",
-            citationId: "BC-SOC-RECORDS",
-          });
-        }
-        return null;
-      },
-      fixtures: [
-        {
-          name: "flags missing constitution evidence",
-          context: baseFixture({
-            society: { ...compliantSociety, constitutionDocId: undefined },
-          }),
-          expectedLevel: "warn",
-        },
-      ],
-    },
-    {
+      field: "constitutionDocId",
+      label: "Constitution",
+      phrase: "constitution",
+    }),
+    governingDocumentRule({
       id: "BC-SOC-BYLAWS-EVIDENCE",
-      audience: "bc_society",
-      jurisdiction: "BC",
-      societyType: "society",
-      effectiveDate: "2016-11-28",
-      ruleText: "Bylaws evidence should be uploaded.",
-      citation: "Societies Act records requirements",
-      evidenceRequired: ["Linked bylaws document"],
-      remediationActions: [
-        { id: "upload-bylaws", label: "Upload bylaws", intent: "navigate", to: "/app/society?tab=documents#governing-documents" },
-        { id: "open-documents", label: "Documents", intent: "navigate", to: "/app/documents" },
-        { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
-      ],
-      passFail(context) {
-        if (!context.society) return null;
-        if (!context.society.bylawsDocId) {
-          return flag(this, {
-            level: "warn",
-            text: "Bylaws not uploaded.",
-            citationId: "BC-SOC-RECORDS",
-          });
-        }
-        return null;
-      },
-      fixtures: [
-        {
-          name: "flags missing bylaws evidence",
-          context: baseFixture({
-            society: { ...compliantSociety, bylawsDocId: undefined },
-          }),
-          expectedLevel: "warn",
-        },
-      ],
-    },
+      field: "bylawsDocId",
+      label: "Bylaws",
+      phrase: "bylaws",
+    }),
     {
       id: "BYLAW-RULE-SET-CONFIGURED",
       audience: "bc_society",
@@ -594,6 +733,12 @@ export function dashboardComplianceRulePackForOrganization(
 }
 
 
+/** Non-BC privacy laws: marked documented and no unresolved review findings. */
+function privacyProgramSettled(society: (EvidenceFacts & { privacyProgramStatus?: string }) | null | undefined) {
+  const state = privacyProgramAssessment(society).state;
+  return state === "documented" || state === "unattested";
+}
+
 /** Corporate profiles reuse one evaluator; source IDs, minima and exceptions are data. */
 function extendedDashboardRules(organization?: LegalEntityLike | null): DashboardComplianceRule[] {
   if (!organization) return [];
@@ -624,7 +769,7 @@ function extendedDashboardRules(organization?: LegalEntityLike | null): Dashboar
       return confirmed < required ? { level: unknown ? 'warn' : 'err', text: `${confirmed} confirmed resident Canadian director${confirmed === 1 ? '' : 's'}; at least ${required} required for the recorded board. ${unknown ? `${unknown} residency assessment${unknown === 1 ? '' : 's'} outstanding. ` : ''}Review stricter regulated-sector exceptions.` } : null;
     }));
     out.push(make(`LEGAL-${profile.id}-CLASSIFICATION`, 'Public/private classification', profile.directors.sourceIds, audience, ctx => ctx.society?.distributing === undefined ? { level: 'warn', text: 'Confirm the applicable public, distributing or offering classification; director minima and governance exceptions depend on it.' } : null, '/app/society'));
-    out.push(make(`LEGAL-${profile.id}-GOVERNING-DOCUMENTS`, 'Governing-document evidence', profile.records[0]?.sourceIds ?? [], audience, ctx => !ctx.society?.bylawsDocId && !ctx.society?.constitutionDocId ? { level: 'warn', text: `Link the current ${profile.id === 'bc_company' ? 'articles and notice of articles' : 'articles and by-laws'} and review the entity-specific minute-book checklist.` } : null, '/app/minute-book'));
+    out.push(make(`LEGAL-${profile.id}-GOVERNING-DOCUMENTS`, 'Governing-document evidence', profile.records[0]?.sourceIds ?? [], audience, ctx => !hasIdentifiedEvidence(ctx.society, 'bylawsDocId') && !hasIdentifiedEvidence(ctx.society, 'constitutionDocId') ? { level: 'warn', text: `Identify the current ${profile.id === 'bc_company' ? 'articles and notice of articles' : 'articles and by-laws'} (upload a copy or record where they are held) and review the entity-specific minute-book checklist.` } : null, '/app/minute-book'));
   }
   const privacy = resolvePrivacyProfile(organization);
   // A BC-home workspace has BC PIPA presumed (privacy.md); the warning asks it
@@ -640,7 +785,7 @@ function extendedDashboardRules(organization?: LegalEntityLike | null): Dashboar
     out.push(make(`PRIVACY-${lawId}-OFFICER`, 'Accountable privacy person', officerSources, audience, ctx => !ctx.society?.privacyOfficerName ? { level: 'warn', text: `No accountable privacy person is recorded for ${law.label}.` } : null, '/app/privacy'));
     if (lawId !== 'bc_pipa') {
       const sources = law.rules.find(r => r.key === 'policy')?.citationIds ?? [];
-      out.push(make(`PRIVACY-${lawId}-POLICY`, 'Privacy practices and policy evidence', sources, audience, ctx => !ctx.society?.privacyPolicyDocId || ctx.society?.privacyProgramStatus !== 'Documented' ? { level: 'warn', text: `Review and link the documented policy and practices for ${law.label}. A document upload alone does not establish compliance.` } : null, '/app/privacy'));
+      out.push(make(`PRIVACY-${lawId}-POLICY`, 'Privacy practices and policy evidence', sources, audience, ctx => !hasIdentifiedEvidence(ctx.society, 'privacyPolicyDocId') || !privacyProgramSettled(ctx.society) ? { level: 'warn', text: `Review the policy and practices for ${law.label} and record where they are maintained. A document upload alone does not establish compliance.` } : null, '/app/privacy'));
     }
   }
   return out;

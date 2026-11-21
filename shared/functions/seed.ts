@@ -62,6 +62,14 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     privacyProgramStatus: "Documented",
     privacyProgramReviewedAtISO: "2026-04-21",
     privacyProgramNotes: "Demo privacy program includes a PIPA policy, complaint process, privacy officer contact, and annual training.",
+    privacyProgramReview: {
+      policiesReviewed: "PIPA privacy policy, complaint process, access and correction procedure",
+      versionOrEffectiveDate: "Adopted by the board 2026-03",
+      maintainedAt: "Societyer Documents: PIPA privacy policy",
+      reviewedOn: "2026-04-21",
+      reviewedAtISO: "2026-04-21T17:00:00.000Z",
+      reviewedByName: "Amara Okonkwo",
+    },
     memberDataAccessStatus: "Society-controlled",
     memberDataGapDocumented: false,
     memberDataAccessReviewedAtISO: "2026-04-21",
@@ -591,10 +599,16 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     });
   }
 
+  const verifiedAt = `${demoAsOf}T17:00:00.000Z`;
   await ctx.db.patch(societyId, {
     constitutionDocId: constitutionId,
     bylawsDocId: bylawsId,
     privacyPolicyDocId: privacyId,
+    // The secretary confirmed both against the registry's filing history.
+    governingDocumentVerifications: [
+      { field: "constitutionDocId", verifiedAsOf: demoAsOf, versionReference: "Constitution as filed on transition", evidenceKind: "document", documentId: constitutionId, recordedAtISO: verifiedAt, verifiedByName: "Amara Okonkwo" },
+      { field: "bylawsDocId", verifiedAsOf: demoAsOf, versionReference: "Bylaws as last amended at the AGM", evidenceKind: "document", documentId: bylawsId, recordedAtISO: verifiedAt, verifiedByName: "Amara Okonkwo" },
+    ],
   });
 
   // Commitments

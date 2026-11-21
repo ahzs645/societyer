@@ -16,7 +16,7 @@ const scripts = [
   'check-packet-instruments.ts', 'check-packet-grammar.ts', 'check-packet-operative-data.ts',
   'check-corporation-settings.ts', 'check-annual-filings.ts',
   'check-entity-rule-scope.ts', 'check-organization-domain.ts',
-  'check-organization-vocabulary.ts', 'check-dashboard-compliance-rules.ts',
+  'check-organization-vocabulary.ts', 'check-dashboard-compliance-rules.ts', 'check-governing-document-evidence.ts',
   'check-jurisdiction-guide-tracks.ts', 'validate-jurisdiction-guide-packs.ts',
   'check-research-legal-boundaries.ts', 'check-compliance-agm-evidence.ts',
   'check-continuity.ts', 'check-meeting-governance.ts',

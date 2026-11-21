@@ -52,6 +52,12 @@
   display: block;
   padding-right: 72px;
 }
+// The name's line is as tall as the status badge beside it ("Not identified",
+// "Held elsewhere"), so the lines under it never run beneath the badge.
+.table.society-doc-table .gov-doc-row:not(.org-package-row) td:first-child > strong {
+  min-height: 22px;
+  padding-right: 120px;
+}
 .table.society-doc-table .gov-doc-row td:last-child {
   position: absolute;
   top: 0;
@@ -192,4 +198,58 @@
     width: 20px;
     height: 20px;
   }
+}
+
+// ------------------------------------------- evidence held elsewhere, currentness
+// "External system reference: …", "Verified current as of … by …" and the
+// review attestation sit under the document name like its title does.
+.gov-doc-row__evidence a {
+  color: inherit;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.gov-doc-row__detail {
+  color: token('text-tertiary');
+}
+.gov-doc-row__verified {
+  color: token('success');
+}
+
+// The Held elsewhere / Verify current / Record review forms.
+.evidence-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-3');
+  min-width: 0;
+  .field {
+    margin: 0;
+  }
+  .input,
+  .textarea {
+    width: 100%;
+  }
+}
+.evidence-dialog__intro,
+.evidence-dialog__meta {
+  margin: 0;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.evidence-dialog__meta {
+  font-size: token('fs-xs');
+}
+// Two short fields side by side; stacked on phones.
+.evidence-dialog__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: token('s-3');
+}
+@media (max-width: 560px) {
+  .evidence-dialog__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+// Remove sits at the start of the footer, away from Save.
+.evidence-dialog__remove {
+  margin-right: auto;
 }

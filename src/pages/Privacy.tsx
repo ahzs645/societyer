@@ -53,6 +53,8 @@ import { MobileFold } from "../components/MobileFold";
 import { useIsMobile } from "../lib/useIsMobile";
 import type { ResolvedPrivacyProfile } from "../../shared/privacyRuleProfiles";
 import { LegalRecordsRequirements } from "../components/LegalRecordsRequirements";
+import { PrivacyReviewDialog } from "../features/governingDocuments/EvidenceDialogs";
+import { attestationLine, governingEvidenceHref, hasIdentifiedEvidence, heldElsewhereEntry, privacyProgramAssessment, shortText } from "../../shared/governingDocumentEvidence";
 import { privacyRecordTemplate, type PrivacyRecordTemplateKind } from "../../shared/privacyRecordTemplates";
 
 type StepTone = "success" | "warn" | "info" | "neutral";
@@ -118,6 +120,7 @@ export function PrivacyPage() {
   const [privacyForm, setPrivacyForm] = useState<any>(null);
   const [privacySaving, setPrivacySaving] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -125,6 +128,20 @@ export function PrivacyPage() {
       setPrivacyForm({ ...society });
     }
   }, [privacyForm, society]);
+
+  // A recorded review sets the program status; keep the operations form in
+  // step so saving it afterwards doesn't put back the old status.
+  const reviewedAtISO = society?.privacyProgramReview?.reviewedAtISO;
+  useEffect(() => {
+    if (!reviewedAtISO || !society) return;
+    setPrivacyForm((current: Record<string, unknown> | null) => current ? {
+      ...current,
+      privacyProgramStatus: society.privacyProgramStatus,
+      privacyProgramReviewedAtISO: society.privacyProgramReviewedAtISO,
+    } : current);
+    // Only when a new review lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewedAtISO]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -143,7 +160,11 @@ export function PrivacyPage() {
     if (!canWriteSociety) return;
     setPrivacyForm((current: any) => ({ ...(current ?? society), [key]: value }));
   };
-  const hasPolicyEvidence = !!society.privacyPolicyDocId;
+  // Uploaded here, or recorded on the profile as held elsewhere.
+  const hasPolicyEvidence = hasIdentifiedEvidence(society, "privacyPolicyDocId");
+  const policyHeldElsewhere = heldElsewhereEntry(society, "privacyPolicyDocId");
+  const privacyAssessment = privacyProgramAssessment(society);
+  const privacyReview = privacyAssessment.review;
   const hasOfficer = !!society.privacyOfficerName && !!society.privacyOfficerEmail;
   const documentRows = documents ?? [];
   const policyDraft = documentRows.find(isPrivacyPolicyDraft);
@@ -152,8 +173,9 @@ export function PrivacyPage() {
   const adoptedPolicyDocument = society.privacyPolicyDocId
     ? documentRows.find((document) => String(document._id) === String(society.privacyPolicyDocId))
     : null;
-  const privacyProgramStatus = society.privacyProgramStatus ?? (hasPolicyEvidence ? "Documented" : "Unknown");
-  const privacyProgramDocumented = privacyProgramStatus === "Documented";
+  const privacyProgramStatus = privacyAssessment.status;
+  // A review's unresolved findings keep the program outstanding whatever the status says.
+  const privacyProgramDocumented = privacyAssessment.state === "documented" || privacyAssessment.state === "unattested";
   const memberDataAccessStatus = society.memberDataAccessStatus ?? "Unknown";
   const memberDataGapDocumented = !!society.memberDataGapDocumented;
   const memberDataReady = isMemberDataReady(memberDataAccessStatus, memberDataGapDocumented);
@@ -688,24 +710,34 @@ export function PrivacyPage() {
                     {policyDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
                     {policyDraft ? canWriteDocuments ? "Edit draft" : "View draft" : "Create draft"}
                   </button>
+                  {canWriteSociety && <button className="btn btn--sm" onClick={() => setReviewOpen(true)}><ClipboardCheck size={12} /> Record review</button>}
                   <a className="btn btn--sm" href="#privacy-operations"><FileText size={12} /> Program status</a>
                 </>
               )}
             >
-              {privacyProgramDocumented ? (
+              {privacyReview ? (
+                <>
+                  <strong>{attestationLine("Reviewed", privacyReview.reviewedByName, formatDate(privacyReview.reviewedOn))}</strong>
+                  {`: ${shortText(privacyReview.policiesReviewed, 160)}`}
+                  {privacyReview.versionOrEffectiveDate ? ` (${privacyReview.versionOrEffectiveDate})` : ""}.
+                  {privacyReview.maintainedAt ? ` Maintained at ${privacyReview.maintainedAt}.` : ""}
+                  {privacyReview.unresolvedFindings ? <> <strong>Unresolved findings:</strong> {shortText(privacyReview.unresolvedFindings, 240)}</> : ""}
+                  {" "}This is the reviewer&rsquo;s attestation, not an automated check.
+                </>
+              ) : privacyProgramDocumented ? (
                 <>
                   The privacy program is marked documented
-                  {society.privacyProgramReviewedAtISO ? ` and was reviewed ${formatDate(society.privacyProgramReviewedAtISO)}` : ""}.
+                  {society.privacyProgramReviewedAtISO ? ` (review date ${formatDate(society.privacyProgramReviewedAtISO)})` : ""}, but no review attestation is recorded. Record who reviewed which policies and where they are kept.
                 </>
               ) : (
-                `Use the starter template as a draft, tailor it to the ${entity.organizationNoun}'s real systems, then approve the policy, complaint process, access/correction process, safeguards, and retention approach.`
+                `Use the starter template as a draft, tailor it to the ${entity.organizationNoun}'s real systems, then approve the policy, complaint process, access/correction process, safeguards, and retention approach. Record the review once they are adopted.`
               )}
             </PrivacyStep>
 
             <PrivacyStep
               icon={FileCheck2}
               title="Link the adopted evidence"
-              status={hasPolicyEvidence ? "Linked" : "Evidence gap"}
+              status={society.privacyPolicyDocId ? "Linked" : hasPolicyEvidence ? "Held elsewhere" : "Evidence gap"}
               tone={hasPolicyEvidence ? "success" : "info"}
               citationIds={profileCitations("policy")}
               actions={(
@@ -716,11 +748,16 @@ export function PrivacyPage() {
                     </button>
                   )}
                   <Link className="btn btn--sm" to="/app/documents"><FileCheck2 size={12} /> Documents</Link>
+                  {canWriteSociety && !society.privacyPolicyDocId && (
+                    <Link className="btn btn--sm" to={governingEvidenceHref("held-elsewhere", "privacyPolicyDocId")}>{policyHeldElsewhere ? "Where it's held" : "Held elsewhere"}</Link>
+                  )}
                 </>
               )}
             >
-              {hasPolicyEvidence
+              {society.privacyPolicyDocId
                 ? "An adopted privacy policy or equivalent evidence is linked in Documents."
+                : policyHeldElsewhere
+                ? `Held elsewhere: ${shortText(policyHeldElsewhere.reference, 160)}${policyHeldElsewhere.custodian ? ` (custodian: ${policyHeldElsewhere.custodian})` : ""}.`
                 : "Once the policy/process is adopted, link the final version or board approval record here. Keep draft templates separate from adopted evidence."}
             </PrivacyStep>
 
@@ -915,6 +952,14 @@ export function PrivacyPage() {
           </div>
         )}
       </Modal>
+      {reviewOpen && (
+        <PrivacyReviewDialog
+          open
+          onClose={() => setReviewOpen(false)}
+          society={society}
+          defaultLocation={adoptedPolicyDocument?.title ? `Societyer Documents: ${adoptedPolicyDocument.title}` : policyHeldElsewhere?.reference}
+        />
+      )}
     </div>
   );
 }

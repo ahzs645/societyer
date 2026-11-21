@@ -42,6 +42,11 @@ import {
 } from "../shared/functions/society";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { linkGoverningDocumentPortable } from "../shared/functions/governingDocuments";
+import {
+  recordPrivacyReviewPortable,
+  setGoverningDocumentEvidencePortable,
+  verifyGoverningDocumentCurrentPortable,
+} from "../shared/functions/governingDocumentEvidence";
 import { createWorkspacePortable } from "../shared/functions/societyCreate";
 import { installInitialInvoiceTemplate } from "./lib/initialInvoiceTemplate";
 import { buildConvexCapabilities } from "./providers/capabilities";
@@ -485,4 +490,50 @@ export const linkGoverningDocument = authorizedMutation("society:linkGoverningDo
   },
   returns: v.any(),
   handler: async (ctx, args) => linkGoverningDocumentPortable(await toPortableMutationCtx(ctx), args),
+});
+
+const evidenceField = v.union(v.literal("constitutionDocId"), v.literal("bylawsDocId"), v.literal("privacyPolicyDocId"));
+
+// Where the authoritative copy is held when it isn't uploaded; null clears it.
+export const setGoverningDocumentEvidence = authorizedMutation("society:setGoverningDocumentEvidence", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    field: evidenceField,
+    evidence: v.union(v.null(), v.object({
+      kind: v.union(v.literal("external"), v.literal("physical")),
+      reference: v.string(),
+      custodian: v.optional(v.string()),
+      version: v.optional(v.string()),
+      effectiveDate: v.optional(v.string()),
+    })),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => setGoverningDocumentEvidencePortable(await toPortableMutationCtx(ctx), args),
+});
+
+// "Verified current as of <date> by <name>", separate from linking the document.
+export const verifyGoverningDocumentCurrent = authorizedMutation("society:verifyGoverningDocumentCurrent", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    field: evidenceField,
+    verifiedAsOf: v.string(),
+    versionReference: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => verifyGoverningDocumentCurrentPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// The accountable privacy review attestation (replaces the one-click "Mark reviewed").
+export const recordPrivacyReview = authorizedMutation("society:recordPrivacyReview", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    policiesReviewed: v.string(),
+    versionOrEffectiveDate: v.optional(v.string()),
+    maintainedAt: v.optional(v.string()),
+    reviewedOn: v.string(),
+    unresolvedFindings: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => recordPrivacyReviewPortable(await toPortableMutationCtx(ctx), args),
 });

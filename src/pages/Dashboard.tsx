@@ -78,7 +78,6 @@ export function Dashboard() {
   const createMemberDataGapMemoDraft = useMutation(api.documents.createMemberDataGapMemoDraft);
   const createPrivacyReviewTask = useMutation(api.dashboardRemediation.createPrivacyReviewTask);
   const createComplianceReviewTask = useMutation(api.dashboardRemediation.createComplianceReviewTask);
-  const markPrivacyProgramReviewed = useMutation(api.dashboardRemediation.markPrivacyProgramReviewed);
   const markMemberDataAccessReviewed = useMutation(api.dashboardRemediation.markMemberDataAccessReviewed);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
@@ -201,11 +200,6 @@ export function Dashboard() {
       if (action.intent === "createComplianceReviewTask") {
         const result = await createComplianceReviewTask(payload);
         toast.success(result?.reused ? "Existing review task reused" : "Compliance review task assigned");
-        return;
-      }
-      if (action.intent === "markPrivacyProgramReviewed") {
-        await markPrivacyProgramReviewed(payload);
-        toast.success("Privacy program marked reviewed");
         return;
       }
       if (action.intent === "markMemberDataAccessReviewed") {
