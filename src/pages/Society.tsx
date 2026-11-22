@@ -188,7 +188,7 @@ export function SocietyPage() {
   // details under another org's name.
   useEffect(() => {
     if (!society) return;
-    setForm((current) => (current && current._id === society._id ? current : { ...society }));
+    setForm((current) => (current && current._id === society._id ? withSavedAddressText(current, society) : { ...society }));
   }, [society]);
 
   if (society === undefined) return <PageLoading />;
@@ -369,6 +369,15 @@ function useRecordBackfills(society: OrganizationRecord | null | undefined, deta
       toast.error("Could not backfill records", error instanceof Error ? error.message : String(error));
     }
   };
+}
+
+/**
+ * The plain-text addresses aren't edited on the form; they follow the server
+ * (removing the current address row clears its copy), so keep them in step.
+ */
+function withSavedAddressText(current: ProfileForm, society: OrganizationRecord): ProfileForm {
+  if (current.registeredOfficeAddress === society.registeredOfficeAddress && current.mailingAddress === society.mailingAddress) return current;
+  return { ...current, registeredOfficeAddress: society.registeredOfficeAddress, mailingAddress: society.mailingAddress };
 }
 
 /** Set one profile field, with the fields that move with it. */

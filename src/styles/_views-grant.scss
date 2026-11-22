@@ -588,9 +588,16 @@
   .grant-source-card__head {
     grid-column: 1;
     grid-row: 1;
+    // On a narrow phone the status badge drops under the name rather than
+    // squeezing it to a few characters a line.
+    flex-wrap: wrap;
     align-items: center;
+    gap: 2px token('s-2');
     padding: 0;
     border-bottom: 0;
+  }
+  .grant-source-card__main {
+    flex: 1 1 8rem;
   }
   .grant-source-card__title {
     font-size: token('fs-sm');

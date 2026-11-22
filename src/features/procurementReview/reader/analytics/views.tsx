@@ -110,6 +110,8 @@ export function EntityView({ ctx, kind }: { ctx: ViewContext; kind: "buyer" | "s
   const [limit, setLimit] = useState(PAGE);
   const all = kind === "buyer" ? data.buyers : data.suppliers;
   const remote = ctx.aggregate?.directory;
+  // The server's directory searches by the URL's term; the local one by the box's own.
+  const query = remote ? ctx.params.get("rankq") ?? "" : search;
   const term = search.trim().toLowerCase();
   const rows = useMemo(() => remote?.rows ?? (term ? all.filter((row) => row.name.toLowerCase().includes(term)) : all), [all, term, remote]);
   const other = kind === "buyer" ? "supplier" : "buyer";
@@ -134,10 +136,10 @@ export function EntityView({ ctx, kind }: { ctx: ViewContext; kind: "buyer" | "s
         table={{ ...entityTable(rows, kind === "buyer" ? "Buyer" : "Supplier", kind === "buyer" ? "Suppliers" : "Buyers", currency), rowAction: (index) => rowAwards(ctx, kind, rows[index]?.name) }}
       >
         <Field label={kind === "buyer" ? "Search buyers" : "Search suppliers"} className="procurement-analytics__search">
-          <input className="input" type="search" value={remote ? ctx.params.get("rankq") ?? "" : search} onChange={(event) => { if (remote) ctx.update({ rankq: event.target.value || null, rankpage: null }); else { setSearch(event.target.value); setLimit(PAGE); } }} placeholder="Search names" />
+          <input className="input" type="search" value={query} onChange={(event) => { if (remote) ctx.update({ rankq: event.target.value || null, rankpage: null }); else { setSearch(event.target.value); setLimit(PAGE); } }} placeholder="Search names" />
         </Field>
-        <p className="muted procurement-analytics__caption">{remote ? `${count(remote.offset + 1)}–${count(remote.offset + rows.length)} of ${count(remote.total)} matching` : count(rows.length)} of {counted(partyCount, kind)}.</p>
-        {rows.length === 0 ? <p className="muted procurement-analytics__empty">No {kind}s match “{search}”.</p> : (
+        <p className="muted procurement-analytics__caption">{remote && rows.length ? `${count(remote.offset + 1)}–${count(remote.offset + rows.length)} of ${count(remote.total)} matching` : count(remote ? remote.total : rows.length)} of {counted(partyCount, kind)}.</p>
+        {rows.length === 0 ? <p className="muted procurement-analytics__empty">No {kind}s match “{query}”.</p> : (
           <RankedList
             rows={rankedRows(rows, (row) => [
               counted(row.count, "award"), counted(row.counterparties, other), `median ${money(row.median, currency, true)}`,

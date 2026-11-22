@@ -2,8 +2,9 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { PageLoading } from "./_helpers";
-import { Building2, Download, FileText, ShieldCheck, Users } from "lucide-react";
+import { Building2, Download, ExternalLink, FileText, ShieldCheck, Users } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { publicationUrl } from "../lib/publicationUrl";
 
 /**
  * Public, token-gated stakeholder portal (e.g. an auditor's read-only room).
@@ -78,7 +79,11 @@ export function PartyPortalPage() {
                     <td><strong>{p.title}</strong>{p.summary && <div className="muted">{p.summary}</div>}</td>
                     <td>{p.category}</td>
                     <td>{formatDate(p.publishedAtISO)}</td>
-                    <td>{p.downloadUrl ? <a className="btn btn--sm" href={p.downloadUrl}><Download size={12} /> Download</a> : <span className="muted">—</span>}</td>
+                    <td><div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                      {p.downloadUrl && <a className="btn btn--sm" href={p.downloadUrl}><Download size={12} /> Download</a>}
+                      {publicationUrl(p.url) && <a className="btn btn--sm" href={publicationUrl(p.url)!} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Open link</a>}
+                      {!p.downloadUrl && !publicationUrl(p.url) && <span className="muted">—</span>}
+                    </div></td>
                   </tr>
                 ))}
               </tbody>

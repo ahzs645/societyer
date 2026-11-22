@@ -136,6 +136,16 @@ export function ImportReviewQueue({
     onFiltersChange({ ...filters, ...patch, page: patch.page ?? 0 });
   };
 
+  // Resolving the last rows of the last page shrinks the queue under it: step
+  // back to the last page that still has rows instead of showing an empty one.
+  const liveTotal: number | undefined = live?.total;
+  useEffect(() => {
+    if (liveTotal === undefined || filters.page === 0 || filters.page * PAGE_SIZE < liveTotal) return;
+    setFocusIndex(0);
+    onFiltersChange({ ...filters, page: Math.max(0, Math.ceil(liveTotal / PAGE_SIZE) - 1) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTotal, filters.page]);
+
   const decide = useCallback(async (item: any, status: Decision) => {
     if (!canWrite || !item) return;
     setDecided((prev) => new Map(prev).set(item._id, status));
@@ -338,10 +348,10 @@ export function ImportReviewQueue({
           onOpenSession={() => focused && onSessionPicked?.(focused.sessionId)}
         />
       </div>}
-      {(data?.total ?? 0) > PAGE_SIZE && (
+      {((data?.total ?? 0) > PAGE_SIZE || filters.page > 0) && (
         <div className="card__body row import-queue__pager">
           <button className="btn btn--sm" disabled={!filters.page} onClick={() => setFilter({ page: filters.page - 1 })}><ChevronLeft size={12} /> Previous</button>
-          <span className="muted">Page {filters.page + 1} of {Math.ceil((data?.total ?? 0) / PAGE_SIZE)}</span>
+          <span className="muted">Page {filters.page + 1} of {Math.max(filters.page + 1, Math.ceil((data?.total ?? 0) / PAGE_SIZE))}</span>
           <button className="btn btn--sm" disabled={(filters.page + 1) * PAGE_SIZE >= (data?.total ?? 0)} onClick={() => setFilter({ page: filters.page + 1 })}>Next <ChevronRight size={12} /></button>
         </div>
       )}

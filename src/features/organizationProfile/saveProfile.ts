@@ -44,8 +44,9 @@ export function profileUpsertArgs(form: ProfileForm, society: OrganizationRecord
     niceClassification: form.niceClassification,
     isCharity: form.isCharity,
     isMemberFunded: form.isMemberFunded,
-    registeredOfficeAddress: addressText(office, form.registeredOfficeAddress),
-    mailingAddress: addressText(mailing, form.mailingAddress),
+    // The form never edits the plain text, so with no row keep the saved copy (not the form's, which can be stale).
+    registeredOfficeAddress: addressText(office, society.registeredOfficeAddress),
+    mailingAddress: addressText(mailing, society.mailingAddress),
     purposes: form.purposes,
     privacyOfficerName: form.privacyOfficerName,
     privacyOfficerEmail: form.privacyOfficerEmail,

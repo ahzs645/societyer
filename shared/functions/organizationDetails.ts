@@ -80,7 +80,7 @@ export async function upsertAddressPortable(
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
-  if (id) await getOwned(ctx, "organizationAddresses", id, args.societyId);
+  const existing = id ? await getOwned(ctx, "organizationAddresses", id, args.societyId) : undefined;
   await Promise.all((args.sourceDocumentIds ?? []).map((documentId) =>
     getOwned(ctx, "documents", documentId, args.societyId)));
   assertAllowedOption("addressTypes", args.type, "Address type", false);
@@ -97,6 +97,9 @@ export async function upsertAddressPortable(
   };
   if (id) {
     await ctx.db.patch(id, payload);
+    if (existing?.status === "current" && (payload.status !== "current" || payload.type !== existing.type)) {
+      await retireLegacyAddressText(ctx, args.societyId, existing.type);
+    }
     return id;
   }
   return await ctx.db.insert("organizationAddresses", {
@@ -106,8 +109,35 @@ export async function upsertAddressPortable(
 }
 
 export async function removeAddressPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "organizationAddresses", id);
+  const row = await requireOwnedRow(ctx, "organizationAddresses", id);
   await ctx.db.delete(id);
+  if (row.status === "current") await retireLegacyAddressText(ctx, row.societyId, row.type);
+}
+
+/** The society's plain-text copies of its current registered office and mailing addresses. */
+const LEGACY_ADDRESS_FIELDS: Partial<Record<string, "registeredOfficeAddress" | "mailingAddress">> = {
+  registered_office: "registeredOfficeAddress",
+  mailing: "mailingAddress",
+};
+
+/**
+ * A current registered office or mailing address was removed or retired. With
+ * no current row of that type left, clear the society's plain-text copy too:
+ * the profile's backfill (`seedFromSocietyAddresses` and
+ * `backfillFromExistingRecords`, run each time the profile opens) would
+ * otherwise read it back in as a new current address.
+ */
+async function retireLegacyAddressText(ctx: PortableMutationCtx, societyId: string, type: unknown) {
+  const field = typeof type === "string" ? LEGACY_ADDRESS_FIELDS[type] : undefined;
+  if (!field) return;
+  const rows = await ctx.db
+    .query("organizationAddresses")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  if (rows.some((row) => row.type === type && row.status === "current")) return;
+  const society = await ctx.db.get(societyId, "societies");
+  if (!society || society[field] === undefined) return;
+  await ctx.db.patch(societyId, { [field]: undefined });
 }
 
 export async function upsertRegistrationPortable(
