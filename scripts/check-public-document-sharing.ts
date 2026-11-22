@@ -38,6 +38,10 @@ await db.patch("released", { tags: [] });
 assert.equal((await publicCenterPortable(ctx, { slug: "sharing" })).publications.length, 0);
 const revokedRelease = await centerPortable(ctx, { token: "test-token" });
 assert.deepEqual(revokedRelease.documents.map((row: any) => row._id), ["unapproved"]);
+// A link-only publication carries its public link, so the portal can open it.
+await db.insert("publications", { societyId: "society", title: "Annual report link", url: "https://example.test/report", status: "Published", reviewStatus: "Approved", category: "AnnualReport", createdAtISO: "2026-01-02" });
+const linked = await centerPortable(ctx, { token: "test-token" });
+assert.deepEqual(linked.publications.map((row: any) => row.url), ["https://example.test/report"]);
 await db.patch("portal", { revokedAtISO: "2026-01-01" });
 assert.equal(await centerPortable(ctx, { token: "test-token" }), null);
 await db.patch("portal", { revokedAtISO: undefined, expiresAtISO: "2000-01-01" });

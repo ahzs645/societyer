@@ -12,6 +12,7 @@ import { Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
+import { appRouteAbsoluteHref } from "../lib/appRouteHref";
 import { Plus, Calculator, Trash2, Share2, Copy } from "lucide-react";
 import type { Id as ConvexId } from "../../convex/_generated/dataModel";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -291,7 +292,8 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
-  const portalUrl = (token: string) => `${window.location.origin}/portal/${token}`;
+  // With the deployment's base path (and /demo), like the app's other copied links.
+  const portalUrl = (token: string) => appRouteAbsoluteHref(`/portal/${token}`);
   const nowISO = new Date().toISOString();
 
   const toggleScope = (key: string) =>
@@ -307,8 +309,10 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
     try {
       const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
       await create({ societyId, token, label: label.trim(), partyEmail: email.trim() || undefined, scopes, allowDownload });
-      await navigator.clipboard.writeText(portalUrl(token)).catch(() => {});
-      toast.success("Portal created", "The share link is copied to your clipboard.");
+      const copied = await navigator.clipboard.writeText(portalUrl(token)).then(() => true, () => false);
+      toast.success("Portal created", copied
+        ? "The share link is copied to your clipboard."
+        : "The link couldn't be copied. Use Link on its row below.");
       setLabel("");
       setEmail("");
       setShowForm(false);

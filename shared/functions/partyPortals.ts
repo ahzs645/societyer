@@ -113,6 +113,8 @@ export async function centerPortable(ctx: PortableQueryCtx, { token }: { token: 
             publishedAtISO: p.publishedAtISO ?? p.createdAtISO,
             fileName: doc?.fileName,
             downloadUrl: allowDownload && doc ? await documentDownloadUrl(ctx, doc) : undefined,
+            // A link-only publication's public link, as the public transparency page shows it.
+            url: typeof p.url === "string" ? p.url : undefined,
           };
         }),
     );
