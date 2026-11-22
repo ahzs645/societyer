@@ -222,27 +222,30 @@ function TagGroupCard({
             <li key={tag._id} className={`books-tags__tag${tag.archived ? " is-archived" : ""}`}>
               <Tag color={tagColor(tag, group)} text={tag.name} variant={tag.archived ? "border" : "solid"} />
               {tag.archived && <span className="muted">Archived</span>}
-              <Link className="books-tags__count" to={`/app/financials?tab=transactions&tag=${encodeURIComponent(tag._id)}`}>
-                {pluralize(tag.transactionCount, "transaction")}
-              </Link>
-              {canWrite && (
-                <span className="books-tags__tag-actions">
-                  {!tag.archived && (
-                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Rename or recolour ${tag.name}`} title="Rename or recolour" onClick={() => onEditTag(tag)}>
-                      <Palette size={12} aria-hidden="true" />
+              {/* Count and actions move as one, so a long name wraps them together. */}
+              <span className="books-tags__tag-meta">
+                <Link className="books-tags__count" to={`/app/financials?tab=transactions&tag=${encodeURIComponent(tag._id)}`}>
+                  {pluralize(tag.transactionCount, "transaction")}
+                </Link>
+                {canWrite && (
+                  <span className="books-tags__tag-actions">
+                    {!tag.archived && (
+                      <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Rename or recolour ${tag.name}`} title="Rename or recolour" onClick={() => onEditTag(tag)}>
+                        <Palette size={12} aria-hidden="true" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm btn--icon"
+                      aria-label={tag.archived ? `Restore ${tag.name}` : `Archive ${tag.name}`}
+                      title={tag.archived ? "Restore" : "Archive"}
+                      onClick={() => onArchiveTag(tag, !tag.archived)}
+                    >
+                      {tag.archived ? <ArchiveRestore size={12} aria-hidden="true" /> : <Archive size={12} aria-hidden="true" />}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm btn--icon"
-                    aria-label={tag.archived ? `Restore ${tag.name}` : `Archive ${tag.name}`}
-                    title={tag.archived ? "Restore" : "Archive"}
-                    onClick={() => onArchiveTag(tag, !tag.archived)}
-                  >
-                    {tag.archived ? <ArchiveRestore size={12} aria-hidden="true" /> : <Archive size={12} aria-hidden="true" />}
-                  </button>
-                </span>
-              )}
+                  </span>
+                )}
+              </span>
             </li>
           ))}
         </ul>

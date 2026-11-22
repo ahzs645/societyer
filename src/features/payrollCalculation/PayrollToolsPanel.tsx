@@ -18,7 +18,7 @@ function Check({ children, checked, onChange }: { children: ReactNode; checked: 
 function ErrorMessage({ message }: { message?: string }) { return message ? <p role="alert" className="form-error">{message}</p> : null; }
 
 export function PayrollToolsPanel({ societyId }: { societyId: string }) {
-  return <div className="payroll-calculator__stack" data-society-id={societyId}>
+  return <div className="payroll-calculator__stack payroll-tools" data-society-id={societyId}>
     <p>Use these supporting calculations with a reviewed payroll draft. <Link to="/app/payroll/calculator?tab=calculations">Open payroll calculations</Link> to save, approve and finalize payroll.</p>
     <MileageTool />
     <VacationReconciliationTool />
