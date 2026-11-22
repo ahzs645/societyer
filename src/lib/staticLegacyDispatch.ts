@@ -1099,13 +1099,11 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
     }
     return { inserted, skipped, total: rows.length, categorized };
   }
-  if (name === "seed:run") {
+  if (name === "seed:run" || name === "seed:reset") {
+    // A real local workspace has no demo seed: reseeding it would only erase it.
+    if (store && !store.hasDemoSeed()) throw new Error("Demo seeding is not available in this workspace.");
     void store?.reseed();
-    return { societyId: SOCIETY_ID };
-  }
-  if (name === "seed:reset") {
-    void store?.reseed();
-    return { ok: true };
+    return name === "seed:run" ? { societyId: SOCIETY_ID } : { ok: true };
   }
   return MUT_NOT_HANDLED;
 }

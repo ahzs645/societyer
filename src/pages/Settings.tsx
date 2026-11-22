@@ -25,7 +25,7 @@ import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { MobileFold } from "../components/MobileFold";
 import { readFileDataUrl } from "../lib/readFileDataUrl";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
-import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
+import { canSeedDemoData, maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
@@ -90,9 +90,18 @@ export function SettingsPage() {
   const [maintenanceBusy, setMaintenanceBusy] = useState<"seed" | "reset" | null>(null);
   const [sharedViewsBusy, setSharedViewsBusy] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState<"light" | "dark" | "letterhead" | null>(null);
-  const [showDarkLogoSection, setShowDarkLogoSection] = useState(Boolean(society?.logoDarkUrl || society?.logoInvertInDarkMode));
-  const [darkLogoMode, setDarkLogoMode] = useState<"invert" | "upload">(society?.logoDarkUrl ? "upload" : "invert");
-  const [showLetterheadSection, setShowLetterheadSection] = useState(Boolean(society?.letterheadUrl));
+  // The branding switches follow what the workspace actually uses, read from the
+  // loaded society (not frozen at first render, before it loads). A switch also
+  // stays on while it was just opened and nothing is saved yet; turning it off
+  // stops using the saved asset.
+  const darkLogoInUse = Boolean(society?.logoDarkUrl || society?.logoInvertInDarkMode);
+  const letterheadInUse = Boolean(society?.letterheadUrl);
+  const [darkLogoOpened, setDarkLogoOpened] = useState(false);
+  const [darkLogoModeChoice, setDarkLogoMode] = useState<"invert" | "upload">("invert");
+  const [letterheadOpened, setLetterheadOpened] = useState(false);
+  const showDarkLogoSection = darkLogoInUse || darkLogoOpened;
+  const darkLogoMode: "invert" | "upload" = society?.logoDarkUrl ? "upload" : society?.logoInvertInDarkMode ? "invert" : darkLogoModeChoice;
+  const showLetterheadSection = letterheadInUse || letterheadOpened;
   const lightLogoInputRef = useRef<HTMLInputElement>(null);
   const darkLogoInputRef = useRef<HTMLInputElement>(null);
   const letterheadInputRef = useRef<HTMLInputElement>(null);
@@ -262,8 +271,11 @@ export function SettingsPage() {
       if (variant === "light") {
         await clearLogo({ societyId: society._id });
       } else if (variant === "dark") {
+        // Removing from inside the section keeps it open for a new upload.
+        setDarkLogoOpened(true);
         await clearDarkLogo({ societyId: society._id });
       } else {
+        setLetterheadOpened(true);
         await clearLetterhead({ societyId: society._id });
       }
       toast.success(
@@ -285,6 +297,58 @@ export function SettingsPage() {
     } catch (error) {
       toast.error("Couldn't update setting", error instanceof Error ? error.message : undefined);
     }
+  };
+
+  const toggleDarkLogoSection = async (on: boolean) => {
+    if (!society || !canEditBranding) return;
+    if (on) {
+      setDarkLogoOpened(true);
+      // The section opens on "Invert the light logo"; save it so the switch shows what is in use.
+      if (!darkLogoInUse && darkLogoModeChoice === "invert") await toggleLogoInvert(true);
+      return;
+    }
+    if (darkLogoInUse) {
+      const ok = await confirm({
+        title: "Use the same logo in dark mode?",
+        message: society.logoDarkUrl
+          ? "Your uploaded dark-mode logo is removed and the light logo is shown in both themes."
+          : "The light logo is shown in both themes without being inverted.",
+        confirmLabel: society.logoDarkUrl ? "Remove" : "Turn off",
+      });
+      if (!ok) return;
+      try {
+        if (society.logoDarkUrl) await clearDarkLogo({ societyId: society._id });
+        if (society.logoInvertInDarkMode) await setLogoInvertInDarkMode({ societyId: society._id, invert: false });
+      } catch (error) {
+        toast.error("Couldn't update setting", error instanceof Error ? error.message : undefined);
+        return;
+      }
+    }
+    setDarkLogoOpened(false);
+    setDarkLogoMode("invert");
+  };
+
+  const toggleLetterheadSection = async (on: boolean) => {
+    if (!society || !canEditBranding) return;
+    if (on) {
+      setLetterheadOpened(true);
+      return;
+    }
+    if (letterheadInUse) {
+      const ok = await confirm({
+        title: "Remove letterhead?",
+        message: "Exports will have no letterhead until you upload a new one.",
+        confirmLabel: "Remove",
+      });
+      if (!ok) return;
+      try {
+        await clearLetterhead({ societyId: society._id });
+      } catch (error) {
+        toast.error("Couldn't remove letterhead", error instanceof Error ? error.message : undefined);
+        return;
+      }
+    }
+    setLetterheadOpened(false);
   };
 
   const changeRetention = async (value: string) => {
@@ -395,7 +459,7 @@ export function SettingsPage() {
           <Toggle
             disabled={!canEditBranding}
             checked={showDarkLogoSection}
-            onChange={setShowDarkLogoSection}
+            onChange={(on) => { void toggleDarkLogoSection(on); }}
             label={t("settings.logoDarkToggle", "Customize logo for dark mode")}
             hint={t("settings.logoDarkHint", "By default, the same logo is used in both themes.")}
           />
@@ -407,6 +471,8 @@ export function SettingsPage() {
                 value={darkLogoMode}
                 onChange={async (val) => {
                   if (!canEditBranding) return;
+                  // Keep the section open while switching modes clears the old asset.
+                  setDarkLogoOpened(true);
                   if (val === "invert" && society.logoDarkUrl) {
                     const ok = await confirm({
                       title: "Switch to inverted logo?",
@@ -491,7 +557,7 @@ export function SettingsPage() {
           <Toggle
             disabled={!canEditBranding}
             checked={showLetterheadSection}
-            onChange={setShowLetterheadSection}
+            onChange={(on) => { void toggleLetterheadSection(on); }}
             label={t("settings.letterheadToggle", "Use a custom document letterhead")}
             hint={t("settings.letterheadHint", "Header image for exported minutes, meeting packs, and the public copy.")}
           />
@@ -853,6 +919,8 @@ export function SettingsPage() {
             </div>
           </div>
 
+          {/* Demo seeding resets the whole local store: never offer it in an operator's own workspace. */}
+          {canSeedDemoData() && (
           <div className="col" style={{ gap: 8, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontWeight: 500 }}>{t("settings.demoData")}</div>
             <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -904,6 +972,7 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
 

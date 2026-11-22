@@ -1,5 +1,5 @@
 import { preflightWorkspaceBackupFile } from "../lib/workspaceArchive";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Download, HardDrive, Server, Upload } from "lucide-react";
 import { useConfirm } from "./Modal";
@@ -30,6 +30,7 @@ export function WorkspaceStorageCard() {
   const toast = useToast();
   const confirm = useConfirm();
   const [busy, setBusy] = useState<"export" | "import" | null>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState("");
 
   const canBackup = localWorkspaceBackupSupported();
@@ -161,16 +162,20 @@ export function WorkspaceStorageCard() {
                     Choose a ZIP or JSON backup. Replaces the local records and restores files bundled in a ZIP.
                   </div>
                 </div>
-                <label className={`btn${busy !== null ? " is-disabled" : ""}`}>
+                {/* A real button opens the hidden picker, so the control is keyboard-reachable. */}
+                <button className="btn" type="button" disabled={busy !== null} onClick={() => backupInputRef.current?.click()}>
                   <Upload size={12} /> {busy === "import" ? "Restoring…" : "Choose file"}
-                  <input
-                    type="file"
-                    accept="application/json,application/zip,.json,.zip"
-                    disabled={busy !== null}
-                    style={{ display: "none" }}
-                    onChange={(event) => void importBackup(event.currentTarget.files?.[0], event.currentTarget)}
-                  />
-                </label>
+                </button>
+                <input
+                  ref={backupInputRef}
+                  type="file"
+                  accept="application/json,application/zip,.json,.zip"
+                  disabled={busy !== null}
+                  hidden
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(event) => void importBackup(event.currentTarget.files?.[0], event.currentTarget)}
+                />
               </div>
             )}
           </div>

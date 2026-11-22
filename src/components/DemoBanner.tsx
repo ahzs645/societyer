@@ -11,7 +11,7 @@ import { Menu, type MenuSection } from "./Menu";
 import { actAsLocalUser, useLocalActorChoices } from "./UserPicker";
 import { setStoredSocietyId, useSocieties, useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
-import { maintenanceErrorMessage, resetDemoData, seedCorporationDemoWorkspace, seedDemoSociety } from "../lib/maintenanceApi";
+import { canSeedDemoData, maintenanceErrorMessage, resetDemoData, seedCorporationDemoWorkspace, seedDemoSociety } from "../lib/maintenanceApi";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { corporationDemoSocietyId, isCorporationDemoKey } from "../../shared/demoData/corporationIdentities";
 import { DEMO_PERSONAS, demoPersonaWorkspaceValues, personaForOrganization, type DemoPersona } from "../lib/demoPersonas";
@@ -33,8 +33,9 @@ export function DemoBanner() {
   const { t } = useTranslation();
 
   // Every workspace in the bundled demo is a demo, including ones created
-  // from the persona switch (they carry no demoMode flag).
-  if (!demo || society === undefined || (society && !society.demoMode && !isStaticDemoRuntime())) return null;
+  // from the persona switch (they carry no demoMode flag). Its Reseed / Wipe
+  // reset the whole store, so it never appears in an operator's own local workspace.
+  if (!demo || !canSeedDemoData() || society === undefined || (society && !society.demoMode && !isStaticDemoRuntime())) return null;
 
   const role = currentUser?.role ?? null;
   const currentPersona = personaForOrganization(society);

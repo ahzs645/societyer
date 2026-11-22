@@ -5,7 +5,7 @@ import { Link, useLocation } from "react-router-dom";
 import { EmptyState, TintedIconTile } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
-import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
+import { canSeedDemoData, maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
 import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { getRuntimeMode } from "../lib/runtimeMode";
@@ -36,7 +36,7 @@ export function PageLoading({ variant = "table", label }: { variant?: PageSkelet
 export function SeedPrompt() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const showDemoSeed = isStaticDemoRuntime() || getRuntimeMode() === "local-indexeddb";
+  const showDemoSeed = (isStaticDemoRuntime() || getRuntimeMode() === "local-indexeddb") && canSeedDemoData();
   return (
     <div className="page">
       <EmptyState

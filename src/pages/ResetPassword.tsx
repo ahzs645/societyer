@@ -102,9 +102,11 @@ function ResetPasswordFlow({ token, linkError }: { token: string | null; linkErr
         stateKey="link-broken"
         after={<p><Link to="/login" className="auth__link">Back to sign in</Link></p>}
       >
-        {mode === "convex" && capabilities?.emailDelivery !== true
-          ? <p>Ask your workspace administrator for a new link if you still need one.</p>
-          : <Link to="/login?mode=forgot" className="btn btn--primary auth__submit">Send a new link</Link>}
+        {/* Only Convex-hosted sign-in with mail can request a link (Login's canResetByEmail);
+            elsewhere, e.g. the Better Auth gateway, `?mode=forgot` falls back to plain sign-in. */}
+        {mode === "convex" && capabilities?.emailDelivery === true
+          ? <Link to="/login?mode=forgot" className="btn btn--primary auth__submit">Send a new link</Link>
+          : <p>Ask your workspace administrator for a new link if you still need one.</p>}
       </AuthShell>
     );
   }

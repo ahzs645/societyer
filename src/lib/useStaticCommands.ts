@@ -17,7 +17,7 @@ import { api } from "./convexApi";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { isDemoMode } from "./demoMode";
-import { maintenanceErrorMessage, seedDemoSociety } from "./maintenanceApi";
+import { canSeedDemoData, maintenanceErrorMessage, seedDemoSociety } from "./maintenanceApi";
 import type { ModuleKey } from "./modules";
 import { organizationVocabulary } from "./organizationVocabulary";
 
@@ -40,7 +40,7 @@ export function useStaticCommands(): StaticCommand[] {
   const meetingLabel = society ? organizationVocabulary(society).annualMeeting : "AGM";
 
   // Seeding is a demo/developer tool: keep it out of real workspaces.
-  const showSeedCommands = import.meta.env.DEV || isDemoMode();
+  const showSeedCommands = (import.meta.env.DEV || isDemoMode()) && canSeedDemoData();
 
   return useMemo<StaticCommand[]>(
     () => [

@@ -31,6 +31,8 @@ export function InvitationAcceptPage() {
   const attemptedToken = useRef<string | null>(null);
   const [result, setResult] = useState<MembershipResolution | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by "Try again": a failed attempt clears attemptedToken, and this re-runs the effect.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (
@@ -54,7 +56,7 @@ export function InvitationAcceptPage() {
         setError("The invitation could not be accepted. Please try again.");
         attemptedToken.current = null;
       });
-  }, [accept, auth, token]);
+  }, [accept, auth, token, attempt]);
 
   if (auth.mode === "none") return <Navigate to="/app" replace />;
   if (!token) return <InvitationState message="This invitation link is invalid." />;
@@ -81,7 +83,15 @@ export function InvitationAcceptPage() {
     const redirect = `/invite/${encodeURIComponent(token)}`;
     return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
   }
-  if (error) return <InvitationState message={error} />;
+  if (error) {
+    return (
+      <InvitationState message={error}>
+        <button className="btn btn--primary auth__submit" type="button" onClick={() => { setError(null); setAttempt((value) => value + 1); }}>
+          Try again
+        </button>
+      </InvitationState>
+    );
+  }
   if (!result) return <InvitationState pending message="Accepting invitation…" />;
   if (result.status === "invitation-accepted" || result.status === "bound") {
     return (

@@ -1,11 +1,20 @@
 import { authenticatedFetch } from "@/lib/authToken";
 import type { Id } from "../../convex/_generated/dataModel";
 import { STATIC_DEMO_SOCIETY_ID } from "./staticIds";
-import { isLocalDataRuntime } from "./staticRuntime";
+import { isLocalDataRuntime, isLocalDemoDataRuntime } from "./staticRuntime";
 import type { CorporationDemoKey } from "../../shared/demoData/corporationIdentities";
 
 type SeedResult = { societyId: Id<"societies"> };
 type ResetResult = { ok: boolean };
+
+/**
+ * Whether demo seeding / wiping may be offered here. On-device it needs the
+ * bundled demo store: reseeding a real local workspace would erase it. Server
+ * deployments gate the maintenance endpoints themselves (local development only).
+ */
+export function canSeedDemoData() {
+  return !isLocalDataRuntime() || isLocalDemoDataRuntime();
+}
 
 export async function seedDemoSociety(): Promise<SeedResult> {
   if (isLocalDataRuntime()) {
@@ -64,6 +73,9 @@ async function postMaintenance<T>(operation: "seed" | "reset"): Promise<T> {
 }
 
 async function reseedLocalData() {
+  if (!isLocalDemoDataRuntime()) {
+    throw new Error("Demo seeding is only available in the demo. This workspace holds your own records, so it was not changed.");
+  }
   const { reseedLocalData: reseed } = await import("./localDataClient");
   await reseed();
 }

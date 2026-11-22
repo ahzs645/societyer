@@ -63,6 +63,10 @@ export class StaticDemoDexieStore {
     return this.rowsStore.removeRow(table, id);
   }
 
+  hasDemoSeed() {
+    return this.rowsStore.hasSeedRows();
+  }
+
   async reseed() {
     await this.rowsStore.reseed();
   }
