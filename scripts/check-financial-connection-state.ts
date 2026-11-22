@@ -6,6 +6,7 @@ import { betterAuthIssuer } from "../convex/lib/authIdentity";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { STATIC_DEMO_SOCIETY_ID } from "../src/lib/staticIds";
 import { STATIC_DEMO_SEED } from "../src/lib/staticDemoStore";
+import { activeBookkeepingConnection } from "../src/features/financials/lib/waveResources";
 
 const native = convexTest(schema, {
   "./_generated/api.js": () => import("../convex/_generated/api.js"),
@@ -48,6 +49,17 @@ try {
   assert.deepEqual(await local.query("financialHub:accounts", { societyId: STATIC_DEMO_SOCIETY_ID }), accounts, "disconnect/reconnect must retain existing cached records");
   await assert.rejects(() => local.mutation("financialHub:markConnectionConnected", { societyId: STATIC_DEMO_SOCIETY_ID, provider: "wave", demo: false }), /Live Wave connections require/);
   await assert.rejects(() => local.mutation("financialHub:markConnectionConnected", { societyId: STATIC_DEMO_SOCIETY_ID, provider: "other-provider", demo: true }), /Wave provider only/);
+  // A manual bank account adds its own "connected" grouping row; Wave's
+  // controls must stay on the Wave row and vanish once Wave is disconnected.
+  await local.mutation("bankAccounts:createManualAccount", { societyId: STATIC_DEMO_SOCIETY_ID, name: "Petty cash tin", kind: "cash", openingBalanceCents: 0, openingDate: "2026-01-01" });
+  const withManual = await local.query("financialHub:connections", { societyId: STATIC_DEMO_SOCIETY_ID }) as Array<{ _id: string; provider: string; status: string }>;
+  assert.ok(withManual.some((row) => row.provider === "manual" && row.status === "connected"));
+  assert.equal(activeBookkeepingConnection(withManual)?._id, connection._id);
+  assert.equal(activeBookkeepingConnection([...withManual].reverse())?._id, connection._id, "row order must not hand Wave's controls to the manual row");
+  await local.mutation("financialHub:disconnect", { connectionId: connection._id });
+  const afterDisconnect = await local.query("financialHub:connections", { societyId: STATIC_DEMO_SOCIETY_ID }) as Array<{ provider: string; status: string }>;
+  assert.equal(activeBookkeepingConnection(afterDisconnect), undefined, "manual or internal rows are not a bookkeeping feed");
+  assert.equal(activeBookkeepingConnection([{ provider: "societyer", status: "connected" }, { provider: "demo", status: "connected" }])?.provider, "demo");
   const ordinary = await local.mutation("society:createWorkspace", { name: "Ordinary local workspace", fiscalYearEnd: "12-31" }) as any;
   await assert.rejects(() => local.mutation("financialHub:markConnectionConnected", { societyId: ordinary.societyId, provider: "wave", demo: true }), /demo workspace/);
 } finally {
@@ -64,4 +76,4 @@ try {
   assert.equal(rows[0].status, "disconnected");
   assert.equal(rows[0].accountLabel, "Imported live connection");
 } finally { importedLive.close(); }
-console.log("Financial connection state passed: actual local disconnect/demo reconnect retain cached records; hosted Member and foreign-workspace writes are denied; local live-provider and non-demo setup are rejected.");
+console.log("Financial connection state passed: actual local disconnect/demo reconnect retain cached records; manual bank rows never take the provider controls; hosted Member and foreign-workspace writes are denied; local live-provider and non-demo setup are rejected.");

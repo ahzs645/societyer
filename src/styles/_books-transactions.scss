@@ -344,19 +344,29 @@ $tag-dot-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pin
 
 .books-tags__tag {
   display: flex;
+  // On phones a long tag name pushes the count and its actions onto a second
+  // line instead of past the card's clipped edge.
+  flex-wrap: wrap;
   align-items: center;
-  gap: token(s-3);
+  gap: token(s-1) token(s-3);
   min-height: 36px;
+  padding-block: token(s-1);
   border-bottom: 1px solid token(border-alpha);
 
   &:last-child { border-bottom: 0; }
   &.is-archived { color: token(text-secondary); }
 }
 
-.books-tags__count {
+.books-tags__tag-meta {
+  display: inline-flex;
   flex: none;
-  white-space: nowrap;
+  align-items: center;
+  gap: token(s-3);
   margin-left: auto;
+}
+
+.books-tags__count {
+  white-space: nowrap;
   font-size: token(fs-sm);
   font-variant-numeric: tabular-nums;
 }

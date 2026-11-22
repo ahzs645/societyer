@@ -258,7 +258,7 @@ export function BillDetailDrawer({
         </table>
         {bill.journalEntryId && (
           <p className="muted bill-detail__posting">
-            Posted {formatDate(bill.billDate)}: debit the accounts above, credit {workspace.accounts.payables?.label ?? "Accounts payable"}. <Link to="/app/financials/accounting">Open the journal</Link>
+            Posted {formatDate(bill.billDate)}: debit the accounts above, credit {workspace.accounts.payables?.label ?? "Accounts payable"}. <Link to={`/app/financials/journal-entries?entry=${encodeURIComponent(String(bill.journalEntryId))}`}>Open the journal entry</Link>
           </p>
         )}
       </section>

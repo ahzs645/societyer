@@ -97,9 +97,11 @@ function paymentRecord(payment: PayrollPayment, record: PayrollCalculationRecord
   };
 }
 
-/** A bank transaction as Financials opens it. */
-const transactionHref = (transactionId: string) =>
-  `/app/financials?tab=transactions&transaction=${encodeURIComponent(transactionId)}`;
+/** Bank transactions as Financials opens them: one payment's, or every one a run paid through. */
+const transactionHref = (transactionIds: string | readonly string[]) =>
+  `/app/financials?tab=transactions&transaction=${encodeURIComponent(
+    typeof transactionIds === "string" ? transactionIds : [...new Set(transactionIds)].join(","),
+  )}`;
 
 export function PayrollResultReview({
   societyId,
@@ -901,9 +903,9 @@ export function PayrollSavedReview({
         >
           <div className="card__head">
             <h3 className="card__title">Recorded bank payment provenance</h3>
-            <a className="btn btn--sm" href="/app/financials">
+            <Link className="btn btn--sm" to={transactionHref(linkedPayments.map((payment) => payment.transactionId))}>
               Open financial transactions
-            </a>
+            </Link>
           </div>
           <div className="card__body">
             <p className="muted">

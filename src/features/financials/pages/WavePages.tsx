@@ -24,6 +24,7 @@ import {
   type WaveAccountView,
   capitalize,
   filterWaveResourcesForView,
+  activeBookkeepingConnection,
   isBrowserBackedWaveConnection,
   isWaveCategoryAccount,
   isWaveCounterpartyResource,
@@ -65,7 +66,7 @@ export function WaveResourceTablePage() {
     api.financialHub.connections,
     society ? { societyId: society._id } : "skip",
   );
-  const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  const activeConnection = activeBookkeepingConnection(connections);
   const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const waveSummary = useQuery(
     api.waveCache.summary,
@@ -274,7 +275,7 @@ export function WaveAccountDetailPage() {
     api.financialHub.connections,
     society ? { societyId: society._id } : "skip",
   );
-  const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  const activeConnection = activeBookkeepingConnection(connections);
   const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const resource = useRecordQuery<any>(
     api.waveCache.resource,

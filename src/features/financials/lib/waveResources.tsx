@@ -1,6 +1,7 @@
 import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
 import { WAVE_RESOURCE_VIEW_NAMES } from "../../../../convex/recordTableDomainObjects";
+import type { Doc } from "../../../../convex/_generated/dataModel";
 
 export type WaveAccountView = "working" | "transaction" | "category" | "ledger" | "all";
 
@@ -296,6 +297,21 @@ function detailValue(value: unknown) {
 function isZeroWaveAmount(value?: string) {
   if (value == null || value === "") return false;
   return Number(value) === 0;
+}
+
+/** Connection rows that only group records entered in Societyer itself (manual
+ * bank accounts and CSV imports, internal ledger postings). They are created
+ * "connected" but have no remote feed to sync, cache or disconnect. */
+const LOCAL_CONNECTION_PROVIDERS = new Set(["manual", "societyer"]);
+
+/** The connected bookkeeping feed (Wave, or a demo feed) that owns the
+ * provider controls — never a local grouping row for manual entries. */
+export function activeBookkeepingConnection<T extends { status?: string; provider?: string } = Doc<"financialConnections">>(
+  connections: readonly T[] | null | undefined,
+): T | undefined {
+  return (connections ?? []).find(
+    (connection) => connection.status === "connected" && !LOCAL_CONNECTION_PROVIDERS.has(String(connection.provider ?? "")),
+  );
 }
 
 export function isBrowserBackedWaveConnection(connection: any) {

@@ -485,6 +485,11 @@ export const sync = authorizedAction("financialHub:sync", action)({
   handler: async (ctx, { connectionId }) => {
     const conn = await ctx.runQuery(api.financialHub.getConnection, { id: connectionId });
     if (!conn) throw new Error("Connection not found.");
+    // Manual bank accounts and internal postings sit on their own "connected"
+    // rows; syncing one would replace its records with the provider's.
+    if (conn.provider === "manual" || conn.provider === "societyer") {
+      throw new Error("This connection holds records entered in Societyer and has no bookkeeping feed to sync.");
+    }
     if (isBrowserWaveConnection(conn)) {
       throw new Error("This Wave connection is browser-backed. Refresh it from Plugin connections with Pull all & save so the public Wave API does not overwrite ledger transactions.");
     }

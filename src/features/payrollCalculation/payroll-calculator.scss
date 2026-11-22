@@ -331,3 +331,23 @@
     white-space: normal;
   }
 }
+// Tools: amount labels are long ("Fifth-year vacation recognized in current
+// calculation (CAD)") and carry the currency and required marker at the end,
+// so they wrap instead of cutting off. Fields sharing a row keep their label,
+// input and hint on common tracks, so a two-line label doesn't stagger the
+// inputs beside it.
+.payroll-tools {
+  .field__label {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  @supports (grid-template-rows: subgrid) {
+    .register-field-row > .field {
+      display: grid;
+      grid-row: span 3;
+      grid-template-rows: subgrid;
+      row-gap: 6px;
+    }
+  }
+}
