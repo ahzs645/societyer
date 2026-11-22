@@ -6,14 +6,16 @@
  * oracle.
  *
  * `create` enforces the active bylaw rule set (proxy voting enabled, proxy
- * holder linkage, per-grantor proxy limit). The rule-resolution helper is a
- * portable copy of `convex/lib/bylawRules.ts`'s `getActiveBylawRuleSet`: it only
- * reads `bylawRuleSets` via the `by_society` index, so it lives here on the
- * portable contract rather than reaching into the Convex-typed lib module.
+ * holder linkage, per-grantor proxy limit) using the rule set in force on the
+ * meeting's local day, selected by `shared/bylawRuleSelection.ts` like the
+ * meeting page.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { bylawRuleSelectionDay, selectBylawRuleSetForDay } from "../bylawRuleSelection";
+import type { MeetingDateLike } from "../meetingDates";
+import { organizationTimeZone } from "../organizationDomain";
 
 interface ResolvedBylawRules {
   status?: string;
@@ -34,41 +36,18 @@ const DEFAULT_BYLAW_RULES = {
   proxyLimitPerGrantorPerMeeting: 1,
 };
 
-function timestampOrInfinity(value: string) {
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.POSITIVE_INFINITY;
-}
-
-function timestampOrNegativeInfinity(value?: string) {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
-}
-
-function effectiveTimestamp(row: any) {
-  return timestampOrNegativeInfinity(row.effectiveFromISO);
-}
-
-function compareRuleSetsDesc(a: any, b: any) {
-  const byEffective = effectiveTimestamp(b) - effectiveTimestamp(a);
-  if (byEffective !== 0) return byEffective;
-  return b.version - a.version;
-}
-
+/** The rule set in force on `at`'s local day (default today); see `shared/bylawRuleSelection.ts`. */
 async function getActiveBylawRuleSet(
   ctx: PortableQueryCtx | PortableMutationCtx,
   societyId: string,
+  at: MeetingDateLike | string = new Date().toISOString(),
 ): Promise<ResolvedBylawRules> {
-  const dateISO = new Date().toISOString();
   const rows = await ctx.db
     .query("bylawRuleSets")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  const targetTs = timestampOrInfinity(dateISO);
-  const eligible = rows
-    .filter((row) => row.status !== "Draft")
-    .filter((row) => effectiveTimestamp(row) <= targetTs);
-  const selected = eligible.sort(compareRuleSetsDesc)[0];
+  const timeZone = organizationTimeZone(await ctx.db.get(societyId));
+  const selected = selectBylawRuleSetForDay(rows, bylawRuleSelectionDay(at, timeZone), timeZone);
   if (selected) return selected as ResolvedBylawRules;
   return {
     ...DEFAULT_BYLAW_RULES,
@@ -114,14 +93,15 @@ export async function proxiesForMeeting(ctx: PortableQueryCtx, { meetingId }: { 
 
 export async function proxyCreate(ctx: PortableMutationCtx, args: ProxyCreateArgs): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
-  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
+  const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   if (args.grantorMemberId) {
     await getOwned(ctx, "members", args.grantorMemberId, args.societyId);
   }
   if (args.proxyHolderMemberId) {
     await getOwned(ctx, "members", args.proxyHolderMemberId, args.societyId);
   }
-  const rules = await getActiveBylawRuleSet(ctx, args.societyId);
+  // The rules that govern the meeting the proxy is for, as the meeting page shows them.
+  const rules = await getActiveBylawRuleSet(ctx, args.societyId, meeting as MeetingDateLike);
   if (!rules.allowProxyVoting) {
     throw new Error(
       "Proxy voting is disabled by the active bylaw rule set.",

@@ -1,4 +1,5 @@
-import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
+import { bylawBaselineForOrganization } from "../bylawBaselines";
+import { bylawRuleSetForDate } from "../bylawRuleSelection";
 import { humanDate } from "../humanDate";
 import { minutesQuorumLabel, recordedMinutesQuorum } from "../minutesQuorum";
 /**
@@ -596,54 +597,17 @@ function daysBetween(start: string, end: string) {
   return Math.round((new Date(`${end}T00:00:00.000Z`).getTime() - new Date(`${start}T00:00:00.000Z`).getTime()) / DAY_MS);
 }
 
-// --- Portable copy of convex/lib/bylawRules.ts rule resolution (ctx.db-only) ---
+// --- Bylaw rule resolution (shared with meetings and minutes) ---
 
 
 export function getDefaultBylawRules(societyId: string, organization?: any) {
   return bylawBaselineForOrganization(organization, societyId);
 }
 
+// Selection compares calendar days in the organization's time zone; see
+// `shared/bylawRuleSelection.ts`.
 async function getActiveBylawRuleSet(ctx: PortableQueryCtx, societyId: string) {
-  return getBylawRuleSetForDate(ctx, societyId, new Date().toISOString());
-}
-
-async function getBylawRuleSetForDate(
-  ctx: PortableQueryCtx,
-  societyId: string,
-  dateISO: string,
-): Promise<Record<string, any>> {
-  const rows = await ctx.db
-    .query("bylawRuleSets")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
-  const targetTs = timestampOrInfinity(dateISO);
-  const eligible = rows
-    .filter((row) => row.status !== "Draft")
-    .filter((row) => effectiveTimestamp(row) <= targetTs);
-  const selected = eligible.sort(compareRuleSetsDesc)[0];
-  const organization = await ctx.db.get(societyId);
-  return contextualBylawRules(organization, societyId, selected);
-}
-
-function compareRuleSetsDesc(a: any, b: any) {
-  const byEffective = effectiveTimestamp(b) - effectiveTimestamp(a);
-  if (byEffective !== 0) return byEffective;
-  return b.version - a.version;
-}
-
-function effectiveTimestamp(row: any) {
-  return timestampOrNegativeInfinity(row.effectiveFromISO);
-}
-
-function timestampOrInfinity(value: string) {
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.POSITIVE_INFINITY;
-}
-
-function timestampOrNegativeInfinity(value?: string) {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
+  return bylawRuleSetForDate(ctx, societyId, new Date().toISOString());
 }
 
 // --- Portable copy of convex/lib/agendaItems.ts readMeetingAgendaItems (ctx.db-only) ---

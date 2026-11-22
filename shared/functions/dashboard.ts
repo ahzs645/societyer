@@ -1,6 +1,7 @@
 import { getPortable as getAccessibleDocument } from "./documents";
 import { tasksForReader } from "./minutesPrivacy";
-import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
+import { bylawBaselineForOrganization } from "../bylawBaselines";
+import { bylawRuleSetForDate } from "../bylawRuleSelection";
 /**
  * PORTABLE FUNCTIONS: the dashboard domain (navCounts / summary).
  *
@@ -12,10 +13,8 @@ import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBase
  * The compliance rule pack lives in the pure `shared/dashboardComplianceRules.ts`;
  * only the rules whose audience matches the workspace's entity type and home
  * jurisdiction are evaluated, so a corporation never receives Societies Act
- * checks. The bylaw-rule resolution (`getActiveBylawRuleSet`)
- * is a portable copy of the pure `ctx.db`-only logic from
- * `convex/lib/bylawRules.ts` (that module imports `_generated`, so its logic is
- * inlined on the portable contract rather than reaching into the Convex lib).
+ * checks. The bylaw rule in force today comes from the shared
+ * `shared/bylawRuleSelection.ts`, the same selection meetings and minutes use.
  */
 
 import type { PortableDoc, PortableQueryCtx } from "../portable/ctx";
@@ -44,54 +43,10 @@ export function getDefaultBylawRules(societyId: string, organization?: any) {
   return bylawBaselineForOrganization(organization, societyId);
 }
 
-async function getBylawRuleSetForDate(
-  ctx: PortableQueryCtx,
-  societyId: string,
-  dateISO: string,
-): Promise<Record<string, any>> {
-  const rows = await ctx.db
-    .query("bylawRuleSets")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
-  const targetTs = timestampOrInfinity(dateISO);
-  const eligible = rows
-    .filter((row) => row.status !== "Draft")
-    .filter((row) => effectiveTimestamp(row) <= targetTs);
-  const selected = eligible.sort(compareRuleSetsDesc)[0];
-  const organization = await ctx.db.get(societyId);
-  return contextualBylawRules(organization, societyId, selected);
-}
-
+// Selection compares calendar days in the organization's time zone; see
+// `shared/bylawRuleSelection.ts`.
 async function getActiveBylawRuleSet(ctx: PortableQueryCtx, societyId: string) {
-  return getBylawRuleSetForDate(ctx, societyId, new Date().toISOString());
-}
-
-// Versions are effective from a calendar day. "Reset to defaults" stamps the
-// click instant while "Save new version" stamps midnight of the chosen day, so
-// two versions effective the same day are ordered by version, not by time.
-function compareRuleSetsDesc(a: any, b: any) {
-  const byDay = effectiveDay(b).localeCompare(effectiveDay(a));
-  if (byDay !== 0) return byDay;
-  return (Number(b.version) || 0) - (Number(a.version) || 0);
-}
-
-function effectiveDay(row: any) {
-  return typeof row.effectiveFromISO === "string" ? row.effectiveFromISO.slice(0, 10) : "";
-}
-
-function effectiveTimestamp(row: any) {
-  return timestampOrNegativeInfinity(row.effectiveFromISO);
-}
-
-function timestampOrInfinity(value: string) {
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.POSITIVE_INFINITY;
-}
-
-function timestampOrNegativeInfinity(value?: string) {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
+  return bylawRuleSetForDate(ctx, societyId, new Date().toISOString());
 }
 
 /* ----------------------------- domain types ------------------------------ */
