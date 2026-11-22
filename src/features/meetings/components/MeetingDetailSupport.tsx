@@ -13,6 +13,7 @@ import { Badge, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { formatDate } from "../../../lib/format";
+import { bylawRuleEffectiveDay } from "../../../../shared/bylawRuleSelection";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
 import { useWorkspaceStoragePolicy } from "../../../hooks/useWorkspaceStoragePolicy";
 import { type StructuredMinutesEdit } from "../lib/structuredMinutes";
@@ -654,7 +655,7 @@ export function getQuorumSnapshot(minutes: any, meeting: any) {
     ? "Manual quorum override; "
     : "";
   const label = version
-    ? `${manualPrefix}Bylaw rules v${version}${effective ? `, effective ${formatDate(effective)}` : ""}`
+    ? `${manualPrefix}Bylaw rules v${version}${effective ? `, effective ${formatDate(bylawRuleEffectiveDay(effective) ?? effective)}` : ""}`
     : humanizeQuorumSourceLabel(sourceLabel);
   return { required, label };
 }

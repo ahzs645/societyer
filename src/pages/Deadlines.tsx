@@ -8,6 +8,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { calendarDate, calendarDateKey } from "../lib/calendarDates";
 import { isPastDue } from "../../shared/dateOnly";
+import { formatDate } from "../lib/format";
 import { isPayrollRoeDeadline } from "../../shared/payrollDeadline";
 import { Segmented } from "../components/primitives";
 import { Select } from "../components/Select";
@@ -194,14 +195,13 @@ export function DeadlinesPage() {
     }
     const spawnedDue: string | null = res?.spawnedDue ?? null;
     const spawnedId: string | null = res?.spawnedId ?? null;
+    const nextDue: string | null = res?.nextDue ?? spawnedDue;
     let description: string | undefined;
+    // formatDate keeps a date-only due date on its own day (no UTC shift).
     if (spawnedDue) {
-      const when = new Date(spawnedDue).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-      description = `Next occurrence added for ${when}.`;
+      description = `Next occurrence added for ${formatDate(spawnedDue)}.`;
+    } else if (nextDue) {
+      description = `The next occurrence (${formatDate(nextDue)}) is already on the list.`;
     } else if (String(record?.recurrence ?? "None") !== "None") {
       description = "This was the last occurrence — the recurrence has ended.";
     }

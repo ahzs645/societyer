@@ -78,12 +78,13 @@ function isPastRecurrenceEnd(nextDue: string, endDate?: string): boolean {
 /** When a recurring deadline is completed, create the next occurrence so the
  *  obligation keeps being tracked — unless an optional `recurrenceEndDate` bound
  *  says the series is over. Idempotent: skips if a matching future occurrence
- *  already exists, so completing twice never duplicates. Returns the new row's
- *  id and due date (so callers can surface/undo it), or null when nothing spawned. */
+ *  already exists, so completing twice never duplicates. Returns the next due
+ *  date with the new row's id (null when that occurrence already existed), so
+ *  callers can surface/undo it; null when the series has no next occurrence. */
 async function spawnNextOccurrence(
   ctx: any,
   doc: any,
-): Promise<{ spawnedId: string; spawnedDue: string } | null> {
+): Promise<{ spawnedId: string | null; nextDue: string } | null> {
   const months = recurrenceMonths(doc?.recurrence);
   if (months === 0) return null;
   const nextDue = advanceDueDate(doc.dueDate, months);
@@ -102,7 +103,7 @@ async function spawnNextOccurrence(
       r.category === doc.category &&
       String(r.recurrence ?? "") === String(doc.recurrence ?? ""),
   );
-  if (already) return null;
+  if (already) return { spawnedId: null, nextDue };
 
   const spawnedId = await ctx.db.insert("deadlines", {
     societyId: doc.societyId,
@@ -117,7 +118,17 @@ async function spawnNextOccurrence(
     linkedFilingId: doc.linkedFilingId,
     ...(doc.agreementId ? { agreementId: doc.agreementId, sourceKey: doc.sourceKey } : {}),
   });
-  return { spawnedId: String(spawnedId), spawnedDue: nextDue };
+  return { spawnedId: String(spawnedId), nextDue };
+}
+
+/** `spawnedDue`/`spawnedId`: the occurrence this completion created (undo removes
+ *  it). `nextDue`: the series' next due date, also when it already existed. */
+function completionResult(spawned: { spawnedId: string | null; nextDue: string } | null) {
+  return {
+    spawnedDue: spawned?.spawnedId ? spawned.nextDue : null,
+    spawnedId: spawned?.spawnedId ?? null,
+    nextDue: spawned?.nextDue ?? null,
+  };
 }
 
 /** Patch a deadline's status and, when it transitions into "complete", roll a
@@ -132,10 +143,9 @@ async function applyStatusTransition(
   await ctx.db.patch(id, { status: nextStatus, done: nextStatus === "complete", ...extraPatch });
   const wasComplete = before ? deriveStatus(before) === "complete" : false;
   if (before && nextStatus === "complete" && !wasComplete) {
-    const spawned = await spawnNextOccurrence(ctx, { ...before, ...extraPatch });
-    return { spawnedDue: spawned?.spawnedDue ?? null, spawnedId: spawned?.spawnedId ?? null };
+    return completionResult(await spawnNextOccurrence(ctx, { ...before, ...extraPatch }));
   }
-  return { spawnedDue: null, spawnedId: null };
+  return completionResult(null);
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -247,10 +257,9 @@ export async function updatePortable(
   const wasComplete = before ? deriveStatus(before) === "complete" : false;
   const nowComplete = next.status === "complete";
   if (before && nowComplete && !wasComplete) {
-    const spawned = await spawnNextOccurrence(ctx, { ...before, ...next });
-    return { spawnedDue: spawned?.spawnedDue ?? null, spawnedId: spawned?.spawnedId ?? null };
+    return completionResult(await spawnNextOccurrence(ctx, { ...before, ...next }));
   }
-  return { spawnedDue: null, spawnedId: null };
+  return completionResult(null);
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
