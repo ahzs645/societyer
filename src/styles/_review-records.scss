@@ -65,6 +65,28 @@
   > .card + .card { border-top: 1px solid token('border-color-light'); }
 }
 
+// Minute-book record drawer: documents linked beyond the one in the picker.
+.minute-book-linked-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  > li {
+    display: flex;
+    align-items: center;
+    gap: token('s-2');
+    font-size: token('fs-sm');
+  }
+  > li > span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
 // Research library: one compact filter row, records listed in one card.
 .research-filters {
   display: flex;

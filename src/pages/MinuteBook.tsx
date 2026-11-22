@@ -127,6 +127,14 @@ export function MinuteBookPage() {
     setOpen(true);
   };
 
+  // The picker edits the record's first document; any further linked documents
+  // stay on the record (listed under the picker) unless removed there.
+  const openRecord = (row: Record<string, unknown>) => {
+    const [documentId, ...otherDocumentIds] = Array.isArray(row.documentIds) ? row.documentIds.map(String) : [];
+    setDraft({ ...row, documentId, otherDocumentIds });
+    setOpen(true);
+  };
+
   const save = async () => {
     if (!canWrite) return;
     if (!draft) return;
@@ -142,7 +150,7 @@ export function MinuteBookPage() {
       recordType: draft.recordType || "minute_book_record",
       effectiveDate: draft.effectiveDate || undefined,
       status: draft.status || "NeedsReview",
-      documentIds: draft.documentId ? [draft.documentId] : draft.documentIds ?? [],
+      documentIds: draftDocumentIds(draft),
       meetingId: draft.meetingId || undefined,
       minutesId: draft.minutesId || undefined,
       filingId: draft.filingId || undefined,
@@ -259,10 +267,7 @@ export function MinuteBookPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={recordSpineRecords}
-          onRecordClick={(_recordId, row) => {
-            setDraft({ ...row, documentId: row.documentIds?.[0] });
-            setOpen(true);
-          }}
+          onRecordClick={(_recordId, row) => openRecord(row)}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -306,10 +311,7 @@ export function MinuteBookPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setDraft({ ...row, documentId: row.documentIds?.[0] });
-                    setOpen(true);
-                  }}
+                  onClick={() => openRecord(row)}
                 >
                   {canWrite ? "Edit" : "View"}
                 </Button>
@@ -370,6 +372,28 @@ export function MinuteBookPage() {
               <Field label="Archived date"><DatePicker value={draft.archivedAtISO ?? ""} onChange={(value) => setDraft({ ...draft, archivedAtISO: value })} /></Field>
             </div>
             <RecordSelect label="Document" value={draft.documentId} rows={safeRows(detail, "documents")} onChange={(value) => setDraft({ ...draft, documentId: value })} getLabel={(row: any) => row.title} />
+            {draft.otherDocumentIds?.length > 0 && (
+              <Field label="Also linked">
+                <ul className="minute-book-linked-documents">
+                  {(draft.otherDocumentIds as string[]).map((documentId) => {
+                    const documentTitle: string = maps.documents.get(documentId)?.title ?? "Linked document";
+                    return (
+                      <li key={documentId}>
+                        <span>{documentTitle}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={<Trash2 size={12} />}
+                          iconOnly
+                          aria-label={`Unlink ${documentTitle}`}
+                          onClick={() => setDraft({ ...draft, otherDocumentIds: (draft.otherDocumentIds as string[]).filter((id) => id !== documentId) })}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Field>
+            )}
             <RecordSelect label="Meeting" value={draft.meetingId} rows={safeRows(detail, "meetings")} onChange={(value) => setDraft({ ...draft, meetingId: value })} getLabel={(row: any) => row.title} />
             <RecordSelect label="Minutes" value={draft.minutesId} rows={safeRows(detail, "minutes")} onChange={(value) => setDraft({ ...draft, minutesId: value })} getLabel={(row: any) => `${row.heldAt ?? "Minutes"} - ${row.status ?? ""}`} />
             <RecordSelect label="Filing" value={draft.filingId} rows={safeRows(detail, "filings")} onChange={(value) => setDraft({ ...draft, filingId: value })} getLabel={(row: any) => row.kind} />
@@ -588,6 +612,12 @@ function LinkedList({ title, rows, getTitle, getMeta, restricted }: any) {
       </div>
     </div>
   );
+}
+
+/** The document links a save writes: the picked document first, then the record's
+ * other linked documents. Clearing the picker drops only that first link. */
+function draftDocumentIds(draft: { documentId?: string; otherDocumentIds?: string[] }): string[] {
+  return [...new Set([draft.documentId, ...(draft.otherDocumentIds ?? [])].filter((id): id is string => Boolean(id)))];
 }
 
 function RecordSelect({ label, value, rows, onChange, getLabel }: any) {

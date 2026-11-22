@@ -39,6 +39,9 @@
 .drawer__title {
   @include text-title-section;
   margin: 0;
+  // A title made of one long word (a file name) wraps instead of widening the drawer.
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 // Touch: the close button is a full 40px target, not the 32px touch icon size.
 @media (pointer: coarse) {

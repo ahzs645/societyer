@@ -70,6 +70,11 @@
   white-space: nowrap;
   max-width: 100%;
 }
+// A file name shown in full (Add document drawer, File history): long names
+// without spaces wrap inside the drawer instead of widening it.
+.document-file-name {
+  overflow-wrap: anywhere;
+}
 .document-queue-link {
   gap: 4px;
   padding: 10px;

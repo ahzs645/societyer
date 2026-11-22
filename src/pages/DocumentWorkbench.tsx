@@ -62,8 +62,15 @@ import {
 } from "lucide-react";
 
 export function DocumentWorkbenchPage() {
-  const isMobile = useIsMobile();
   const { id } = useParams<{ id: string }>();
+  // Following a duplicate or version link reuses this route, so key the workbench
+  // by document: a half-written comment, the "opened" mark and the saved-original
+  // check all start fresh for the new document instead of carrying over.
+  return <DocumentWorkbench key={id} id={id} />;
+}
+
+function DocumentWorkbench({ id }: { id: string | undefined }) {
+  const isMobile = useIsMobile();
   const society = useSociety();
   const userId = useCurrentUserId() ?? undefined;
   const document = useRecordQuery<any>(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");

@@ -219,6 +219,26 @@ export function DocumentsPage() {
     return result.versionId;
   };
 
+  // Every storage path keys the file by its document (upload handles, storage keys,
+  // local file references), so the record is created first. If the file then fails
+  // to land, the new record is removed again: a failed upload leaves no metadata-only
+  // row behind, and a retry starts clean instead of adding a duplicate.
+  const createDocument = async (payload: Parameters<typeof create>[0], file?: File) => {
+    const documentId = await create(payload);
+    if (!file) return documentId;
+    try {
+      await uploadFile(documentId, file);
+    } catch (error) {
+      try {
+        await remove({ id: documentId });
+      } catch {
+        throw new Error(`${error instanceof Error ? error.message : String(error)} The document record was created without its file; attach the file from File history or delete the record.`);
+      }
+      throw error;
+    }
+    return documentId;
+  };
+
   const save = async () => {
     if (!canEdit || busy) return;
     const payload = documentPayload(form);
@@ -229,10 +249,7 @@ export function DocumentsPage() {
     if (hasErrors(validation)) return;
     setBusy(true);
     try {
-      const newDocId = await create({ societyId: society._id, ...payload });
-      if (form._file) {
-        await uploadFile(newDocId, form._file);
-      }
+      await createDocument({ societyId: society._id, ...payload }, form._file);
       setOpen(false);
       toast.success("Document saved");
     } catch (error: any) {
@@ -246,8 +263,7 @@ export function DocumentsPage() {
     if (!canEdit || busy) return;
     setBusy(true);
     try {
-      const docId = await create({ societyId: society._id, title: file.name, category: "Other", tags: [], retentionYears: 10 });
-      await uploadFile(docId, file);
+      await createDocument({ societyId: society._id, title: file.name, category: "Other", tags: [], retentionYears: 10 }, file);
       toast.success("Document uploaded");
     } catch (error: any) {
       toast.error(error?.message ?? "Upload failed");
@@ -535,7 +551,7 @@ export function DocumentsPage() {
                   touchTitle="Attach a file"
                   onFiles={([file]) => { if (file) setForm({ ...form, _file: file, fileName: file.name }); }}
                 />
-                {form.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{form.fileName}</div>}
+                {form.fileName && <div className="mono muted document-file-name" style={{ fontSize: 11 }}>{form.fileName}</div>}
               </Field>
             ) : (
               <Field label="Attach file" hint="Native file storage is disabled — create the record here and link it to a document connector (e.g. Paperless) as the source.">
