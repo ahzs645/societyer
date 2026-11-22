@@ -9,6 +9,7 @@ import {
   Fragment,
   isValidElement,
   ButtonHTMLAttributes,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   ReactElement,
   ReactNode,
@@ -272,6 +273,24 @@ export function SettingsShell({
   const organization = useSociety();
   useDocumentTitle(typeof displayTitle === "string" ? displayTitle : identity ? translateNavLabel(t, identity.label) : null, organization?.name);
 
+  // WAI-ARIA tablist: one tab stop (the selected tab); Left/Right/Home/End move
+  // focus and, when the tabs are switchable, select the focused tab.
+  const tabListRef = useRef<HTMLDivElement>(null);
+  const hasActiveTab = tabs?.some((tab) => tab.id === activeTab) ?? false;
+  const onTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!tabs || (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End")) return;
+    const buttons = Array.from(tabListRef.current?.querySelectorAll<HTMLButtonElement>(':scope > [role="tab"]') ?? []);
+    const current = buttons.indexOf(event.target as HTMLButtonElement);
+    if (current < 0) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0
+      : event.key === "End" ? buttons.length - 1
+      : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[next]?.focus();
+    const nextTab = tabs[next];
+    if (nextTab && nextTab.id !== activeTab) onTabChange?.(nextTab.id);
+  };
+
   return (
     <div className="settings-shell">
       <div className="settings-shell__bar">
@@ -287,13 +306,14 @@ export function SettingsShell({
           {description && <div className="settings-shell__description">{description}</div>}
         </div>
         {tabs && tabs.length > 0 && (
-          <div className="settings-shell__tabs" role="tablist" aria-label="Settings sections">
-            {tabs.map((tab) => (
+          <div ref={tabListRef} className="settings-shell__tabs" role="tablist" aria-label="Settings sections" onKeyDown={onTabKeyDown}>
+            {tabs.map((tab, index) => (
               <button
                 key={tab.id}
                 type="button"
                 role="tab"
                 aria-selected={tab.id === activeTab}
+                tabIndex={(hasActiveTab ? tab.id === activeTab : index === 0) ? 0 : -1}
                 className={`settings-shell__tab${tab.id === activeTab ? " is-active" : ""}${onTabChange ? " is-clickable" : ""}`}
                 onClick={() => onTabChange?.(tab.id)}
               >

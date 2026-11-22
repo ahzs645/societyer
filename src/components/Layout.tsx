@@ -98,7 +98,7 @@ import { setStoredUserId } from "../hooks/useCurrentUser";
 import { useSocietySelection } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { useLocalWorkspaceReady } from "../hooks/useLocalWorkspaceReady";
-import { useDialogFocus } from "../lib/useDialogFocus";
+import { focusAdjacentTo, getDialogFocusables, useDialogFocus } from "../lib/useDialogFocus";
 import { useMediaQuery, useSheetDrag } from "../lib/useSheetDrag";
 import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 import { backdropDismissProps } from "../lib/floatingLayer";
@@ -1742,6 +1742,20 @@ export function Layout() {
             role="menu"
             aria-label={t("sidebar.workspaces")}
             onKeyDown={event => {
+              // The menu is portalled to the end of <body>: Tab past its last
+              // control (or Shift+Tab before its first) closes it and moves on
+              // from the trigger, instead of leaving focus on the page body.
+              if (event.key === "Tab") {
+                const focusables = getDialogFocusables(event.currentTarget);
+                const index = focusables.indexOf(document.activeElement as HTMLElement);
+                if (event.shiftKey ? index > 0 : index >= 0 && index < focusables.length - 1) return;
+                event.preventDefault();
+                const trigger = workspaceTriggerRef.current ?? workspaceButtonRef.current;
+                setWorkspaceOpen(false);
+                if (event.shiftKey) trigger?.focus();
+                else focusAdjacentTo(trigger);
+                return;
+              }
               if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || event.target instanceof HTMLInputElement) return;
               const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button[role^='menuitem']"));
               if (!options.length) return;
