@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Link, useNavigate, type LinkProps } from "react-router-dom";
 import { Select } from "../../../components/Select";
+import { useReportUnsaved } from "../lib/unsavedPanels";
+import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 
 type Row = Record<string, unknown>;
 type HistoryKey = "actionObservations" | "importedSourceVersions";
@@ -79,6 +82,15 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
   useEffect(() => {
     if (!dirty) { setDraft(JSON.parse(latest) as History); baseline.current = latest; }
   }, [latest, dirty]); // Preserve unsaved edits when query data refreshes.
+  useReportUnsaved(dirty, "history changes");
+  // In-app links to other minutes ask before an unsaved draft is dropped.
+  const navigate = useNavigate();
+  const leaveTarget = useRef("");
+  const leave = useDirtyCloseGuard(dirty, () => navigate(leaveTarget.current), "history changes");
+  const minutesLink = (meetingId: unknown, children: LinkProps["children"]) => {
+    const to = `/app/meetings/${String(meetingId)}?tab=minutes`;
+    return <Link to={to} onClick={(event) => { if (!dirty) return; event.preventDefault(); leaveTarget.current = to; void leave(); }}>{children}</Link>;
+  };
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -177,11 +189,11 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
               {tab !== "importedSourceVersions" && <>{field("sourceLocator", "Source page, section or row")}{field("evidence", "Source evidence", { multiline: true })}</>}
               <div><button type="button" className="btn btn--ghost" onClick={() => remove(tab, index)}>Remove this {tab === "actionObservations" ? "observation" : "version"}</button></div>
             </fieldset>
-            {tab === "actionObservations" && Boolean(row.carriedFromMinutesId) && <p>Carried from {otherMinutes.find(m => m._id === row.carriedFromMinutesId)?.meetingId ? <a href={`/app/meetings/${otherMinutes.find(m => m._id === row.carriedFromMinutesId)?.meetingId}?tab=minutes`}>prior minutes</a> : <span>minutes {str(row.carriedFromMinutesId)}</span>}; observation {str(row.carriedFromEntryId)}. Earlier status is not a current completion claim.</p>}
+            {tab === "actionObservations" && Boolean(row.carriedFromMinutesId) && <p>Carried from {otherMinutes.find(m => m._id === row.carriedFromMinutesId)?.meetingId ? minutesLink(otherMinutes.find(m => m._id === row.carriedFromMinutesId)?.meetingId, "prior minutes") : <span>minutes {str(row.carriedFromMinutesId)}</span>}; observation {str(row.carriedFromEntryId)}. Earlier status is not a current completion claim.</p>}
             {tab === "actionObservations" && <details><summary>Observations with this action identity</summary>
               <p>Matches use the recorded identity, not text similarity. Confirm the evidence before treating these as the same action.</p>
               <ol>{[...otherMinutes.filter(m => m._id !== minutes._id), { ...minutes, actionObservations: draft.actionObservations }].flatMap(m => (m.actionObservations ?? []).filter(a => a.actionKey === row.actionKey).map(a => ({ m, a }))).sort((x, y) => str(x.a.statusAsOf || x.m.heldAt).localeCompare(str(y.a.statusAsOf || y.m.heldAt))).map(({ m, a }) => <li key={`${m._id}:${str(a.entryId)}`} style={{ marginBlock: 12 }}>
-                <strong>{statusLabels[str(a.status)] ?? str(a.status)}</strong> as of {str(a.statusAsOf) || "date not recorded"} · {m.meetingId ? <a href={`/app/meetings/${m.meetingId}?tab=minutes`}>{meetingLabel(m)}</a> : meetingLabel(m)}
+                <strong>{statusLabels[str(a.status)] ?? str(a.status)}</strong> as of {str(a.statusAsOf) || "date not recorded"} · {m.meetingId ? minutesLink(m.meetingId, meetingLabel(m)) : meetingLabel(m)}
                 <p style={{ whiteSpace: "pre-wrap" }}>{str(a.text)}</p>
                 {Boolean(a.sourceStatus) && <p>Source status: {str(a.sourceStatus)}</p>}
                 {Boolean(a.sourceLocator) && <p>Source location: {str(a.sourceLocator)}</p>}

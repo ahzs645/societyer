@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
@@ -8,6 +9,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { calendarDate, calendarDateKey } from "../lib/calendarDates";
 import { isPastDue } from "../../shared/dateOnly";
+import { formatDate } from "../lib/format";
 import { isPayrollRoeDeadline } from "../../shared/payrollDeadline";
 import { Segmented } from "../components/primitives";
 import { Select } from "../components/Select";
@@ -194,14 +196,13 @@ export function DeadlinesPage() {
     }
     const spawnedDue: string | null = res?.spawnedDue ?? null;
     const spawnedId: string | null = res?.spawnedId ?? null;
+    const nextDue: string | null = res?.nextDue ?? spawnedDue;
     let description: string | undefined;
+    // formatDate keeps a date-only due date on its own day (no UTC shift).
     if (spawnedDue) {
-      const when = new Date(spawnedDue).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-      description = `Next occurrence added for ${when}.`;
+      description = `Next occurrence added for ${formatDate(spawnedDue)}.`;
+    } else if (nextDue) {
+      description = `The next occurrence (${formatDate(nextDue)}) is already on the list.`;
     } else if (String(record?.recurrence ?? "None") !== "None") {
       description = "This was the last occurrence — the recurrence has ended.";
     }
@@ -376,14 +377,14 @@ export function DeadlinesPage() {
                         {record.title}
                       </strong>
                       {record.description && <div className="deadline-title-cell__desc">{record.description}</div>}
-                      {isPayrollRoeDeadline(record) && <a href="/app/payroll/calculator?tab=roe" onClick={(event) => event.stopPropagation()}>Managed by ROE workflow</a>}
+                      {isPayrollRoeDeadline(record) && <Link to="/app/payroll/calculator?tab=roe" onClick={(event) => event.stopPropagation()}>Managed by ROE workflow</Link>}
                     </div>
                   );
                 }
                 return undefined;
               }}
               renderRowActions={(r) => {
-                if (isPayrollRoeDeadline(r)) return <a className="btn btn--ghost btn--sm" href="/app/payroll/calculator?tab=roe">Open ROE workflow</a>;
+                if (isPayrollRoeDeadline(r)) return <Link className="btn btn--ghost btn--sm" to="/app/payroll/calculator?tab=roe">Open ROE workflow</Link>;
                 const s = statusOf(r);
                 const isClosed = s === "closed";
                 return (
@@ -421,7 +422,7 @@ export function DeadlinesPage() {
 
       <Drawer
         open={open} onClose={() => { if (!saving) setOpen(false); }} title={editingId ? canEdit ? "Edit deadline" : "View deadline" : "Add deadline"}
-        footer={<><button className="btn" onClick={() => setOpen(false)} disabled={saving}>{editingDerived ? "Close" : "Cancel"}</button>{editingDerived ? <a className="btn btn--accent" href="/app/payroll/calculator?tab=roe">Open ROE workflow</a> : <button className="btn btn--accent" onClick={save} disabled={!canEdit || saving || !form?.title?.trim()}>{saving ? "Saving…" : "Save"}</button>}</>}
+        footer={<><button className="btn" onClick={() => setOpen(false)} disabled={saving}>{editingDerived ? "Close" : "Cancel"}</button>{editingDerived ? <Link className="btn btn--accent" to="/app/payroll/calculator?tab=roe">Open ROE workflow</Link> : <button className="btn btn--accent" onClick={save} disabled={!canEdit || saving || !form?.title?.trim()}>{saving ? "Saving…" : "Save"}</button>}</>}
       >
         {form && (
           <fieldset disabled={!canEdit || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>

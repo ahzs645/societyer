@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Banner, Field } from "../../components/ui";
@@ -375,7 +376,7 @@ export function PayrollEmployerForm({
       <p>
         Enter the actual payment calendar and documented employer rates for this
         year. Registered payroll account and provider settings remain in{" "}
-        <a href="/app/payroll?setup=1">Payroll settings</a>.
+        <Link to="/app/payroll?setup=1">Payroll settings</Link>.
       </p>
       <div className="payroll-calculator__form-grid">
         <TextInput

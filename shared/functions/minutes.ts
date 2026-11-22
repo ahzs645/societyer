@@ -4,7 +4,8 @@ import { buildSourceMeetingRecord, preflightSourceMeetingRecord, type SourceMeet
 import { requireDocumentAccess, documentAclPredicate } from "./documents";
 import { visibleDirectoryRows } from "./peopleDirectory";
 import { minutesEvidenceOptions } from "../minutesExportEvidence";
-import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
+import { bylawBaselineForOrganization } from "../bylawBaselines";
+import { bylawRuleSetForDate } from "../bylawRuleSelection";
 import { normalizeMeetingHistory, assertMeetingHistoryMutable, MEETING_HISTORY_FIELDS, type MeetingHistory, type ActionObservation } from "../meetingHistory";
 import { normalizeMeetingQuorum } from "../minutesQuorum";
 import { minutesDraftBlocker } from "../minutesDraftInput";
@@ -38,7 +39,7 @@ import {
 import { motionRowToEmbedded } from "../minutesMotions";
 import { classifyMotionOutcome } from "../motionOutcome";
 import { agendaOnlyMeetingStatus } from "../meetingStatus";
-import { meetingCalendarDate } from "../meetingDates";
+import { meetingCalendarDate, type MeetingDateLike } from "../meetingDates";
 import { assertMotionVotes } from "../motionValidation";
 import { normalizeActionItemStatusFields } from "../actionItemStatus";
 import { assertMeetingFieldsUnchanged, meetingAgendaSnapshot, meetingFieldValuesMatch, type MeetingAgendaSnapshot, type MeetingExpectedFields } from "../meetingConcurrency";
@@ -63,40 +64,18 @@ export function getDefaultBylawRules(societyId: string, organization?: any) {
   return bylawBaselineForOrganization(organization, societyId);
 }
 
-async function getBylawRuleSetForDate(
-  ctx: PortableQueryCtx | PortableMutationCtx,
-  societyId: string,
-  dateISO: string,
-): Promise<ResolvedBylawRuleSet> {
-  const rows = await ctx.db
-    .query("bylawRuleSets")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
-  const targetTs = timestampOrInfinity(dateISO);
-  const eligible = rows
-    .filter((row) => row.status !== "Draft")
-    .filter((row) => effectiveTimestamp(row) <= targetTs);
-  const selected = eligible.sort(compareRuleSetsDesc)[0];
-  const organization = await ctx.db.get(societyId);
-  return contextualBylawRules(organization, societyId, selected);
-}
-
 async function buildQuorumSnapshot(
   ctx: PortableQueryCtx | PortableMutationCtx,
   args: {
     societyId: string;
-    meetingDateISO: string;
+    meeting: MeetingDateLike;
     meetingType?: string;
     committeeId?: string;
     quorumRequiredOverride?: number;
   },
 ): Promise<QuorumSnapshot> {
   const now = new Date().toISOString();
-  const rules = await getBylawRuleSetForDate(
-    ctx,
-    args.societyId,
-    args.meetingDateISO,
-  );
+  const rules: ResolvedBylawRuleSet = await bylawRuleSetForDate(ctx, args.societyId, args.meeting);
   const { required: ruleRequired, articlesLabel } = await computeRequiredQuorum(ctx, rules, args);
   const quorumRequired =
     args.quorumRequiredOverride ?? ruleRequired;
@@ -146,31 +125,6 @@ function quorumSourceLabel(
     : "";
   return `${prefix}Bylaw rules v${rules.version}${effective}`;
 }
-
-function compareRuleSetsDesc(
-  a: Record<string, any>,
-  b: Record<string, any>,
-) {
-  const byEffective = effectiveTimestamp(b) - effectiveTimestamp(a);
-  if (byEffective !== 0) return byEffective;
-  return b.version - a.version;
-}
-
-function effectiveTimestamp(row: Record<string, any>) {
-  return timestampOrNegativeInfinity(row.effectiveFromISO);
-}
-
-function timestampOrInfinity(value: string) {
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.POSITIVE_INFINITY;
-}
-
-function timestampOrNegativeInfinity(value?: string) {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
-}
-
 
 // ----- portable motions dual-write helper (copied from convex/motions.ts) ----
 
@@ -1153,7 +1107,7 @@ async function quorumSnapshotForMeeting(
 ) {
   return await buildQuorumSnapshot(ctx, {
     societyId: meeting.societyId,
-    meetingDateISO: meeting.scheduledAt,
+    meeting,
     meetingType: meeting.type,
     committeeId: meeting.committeeId,
     quorumRequiredOverride,

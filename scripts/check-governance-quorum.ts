@@ -10,6 +10,7 @@ import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
 import { PortableRuntime } from "../shared/portable/define";
 import { MemoryDb } from "../shared/portable/memoryDb";
 import { makeCapabilities } from "../shared/portable/capabilities";
+import { bylawRuleEffectiveDay, bylawRuleSelectionDay, selectBylawRuleSetForDay } from "../shared/bylawRuleSelection";
 
 // --- pure helpers -------------------------------------------------------------
 assert.equal(describeQuorumRule({ quorumType: "majority", quorumMinimumCount: 3 }, "committee"), "Majority of committee members (at least 3)");
@@ -83,13 +84,57 @@ assert.equal(committeeDefault.required, 2, "committee default applies when the c
   await run.runMutation("bylawRules:resetToDefault", { societyId: "soc3" });
   const baseline = (fresh.dump("bylawRuleSets") as any[])[0];
   assert.equal(baseline.status, "Baseline");
-  const todayMidnight = `${String(baseline.effectiveFromISO).slice(0, 10)}T00:00:00.000Z`;
+  // The editor saves "today" as the society's local day at midnight UTC.
+  const todayMidnight = `${bylawRuleEffectiveDay(baseline.effectiveFromISO, "America/Vancouver")}T00:00:00.000Z`;
   await run.runMutation("bylawRules:upsertActive", { ...baseRules, societyId: "soc3", quorumValue: 4, effectiveFromISO: todayMidnight });
   const governing: any = await run.runQuery("bylawRules:getActive", { societyId: "soc3" });
   assert.equal(governing.version, 2, "the society's saved version governs over the same-day baseline");
   assert.equal(governing.quorumValue, 4);
   const dashboardRules: any = await run.runQuery("dashboard:summary", { societyId: "soc3" });
   assert.ok(!JSON.stringify(dashboardRules.complianceFlags ?? []).includes("Bylaw rule set not configured"), "dashboard reads the saved version");
+}
+
+// A rule effective June 1 governs from the meeting's local June 1, not from
+// June 1 UTC: two meetings on the same Pacific evening get the same rule.
+{
+  assert.equal(bylawRuleEffectiveDay("2025-06-01T00:00:00.000Z", "America/Vancouver"), "2025-06-01", "midnight UTC is the chosen day");
+  assert.equal(bylawRuleEffectiveDay("2025-06-01", "America/Vancouver"), "2025-06-01");
+  assert.equal(bylawRuleEffectiveDay("2025-06-01T03:30:00.000Z", "America/Vancouver"), "2025-05-31", "a click instant is its local day");
+  assert.equal(bylawRuleSelectionDay("2025-06-01T01:00:00.000Z", "America/Vancouver"), "2025-05-31");
+  assert.equal(bylawRuleSelectionDay({ scheduledAt: "2025-06-01T01:00:00.000Z", timeZone: "America/Toronto" }, "America/Vancouver"), "2025-05-31");
+  assert.equal(bylawRuleSelectionDay({ scheduledAt: "2025-06-01T04:30:00.000Z", timeZone: "America/Toronto" }, "America/Vancouver"), "2025-06-01", "the meeting's own zone wins");
+  assert.equal(bylawRuleSelectionDay("2025-06-01T12:00:00.000Z", "Pacific/Kiritimati"), "2025-06-01", "a date-only placeholder keeps its day");
+  const versions = [
+    { version: 1, status: "Archived", effectiveFromISO: "2020-01-01T00:00:00.000Z" },
+    { version: 2, status: "Active", effectiveFromISO: "2025-06-01T00:00:00.000Z" },
+    { version: 3, status: "Draft", effectiveFromISO: "2025-05-01T00:00:00.000Z" },
+  ];
+  assert.equal(selectBylawRuleSetForDay(versions, "2025-05-31")?.version, 1);
+  assert.equal(selectBylawRuleSetForDay(versions, "2025-06-01")?.version, 2);
+  assert.equal(selectBylawRuleSetForDay(versions, undefined)?.version, 2, "an unparseable date keeps every version eligible");
+
+  const pacific = new MemoryDb({
+    seed: {
+      societies: [{ _id: "soc4", name: "Synthetic Pacific Society", jurisdictionCode: "CA-BC", entityType: "society", isMemberFunded: false }],
+      users: [{ _id: "owner4", societyId: "soc4", role: "Owner", status: "Active", displayName: "Owner" }],
+    },
+  });
+  const run = new PortableRuntime({ db: pacific, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "user" as const, runtime: "test" as const, assurance: "trusted-workspace" as const, subject: "owner4", userId: "owner4", societyId: "soc4" }) }).registerAll(PORTABLE_FUNCTIONS);
+  await run.runMutation("bylawRules:upsertActive", { ...baseRules, societyId: "soc4", quorumValue: 3, effectiveFromISO: "2020-01-01T00:00:00.000Z" });
+  await run.runMutation("bylawRules:upsertActive", { ...baseRules, societyId: "soc4", quorumValue: 5, effectiveFromISO: "2025-06-01T00:00:00.000Z" });
+  const required = async (scheduledAt: string) => {
+    const meetingId = await run.runMutation("meetings:create", { societyId: "soc4", type: "AGM", title: `AGM ${scheduledAt}`, scheduledAt, electronic: false, status: "Scheduled" }) as string;
+    const meeting = await pacific.get(meetingId) as { quorumRequired?: number };
+    const minutes = (pacific.dump("minutes") as { meetingId: string; quorumRequired?: number }[]).find((row) => row.meetingId === meetingId);
+    assert.equal(minutes?.quorumRequired, meeting.quorumRequired, "meeting and minutes snapshots agree");
+    return meeting.quorumRequired;
+  };
+  assert.equal(await required("2025-05-31T23:00:00.000Z"), 3, "4 p.m. Pacific on May 31 keeps the old rule");
+  assert.equal(await required("2025-06-01T01:00:00.000Z"), 3, "6 p.m. Pacific on May 31 keeps the old rule too");
+  assert.equal(await required("2025-06-01T17:00:00.000Z"), 5, "10 a.m. Pacific on June 1 uses the new rule");
+  assert.equal(await required("2025-06-01T12:00:00.000Z"), 5, "a date-only June 1 meeting uses the new rule");
+  const formRules = await run.runQuery("bylawRules:getForDate", { societyId: "soc4", dateISO: "2025-06-01T01:00:00.000Z" }) as { quorumValue?: number };
+  assert.equal(formRules.quorumValue, 3, "the meeting form reads the same rule");
 }
 
 console.log("governance quorum checks passed");

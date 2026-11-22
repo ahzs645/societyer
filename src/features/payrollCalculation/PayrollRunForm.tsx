@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import {
   payrollLocalTimestamp,
   payrollTimestampFromLocal,
@@ -399,7 +400,7 @@ export function PayrollRunForm({
           {!employees.length && (
             <p>
               Create an employee in the{" "}
-              <a href="/app/employees">employee directory</a> before calculating.
+              <Link to="/app/employees">employee directory</Link> before calculating.
             </p>
           )}
         </fieldset>

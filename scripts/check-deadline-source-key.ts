@@ -31,4 +31,16 @@ assert.equal(rows[0].sourceKey, sourceKey, "the source key is stored");
 // A later regeneration with a different title and due date still matches by key.
 assert.ok(complianceDeadlineAlreadyTracked({ ...derived, title: "Annual report (Societies Act)", dueDate: "2027-02-01" } as never,
   [{ title: "Something renamed", dueDate: "2027-01-31", category: "Governance", sourceKey }], { jurisdictionCode: "CA-BC", entityType: "society" } as never));
-console.log("Deadline source key passed: generated deadlines store a validated compliance key and are recognised after renames.");
+
+// Completing a recurring deadline reports the series' next date-only due date,
+// also when that occurrence is already on the list (AUD-26).
+const first = await client.mutation("deadlines:create", { societyId: SRC, title: "Monthly remittance", dueDate: "2025-01-31", category: "Payroll", recurrence: "Monthly" });
+const spawned = await client.mutation("deadlines:setStatus", { id: first, status: "complete" }) as { spawnedDue: string | null; spawnedId: string | null; nextDue: string | null };
+assert.equal(spawned.spawnedDue, "2025-02-28", "the next occurrence stays a date-only day");
+assert.equal(spawned.nextDue, "2025-02-28");
+assert.ok(spawned.spawnedId);
+const march = await client.mutation("deadlines:create", { societyId: SRC, title: "Monthly remittance", dueDate: "2025-03-31", category: "Payroll", recurrence: "Monthly" });
+await client.mutation("deadlines:create", { societyId: SRC, title: "Monthly remittance", dueDate: "2025-04-30", category: "Payroll", recurrence: "Monthly" });
+const existing = await client.mutation("deadlines:setStatus", { id: march, status: "complete" }) as { spawnedDue: string | null; spawnedId: string | null; nextDue: string | null };
+assert.deepEqual(existing, { spawnedDue: null, spawnedId: null, nextDue: "2025-04-30" }, "an existing next occurrence is reported, not 'recurrence ended'");
+console.log("Deadline source key passed: generated deadlines store a validated compliance key and are recognised after renames; recurring completion reports the next due date.");

@@ -11,6 +11,7 @@ import { EvidenceRowsEditor, type EvidenceColumn } from "@/components/EvidenceRo
 import { StructuredMinutesEditor, StructuredMinutesSummary } from "./MeetingDetailSupport";
 import { structuredEditFromMinutes, structuredMetadataChanges, type StructuredMinutesEdit } from "../lib/structuredMinutes";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
+import { useReportUnsaved } from "../lib/unsavedPanels";
 import { slugBody } from "../../../../shared/meetingBody";
 
 const NEXT_BODY_LABELS: Record<string, string> = { board: "Board", agm: "AGM", sgm: "SGM" };
@@ -96,6 +97,7 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
   ], [committees]);
   const dirty = !!draft && !!original && (JSON.stringify(draft) !== JSON.stringify(original) || JSON.stringify(nextRows) !== originalNext);
   const cancel = useDirtyCloseGuard(dirty, () => { setDraft(null); setOriginal(null); }, "minutes details");
+  useReportUnsaved(dirty, "minutes details");
   if (!minutes) return null;
 
   const start = () => {

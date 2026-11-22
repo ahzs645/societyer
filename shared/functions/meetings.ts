@@ -3,7 +3,9 @@ import { isWorkingMeeting } from "../meetingBody";
 import { minutesActionItemsFromNotes } from "../meetingNoteActions";
 import { inCameraFacts, isInCameraMotion, IN_CAMERA_ACCESS_PERMISSION } from "../minutesPrivacy";
 import { carryForwardToMeetingPortable } from "./motionBacklog";
-import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
+import { bylawBaselineForOrganization } from "../bylawBaselines";
+import { bylawRuleSetForDate } from "../bylawRuleSelection";
+import type { MeetingDateLike } from "../meetingDates";
 /**
  * PORTABLE FUNCTIONS: the meetings domain
  * (list / get / create / applyTemplate / update / markSourceReview /
@@ -45,40 +47,18 @@ export function getDefaultBylawRules(societyId: string, organization?: any) {
   return bylawBaselineForOrganization(organization, societyId);
 }
 
-async function getBylawRuleSetForDate(
-  ctx: PortableQueryCtx | PortableMutationCtx,
-  societyId: string,
-  dateISO: string,
-): Promise<ResolvedBylawRuleSet> {
-  const rows = await ctx.db
-    .query("bylawRuleSets")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
-  const targetTs = timestampOrInfinity(dateISO);
-  const eligible = rows
-    .filter((row) => row.status !== "Draft")
-    .filter((row) => effectiveTimestamp(row) <= targetTs);
-  const selected = eligible.sort(compareRuleSetsDesc)[0];
-  const organization = await ctx.db.get(societyId);
-  return contextualBylawRules(organization, societyId, selected);
-}
-
 async function buildQuorumSnapshot(
   ctx: PortableQueryCtx | PortableMutationCtx,
   args: {
     societyId: string;
     committeeId?: string;
-    meetingDateISO: string;
+    meeting: MeetingDateLike;
     meetingType?: string;
     quorumRequiredOverride?: number;
   },
 ): Promise<QuorumSnapshot> {
   const now = new Date().toISOString();
-  const rules = await getBylawRuleSetForDate(
-    ctx,
-    args.societyId,
-    args.meetingDateISO,
-  );
+  const rules: ResolvedBylawRuleSet = await bylawRuleSetForDate(ctx, args.societyId, args.meeting);
   // A working meeting is not a meeting of a governing body: no bylaw quorum.
   if (isWorkingMeeting(args.meetingType)) {
     return {
@@ -137,31 +117,6 @@ function quorumSourceLabel(
     : "";
   return `${prefix}Bylaw rules v${rules.version}${effective}`;
 }
-
-function compareRuleSetsDesc(
-  a: Record<string, any>,
-  b: Record<string, any>,
-) {
-  const byEffective = effectiveTimestamp(b) - effectiveTimestamp(a);
-  if (byEffective !== 0) return byEffective;
-  return b.version - a.version;
-}
-
-function effectiveTimestamp(row: Record<string, any>) {
-  return timestampOrNegativeInfinity(row.effectiveFromISO);
-}
-
-function timestampOrInfinity(value: string) {
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.POSITIVE_INFINITY;
-}
-
-function timestampOrNegativeInfinity(value?: string) {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
-}
-
 
 /** A13/A18 field checks shared by create and update. */
 export const MEETING_DATE_PRECISIONS = ["date", "datetime"] as const;
@@ -540,11 +495,7 @@ export async function createPortable(
     args.bylawRuleSetId ? getOwned(ctx, "bylawRuleSets", args.bylawRuleSetId, args.societyId) : Promise.resolve(),
     args.meetingTemplateId ? getOwned(ctx, "meetingTemplates", args.meetingTemplateId, args.societyId) : Promise.resolve(),
   ]);
-  const rules = await getBylawRuleSetForDate(
-    ctx,
-    args.societyId,
-    args.scheduledAt,
-  );
+  const rules = await bylawRuleSetForDate(ctx, args.societyId, args);
   // Bylaw rules on electronic participation govern meetings of the society's
   // bodies, not a staff check-in or a call with a partner.
   if (args.electronic && !rules.allowElectronicMeetings && !isWorkingMeeting(args.type)) {
@@ -556,7 +507,7 @@ export async function createPortable(
   const snapshot = await buildQuorumSnapshot(ctx, {
     societyId: args.societyId,
     committeeId: args.committeeId,
-    meetingDateISO: args.scheduledAt,
+    meeting: args,
     meetingType: args.type,
     quorumRequiredOverride: args.quorumRequired,
   });
@@ -1210,7 +1161,7 @@ export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, {
   const meeting = await requireOwnedRow(ctx, "meetings", id);
   const snapshot = await buildQuorumSnapshot(ctx, {
     societyId: String(meeting.societyId),
-    meetingDateISO: meeting.scheduledAt,
+    meeting: { scheduledAt: meeting.scheduledAt, scheduledAtPrecision: meeting.scheduledAtPrecision, timeZone: meeting.timeZone },
     meetingType: meeting.type,
     committeeId: meeting.committeeId,
     quorumRequiredOverride: meeting.quorumRequired,

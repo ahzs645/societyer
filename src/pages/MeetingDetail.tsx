@@ -122,6 +122,7 @@ import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
 import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
 import { Modal, useConfirm, usePrompt } from "../components/Modal";
+import { UnsavedPanelsProvider, useUnsavedPanels } from "../features/meetings/lib/unsavedPanels";
 import { isPastMeeting, meetingNotYetHeld, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -339,6 +340,8 @@ function MeetingDetailWorkspace() {
   const toast = useToast();
   const confirm = useConfirm();
   const prompt = usePrompt();
+  // Tab panels unmount on switch: ask before dropping their unsaved edits.
+  const { registry: unsavedPanels, confirmLeave } = useUnsavedPanels();
   const vttInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const motionEditorRef = useRef<MotionEditorHandle | null>(null);
@@ -423,7 +426,8 @@ function MeetingDetailWorkspace() {
       return params;
     }, { replace: true });
   }, [transcriptTabOnNotes, setSearchParams]);
-  const setActiveTab = (next: MeetingDetailTab) => {
+  const setActiveTab = async (next: MeetingDetailTab) => {
+    if (next !== activeTab && !(await confirmLeave())) return;
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev);
@@ -2573,6 +2577,7 @@ function MeetingDetailWorkspace() {
         ] satisfies MeetingTabItem[]).filter((item) => visibleTabs.includes(item.id)), isPhone, activeTab)}
       />
 
+      <UnsavedPanelsProvider value={unsavedPanels}>
       <div className="meeting-detail-tabpanel">
         {activeTab === "transcript" && !transcriptAccess && <TeamsSpeakerLinks societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} />}
         {activeTab === "transcript" && transcriptAccess && (
@@ -2989,6 +2994,7 @@ function MeetingDetailWorkspace() {
           />
         )}
       </div>
+      </UnsavedPanelsProvider>
 
       <EditMeetingDrawer
         open={editMeetingOpen}
