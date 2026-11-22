@@ -13,6 +13,12 @@ function loadPdfJs() {
   return pdfJsModule;
 }
 type PdfJs = Awaited<ReturnType<typeof loadPdfJs>>;
+let sharedWorker: InstanceType<PdfJs["PDFWorker"]> | undefined;
+/** One pdf.js worker for every preview: without it each new PDF (every live invoice rebuild) starts and loads a fresh worker. */
+function pdfWorker(pdfjs: PdfJs) {
+  if (!sharedWorker || sharedWorker.destroyed) sharedWorker = new pdfjs.PDFWorker();
+  return sharedWorker;
+}
 type PdfDoc = Awaited<ReturnType<PdfJs["getDocument"]>["promise"]>;
 type PageSize = { width: number; height: number };
 /** Passed with each page's text layer; `focus` is true once, for the page a `pageNumber`/`focusKey` request asked for. */
@@ -23,6 +29,8 @@ type DrawParams = { pdfjs: PdfJs; doc: PdfDoc; scaleOf: (page: number) => number
 /** Fit-width is capped so a desktop dialog shows a readable page, not a poster. */
 const FIT_MIN = 120, FIT_MAX = 900, GUTTER = 8;
 const VISIBLE_THRESHOLDS = Array.from({ length: 11 }, (_, index) => index / 10);
+/** How long a resize must pause before drawn pages are redrawn at the new size. */
+const RESIZE_SETTLE_MS = 150;
 
 function freeCanvas(canvas: HTMLCanvasElement) {
   // Zero the backing store first: Safari keeps detached canvases' memory otherwise.
@@ -74,6 +82,9 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, fitTo
   const params = useRef<DrawParams | null>(null);
   const pdfjsRef = useRef<PdfJs | null>(null);
   const scheduler = useRef<{ running: boolean; cancel?: () => void }>({ running: false });
+  /** Set while the viewport is being resized: stale canvases stretch to fit until it settles. */
+  const settling = useRef<number | undefined>(undefined);
+  const geometrySource = useRef<{ doc: PdfDoc; zoom: number } | null>(null);
   const textLayerReady = useRef(onTextLayerReady);
   useLayoutEffect(() => { textLayerReady.current = onTextLayerReady; });
   const slotList = useCallback(() => Array.from({ length: params.current?.doc.numPages ?? 0 }, (_, index) => slots.current.get(index + 1)).filter((slot): slot is HTMLDivElement => Boolean(slot)), []);
@@ -139,7 +150,7 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, fitTo
     try {
       for (;;) {
         const run = params.current;
-        if (!run) break;
+        if (!run || settling.current !== undefined) break;
         const freshness = new Map<number, boolean>();
         for (const [page, entry] of drawn.current) freshness.set(page, entry.scale === run.scaleOf(page) && entry.ratio === run.ratioOf(page));
         for (const page of failed.current) freshness.set(page, true);
@@ -163,7 +174,7 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, fitTo
         const pdfjs = await loadPdfJs();
         const data = new Uint8Array(await blob.arrayBuffer());
         if (!alive) return;
-        task = pdfjs.getDocument({ data });
+        task = pdfjs.getDocument({ data, worker: pdfWorker(pdfjs) });
         const loaded = await task.promise;
         if (!alive) return;
         const first = (await loaded.getPage(1)).getViewport({ scale: 1 });
@@ -231,8 +242,16 @@ export function PdfPreview({ blob, pageNumber, focusKey, onTextLayerReady, fitTo
     };
     // A stretched canvas reads fine for a moment; its text layer would sit at the old scale.
     for (const [page, entry] of drawn.current) entry.textLayer.hidden = entry.scale !== box(page).scale;
-    void pump();
-  }, [doc, width, boxes, pump]);
+    // A window or pane resize changes the size every frame; redraw once it pauses, not per frame.
+    const resized = drawn.current.size > 0 && geometrySource.current?.doc === doc && geometrySource.current.zoom === zoom;
+    geometrySource.current = { doc, zoom };
+    window.clearTimeout(settling.current);
+    settling.current = undefined;
+    if (!resized) { void pump(); return; }
+    scheduler.current.cancel?.();
+    settling.current = window.setTimeout(() => { settling.current = undefined; void pump(); }, RESIZE_SETTLE_MS);
+  }, [doc, width, boxes, zoom, pump]);
+  useEffect(() => () => window.clearTimeout(settling.current), []);
 
   // Keep the same point under the pointer (or the view's centre) across a zoom.
   useLayoutEffect(() => {

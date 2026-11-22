@@ -18,6 +18,8 @@ export function InvoicePdfPreview(props: InvoiceDocumentProps) {
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const documentKey = JSON.stringify(props);
+  /** The document the shown PDF was built from, so revealing a hidden preview does not rebuild it. */
+  const builtKey = useRef<string | null>(null);
 
   useLayoutEffect(() => {
     const element = host.current;
@@ -39,7 +41,8 @@ export function InvoicePdfPreview(props: InvoiceDocumentProps) {
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
+    // Crossing the phone breakpoint hides then reveals the preview; the PDF on screen is still current.
+    if (!visible || builtKey.current === documentKey) return;
     let cancelled = false;
     setError("");
     // Wait for a pause in typing, and do not render a hidden mobile preview.
@@ -48,7 +51,9 @@ export function InvoicePdfPreview(props: InvoiceDocumentProps) {
         try {
           const { buildInvoicePdf } = await import("./invoicePdf");
           const bytes = await buildInvoicePdf(JSON.parse(documentKey));
-          if (!cancelled) setPdf({ key: documentKey, blob: new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" }) });
+          if (cancelled) return;
+          builtKey.current = documentKey;
+          setPdf({ key: documentKey, blob: new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/pdf" }) });
         } catch (failure) {
           if (!cancelled) setError(failure instanceof Error ? failure.message : "Could not generate the PDF preview.");
         }

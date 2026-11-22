@@ -27,10 +27,34 @@ export async function ensureDocumentPdfEngine(): Promise<void> {
   if (!engineReady) engineReady = init(wasmUrl).catch((error) => { engineReady = undefined; throw error; });
   await engineReady;
 }
+const fontFiles = new Map<string, Promise<string>>();
+/**
+ * Each font file is fetched once per session and kept as a data URI. Forme passes data URIs
+ * straight to the engine; given a URL it fetches every registration one after another on
+ * every render, which made each live-preview rebuild ~15 sequential requests.
+ */
+function fontDataUri(url: string): Promise<string> {
+  let file = fontFiles.get(url);
+  if (!file) {
+    file = fetch(url).then(async (response) => {
+      if (!response.ok) throw new Error(`Could not load the PDF font ${url} (${response.status}).`);
+      const blob = await response.blob();
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error ?? new Error(`Could not read the PDF font ${url}.`));
+        reader.readAsDataURL(blob);
+      });
+    });
+    file.catch(() => fontFiles.delete(url));
+    fontFiles.set(url, file);
+  }
+  return file;
+}
 /** All selectable families are local assets, including when the document mixes section fonts. */
 export async function loadDocumentFonts(config?: Partial<InvoiceTemplate>): Promise<FontRegistration[]> {
   const brandSerif = !config?.brand || config.brand.font === "serif";
-  return [
+  const registrations: FontRegistration[] = [
     { family: "Invoice", src: brandSerif ? regularUrl : interRegularUrl }, { family: "Invoice", src: brandSerif ? boldUrl : interBoldUrl, fontWeight: "bold" },
     { family: "InvoiceSans", src: interRegularUrl }, { family: "InvoiceSans", src: interBoldUrl, fontWeight: "bold" },
     { family: "InvoiceSerif", src: regularUrl }, { family: "InvoiceSerif", src: boldUrl, fontWeight: "bold" },
@@ -39,6 +63,7 @@ export async function loadDocumentFonts(config?: Partial<InvoiceTemplate>): Prom
     { family: "InvoiceLiberationSerif", src: liberationSerifUrl }, { family: "InvoiceLiberationSerif", src: liberationSerifBoldUrl, fontWeight: "bold" },
     { family: "InvoiceDisplay", src: interDisplayUrl }, { family: "InvoiceLabel", src: spaceMonoUrl },
   ];
+  return Promise.all(registrations.map(async (font) => typeof font.src === "string" ? { ...font, src: await fontDataUri(font.src) } : font));
 }
 /** No upload or server required: pdfcn → Forme pagination → vector PDF and real page numbers. */
 export async function buildInvoicePdf(props: InvoicePdfProps): Promise<Uint8Array> {
