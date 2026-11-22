@@ -194,7 +194,7 @@ export function DocumentVersionsDrawer({
                 </span>
               </div>
               <div style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
-                <span className="mono">{v.fileName}</span>
+                <span className="mono document-file-name">{v.fileName}</span>
                 {v.fileSizeBytes != null && (
                   <span className="muted"> · {formatBytes(v.fileSizeBytes)}</span>
                 )}
