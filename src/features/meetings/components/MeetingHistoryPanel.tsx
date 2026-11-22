@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Select } from "../../../components/Select";
+import { useReportUnsaved } from "../lib/unsavedPanels";
 
 type Row = Record<string, unknown>;
 type HistoryKey = "actionObservations" | "importedSourceVersions";
@@ -79,6 +80,7 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
   useEffect(() => {
     if (!dirty) { setDraft(JSON.parse(latest) as History); baseline.current = latest; }
   }, [latest, dirty]); // Preserve unsaved edits when query data refreshes.
+  useReportUnsaved(dirty, "history changes");
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };

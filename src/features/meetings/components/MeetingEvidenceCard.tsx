@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { EvidenceRowsEditor, type EvidenceColumn } from '@/components/EvidenceRowsEditor';
 import { checkpointResult, decisionReadiness } from '../../../../shared/evidenceReview';
 import { formatMeetingDate } from '../../../../shared/meetingDates';
+import { useReportUnsaved } from '../lib/unsavedPanels';
 const evidence: EvidenceColumn[] = [{key:'sourceExternalIds',label:'External source IDs',type:'list'},{key:'sourceUrl',label:'Source URL'},{key:'sourceReference',label:'Page / section citation'},{key:'reviewStatus',label:'Review',options:['pending','verified','rejected']}];
 const editors: Record<string, {title:string;columns:EvidenceColumn[]}> = {
   consentItems: {title:'Documents adopted by consent',columns:[{key:'id',label:'Item ID'},{key:'title',label:'Document title'},{key:'documentVersionId',label:'Pinned document version ID'},{key:'targetMinutesId',label:'Target minutes ID'},{key:'outcome',label:'Recorded outcome',options:['pending','adopted','received','deferred','excluded']},{key:'checkpointId',label:'Quorum checkpoint ID'},...evidence]},
@@ -46,6 +47,7 @@ export function MeetingEvidenceCard({minutes, allMinutes, meetings}:{minutes:any
   const {can}=usePermissions();const toast=useToast();
   const save=useMutation(api.minutesReview.saveEvidence);const schedule=useMutation(api.minutesReview.scheduleSuggestions);
   const [draft,setDraft]=useState<any>(null);const [busy,setBusy]=useState(false);
+  useReportUnsaved(Boolean(draft&&minutes)&&EVIDENCE_KEYS.some(key=>JSON.stringify(draft[key]??[])!==JSON.stringify(minutes[key]??[])),'meeting evidence');
   if(!minutes)return null;
   const value=draft ?? minutes;const canEdit=can('minutes:write')&&!minutes.approvedAt;
   const choices=minutesChoices(minutes,allMinutes,meetings);
@@ -60,6 +62,8 @@ export function MeetingEvidenceCard({minutes, allMinutes, meetings}:{minutes:any
     return <><section className="card meeting-evidence-add" style={{marginTop:16}}><div className="card__head"><h2 className="card__title">Decisions and evidence</h2><span className="card__subtitle">None recorded</span>
       <button className="btn-action" type="button" style={{marginLeft:'auto'}} disabled={busy} onClick={startEdit}>Add evidence</button></div></section>{people}</>;
   }
+  // Confirmed, verified and not yet scheduled: the rows the server will act on.
+  const schedulableIds:string[]=(value.futureMeetingSuggestions??[]).filter((row:any)=>row.status==='confirmed'&&row.reviewStatus==='verified'&&!row.scheduledMeetingId).map((row:any)=>String(row.id));
   const shownEditors=Object.entries(editors).filter(([key])=>draft||(value[key]??[]).length>0);
   return <><div className="card" style={{marginTop:16}}><div className="card__head"><h2 className="card__title">Decisions and evidence</h2>
     {canEdit&&<button className="btn-action" disabled={busy} onClick={()=>draft?setDraft(null):startEdit()}>{draft?'Cancel':'Edit evidence'}</button>}
@@ -70,6 +74,6 @@ export function MeetingEvidenceCard({minutes, allMinutes, meetings}:{minutes:any
     {shownEditors.map(([key,editor])=><details key={key}><summary>{editor.title} ({(value[key]??[]).length})</summary><EvidenceRowsEditor title={editor.title} rows={value[key]??[]} columns={columnsFor(key)} disabled={!draft||busy} onChange={rows=>changeRows(key,rows)}/></details>)}
     {(value.quorumCheckpoints??[]).map((row:any)=><p key={row.id}>Quorum {row.id}: {checkpointResult(row)}</p>)}
     {(value.conditionalDecisions??[]).map((row:any)=><p key={row.id}>{row.title}: {decisionReadiness(row,value.decisionRequirements??[],value.quorumCheckpoints??[])}</p>)}
-    {!draft&&canEdit&&can('meetings:write')&&(value.futureMeetingSuggestions??[]).length>0&&<button className="btn-action" disabled={busy} onClick={async()=>{setBusy(true);try{await schedule({id:minutes._id,suggestionIds:value.futureMeetingSuggestions.filter((row:any)=>row.status==='confirmed'&&row.reviewStatus==='verified').map((row:any)=>row.id)});toast.success('Reviewed suggestions scheduled');}catch(error:any){toast.error(error.message);}finally{setBusy(false);}}}>Schedule confirmed reviewed suggestions</button>}
+    {!draft&&canEdit&&can('meetings:write')&&(value.futureMeetingSuggestions??[]).length>0&&<button className="btn-action" disabled={busy||!schedulableIds.length} title={schedulableIds.length?undefined:'No confirmed, reviewed suggestions are waiting to be scheduled.'} onClick={async()=>{setBusy(true);try{await schedule({id:minutes._id,suggestionIds:schedulableIds});toast.success('Reviewed suggestions scheduled');}catch(error:any){toast.error(error.message);}finally{setBusy(false);}}}>Schedule confirmed reviewed suggestions</button>}
   </div></div>{people}</>;
 }
