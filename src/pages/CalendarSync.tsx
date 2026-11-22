@@ -174,6 +174,11 @@ export function CalendarSyncPage() {
         location: e.location,
         description: e.description,
         iCalUID: e.iCalUID,
+        ...(e.recurrenceRule ? { recurrenceRule: e.recurrenceRule } : {}),
+        ...(e.recurrenceId ? { recurrenceId: e.recurrenceId } : {}),
+        // Every event is also offered as a candidate deadline for review
+        // (the page promises "candidate deadlines and source evidence").
+        isDeadline: true,
       }));
       const sessionId = await stage({
         societyId: society._id,
@@ -182,9 +187,10 @@ export function CalendarSyncPage() {
         events,
         name: calendarName.trim() ? `${calendarName.trim()} calendar sync` : undefined,
       } as any);
-      // The import session also lists the calendar itself as a source record,
-      // so its candidate count is one more than the number of events.
-      toast.success(`Staged ${events.length} event${events.length === 1 ? "" : "s"} for review`, "The import session also includes 1 calendar source record.");
+      // Each event is staged as source evidence and a candidate deadline, and
+      // the session also lists the calendar itself as a source record.
+      const plural = events.length === 1 ? "" : "s";
+      toast.success(`Staged ${events.length} event${plural} for review`, "Each event is also a candidate deadline; the import session includes 1 calendar source record.");
       navigate(`/app/imports?sessionId=${encodeURIComponent(String(sessionId))}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Could not stage calendar events");

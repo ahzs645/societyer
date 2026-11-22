@@ -16,7 +16,7 @@ import { parseTypedDate } from "../src/lib/typedDate";
 import { userDisplayName } from "../shared/functions/users";
 import { MODULE_DEFINITIONS } from "../src/lib/modules";
 import { newSocietyOwnerFields } from "../shared/functions/society";
-import { formatIcsWhen, parseIcs } from "../shared/icsCalendar";
+import { formatIcsWhen, MAX_ICS_OCCURRENCES, parseIcs } from "../shared/icsCalendar";
 
 type Catalog = { [key: string]: string | Catalog };
 function flatten(catalog: Catalog, prefix = ""): Map<string, string> {
@@ -211,6 +211,27 @@ assert.equal(openableExternalUrl(" https://paperless.example.org/documents/12/ "
   assert.equal(formatIcsWhen(committee.start, committee.startTimeZone, "America/Vancouver"), "2026-11-12 09:00 (America/Toronto)");
   assert.equal(formatIcsWhen(holiday.start), "2026-11-11");
   assert.match(readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8"), /formatIcsWhen\(record\.start/, "the parsed-events table formats the time");
+}
+
+// AUD-24: a recurring event stages every occurrence (bounded), not just the first.
+{
+  const one = (lines: string[]) => ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "SUMMARY:Board", "UID:series-1", ...lines, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  const starts = (text: string, expandUntil = "2025-12-31") => parseIcs(text, { displayTimeZone: "America/Vancouver", expandUntil }).map((event) => event.start);
+  const weekly = parseIcs(one(["DTSTART;TZID=America/Vancouver:20250107T180000", "DTEND;TZID=America/Vancouver:20250107T200000", "RRULE:FREQ=WEEKLY;COUNT=3"]), { expandUntil: "2025-12-31" });
+  assert.deepEqual(weekly.map((event) => [event.start, event.end]), [["2025-01-07T18:00", "2025-01-07T20:00"], ["2025-01-14T18:00", "2025-01-14T20:00"], ["2025-01-21T18:00", "2025-01-21T20:00"]], "COUNT=3 gives three occurrences with their own end times");
+  assert.ok(weekly.every((event) => event.iCalUID === "series-1" && event.recurrenceRule === "FREQ=WEEKLY;COUNT=3" && event.recurrenceId === event.start), "each occurrence keeps the series UID, rule and its own recurrence id");
+  assert.deepEqual(starts(one(["DTSTART;TZID=America/Vancouver:20250114T180000", "RRULE:FREQ=MONTHLY;BYDAY=2TU;UNTIL=20250601T000000Z"])),
+    ["2025-01-14T18:00", "2025-02-11T18:00", "2025-03-11T18:00", "2025-04-08T18:00", "2025-05-13T18:00"], "second Tuesday monthly until a UTC bound");
+  assert.deepEqual(starts(one(["DTSTART;VALUE=DATE:20250131", "RRULE:FREQ=MONTHLY;COUNT=4"])), ["2025-01-31", "2025-03-31", "2025-05-31", "2025-07-31"], "months without the 31st are skipped");
+  assert.deepEqual(starts(one(["DTSTART;VALUE=DATE:20250101", "RRULE:FREQ=DAILY;INTERVAL=2;COUNT=4", "EXDATE;VALUE=DATE:20250103"])), ["2025-01-01", "2025-01-05", "2025-01-07"], "EXDATE removes an instance that still counts");
+  assert.deepEqual(starts(one(["DTSTART;VALUE=DATE:20200229", "RRULE:FREQ=YEARLY;COUNT=2"]), "2030-01-01"), ["2020-02-29", "2024-02-29"], "yearly Feb 29 skips common years");
+  assert.deepEqual(starts(one(["DTSTART;VALUE=DATE:20251229", "RRULE:FREQ=DAILY"])), ["2025-12-29", "2025-12-30", "2025-12-31"], "an open rule stops at the window");
+  assert.equal(parseIcs(one(["DTSTART;VALUE=DATE:20000101", "RRULE:FREQ=DAILY"]), { expandUntil: "2025-12-31" }).length, MAX_ICS_OCCURRENCES, "an open rule keeps a bounded number of the latest occurrences");
+  assert.deepEqual(starts(one(["DTSTART;VALUE=DATE:20250103", "RRULE:FREQ=MONTHLY;BYSETPOS=-1;BYDAY=MO,TU"])), ["2025-01-03"], "an unsupported rule keeps its first occurrence");
+  const moved = ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:series-2", "SUMMARY:Board", "DTSTART;TZID=America/Vancouver:20250107T180000", "RRULE:FREQ=WEEKLY;COUNT=3", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:series-2", "SUMMARY:Board (moved)", "RECURRENCE-ID;TZID=America/Vancouver:20250114T180000", "DTSTART;TZID=America/Vancouver:20250115T180000", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  assert.deepEqual(parseIcs(moved, { expandUntil: "2025-12-31" }).map((event) => `${event.summary}@${event.start}`), ["Board@2025-01-07T18:00", "Board@2025-01-21T18:00", "Board (moved)@2025-01-15T18:00"], "a RECURRENCE-ID event replaces its instance");
+  assert.match(readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8"), /isDeadline: true/, "staged calendar events are offered as candidate deadlines");
 }
 
 // Destructive platform actions name what is lost before they run.
