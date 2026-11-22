@@ -440,7 +440,7 @@ export function InvoicesPage() {
           The books are kept in {workspace.ledger.workspaceCurrency}. Set an explicit invoice exchange rate and settlement rate to post foreign invoices and their exchange differences.{" "}
           {/* The list shows one currency at a time, so each action switches to the foreign currency it names. */}
           {workspace.ledger.foreignCurrency.currencies.map((foreign) => (
-            <button key={foreign} type="button" className="btn btn--ghost btn--sm" onClick={() => { setCurrencyFilter(foreign); setTab("needs_action"); }}>
+            <button key={foreign} type="button" className="btn btn--ghost btn--sm" onClick={() => { setCurrencyFilter(foreign); setTab("all"); }}>
               {workspace.ledger.foreignCurrency.currencies.length === 1 ? "Show them" : `Show ${foreign}`}
             </button>
           ))}
