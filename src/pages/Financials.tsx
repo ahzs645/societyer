@@ -74,6 +74,7 @@ import {
 } from "../features/financials/lib/operatingSubscriptions";
 import {
   type WaveAccountView,
+  activeBookkeepingConnection,
   isBrowserBackedWaveConnection,
 } from "../features/financials/lib/waveResources";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -197,7 +198,12 @@ export function FinancialsPage() {
   const budgetFiscalYear: string = hub?.budgetFiscalYear ?? fiscalYear;
   // The window the budget actuals are summed over, for the links into them.
   const budgetRange = hub?.budgetFiscalYear ? fiscalWindow(hub.budgetFiscalYear, society?.fiscalYearEnd) : null;
-  const activeConnection = (connections ?? []).find((c) => c.status === "connected");
+  // The provider feed (Wave) owns Sync/Cache/Disconnect; manual bank accounts
+  // and internal postings also live on "connected" rows but are not a feed.
+  const activeConnection = activeBookkeepingConnection(connections);
+  // Bank figures and transactions show whenever the books hold them, whether
+  // they came from a feed, a CSV import or a feed that was since disconnected.
+  const hasBankData = (hub?.bankAccountCount ?? 0) > 0 || (transactions?.length ?? 0) > 0;
   const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const importedBudgetReviewCount = (orgHistory?.budgets ?? []).filter((budget: any) => budget.status === "NeedsReview").length;
   const linksByTransactionId = useMemo(() => {
@@ -245,8 +251,12 @@ export function FinancialsPage() {
     }
     return { ...tableData.hydratedView, columns };
   }, [isMobile, tableData.hydratedView]);
+  // `?transaction=` names one linked transaction, or a comma-separated set
+  // (every bank payment of a payroll run).
   const focusedTransactionId = searchParams.get("transaction");
-  const focusedTransaction = (transactions ?? []).find((row: any) => String(row._id) === focusedTransactionId);
+  const focusedTransactionIds = useMemo(() => new Set((focusedTransactionId ?? "").split(",").filter(Boolean)), [focusedTransactionId]);
+  const focusedTransactions = (transactions ?? []).filter((row) => focusedTransactionIds.has(String(row._id)));
+  const focusedTransaction = focusedTransactions.length === 1 ? focusedTransactions[0] : undefined;
   // The To review / Reviewed queue, categorisation method and tag filters (in the URL).
   const txnFilters = useMemo(() => readTransactionFilters(searchParams), [searchParams]);
   const setTxnFilters = (next: TransactionFilterState) => setSearchParams((prev) => withTransactionFilters(prev, next), { replace: true });
@@ -257,7 +267,7 @@ export function FinancialsPage() {
   const { decorate: decorateTransactions } = txnSurface;
   const accountsById = useMemo(() => new Map((accounts ?? []).map((account) => [account._id, account])), [accounts]);
   const allRecords = useMemo(
-    () => decorateTransactions((transactions ?? []).filter((t: any) => !focusedTransactionId || String(t._id) === focusedTransactionId).map((t: any) => ({
+    () => decorateTransactions((transactions ?? []).filter((t: any) => !focusedTransactionId || focusedTransactionIds.has(String(t._id))).map((t: any) => ({
       ...t,
       account: accountsById.get(t.accountId)?.name ?? "",
       currency: accountsById.get(t.accountId)?.currency,
@@ -266,7 +276,7 @@ export function FinancialsPage() {
         ...(assetsByTransactionId.get(t._id) ?? []).map((asset: any) => String(asset._id)),
       ]).size,
     }))),
-    [transactions, accountsById, linksByTransactionId, assetsByTransactionId, focusedTransactionId, decorateTransactions],
+    [transactions, accountsById, linksByTransactionId, assetsByTransactionId, focusedTransactionId, focusedTransactionIds, decorateTransactions],
   );
   // A linked purchase (`?transaction=`) shows on its own, whatever the queue.
   const records = useMemo(
@@ -376,14 +386,14 @@ export function FinancialsPage() {
     <StatTile key="ledger-expenses" label="Ledger expenses" value={<Money variant="hero" trimWholeCents cents={ledgerExpenseCents} />} />,
     <StatTile key="ledger-net" label="Ledger net" value={<Money variant="hero" trimWholeCents cents={ledgerNetCents} />} tone={ledgerNetCents < 0 ? "danger" : "neutral"} />,
     // Ledger assets only earn a tile when they differ from the bank balance beside them.
-    ...(activeConnection && hub && hub.totalBalance === ledgerAssetCents
+    ...(hasBankData && hub && hub.totalBalance === ledgerAssetCents
       ? []
       : [<StatTile key="ledger-assets" label="Ledger assets" value={<Money variant="hero" trimWholeCents cents={ledgerAssetCents} />} />]),
   ] : [];
-  const bankBalanceTile = activeConnection && hub
+  const bankBalanceTile = hasBankData && hub
     ? <StatTile label="Bank balance" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance} />} />
     : null;
-  const bankTiles = activeConnection && hub ? [
+  const bankTiles = hasBankData && hub ? [
     <StatTile key="unrestricted" label="Unrestricted" value={<Money variant="hero" trimWholeCents cents={hub.unrestricted} />} tone={hub.unrestricted < 0 ? "danger" : "neutral"} />,
     <StatTile key="restricted" label="Restricted funds" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance - hub.unrestricted} />} />,
   ] : [];
@@ -420,6 +430,7 @@ export function FinancialsPage() {
         demo,
       });
       await sync({ connectionId });
+      completeTransactions.refresh();
       toast.success(demo ? "Connected to demo Wave workspace" : "Connected to Wave");
     } catch (err: any) {
       toast.error(err?.message ?? "Connect failed");
@@ -519,6 +530,7 @@ export function FinancialsPage() {
                         toast.success(
                           `Synced ${result.accounts} accounts, ${result.transactions} transactions.`,
                         );
+                        completeTransactions.refresh();
                       } catch (err: any) {
                         toast.error(err?.message ?? "Sync failed");
                       } finally {
@@ -533,8 +545,14 @@ export function FinancialsPage() {
                     label: "Disconnect",
                     destructive: true,
                     onSelect: async () => {
-                      await disconnect({ connectionId: activeConnection._id });
-                      toast.info("Disconnected Wave");
+                      const label = providerLabel(activeConnection.provider);
+                      try {
+                        await disconnect({ connectionId: activeConnection._id });
+                        // Cached accounts and transactions stay; only the feed's status changes.
+                        toast.info(`Disconnected ${label}`);
+                      } catch (err: any) {
+                        toast.error(err?.message ?? `Could not disconnect ${label}`);
+                      }
                     },
                   },
                 ]}
@@ -597,6 +615,7 @@ export function FinancialsPage() {
         <BankCsvImportCard
           societyId={society._id}
           accounts={accounts ?? []}
+          onImported={completeTransactions.refresh}
         />
       )}
 
@@ -648,7 +667,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {tab === "overview" && <FinancialInsightsLazy society={society} moreMetrics={mobileMoreMetrics} hideBudgetChart={isMobile && Boolean(activeConnection)} />}
+      {tab === "overview" && <FinancialInsightsLazy society={society} moreMetrics={mobileMoreMetrics} hideBudgetChart={isMobile && hasBankData} />}
 
       {tab === "wave" && activeConnection && (
         <WaveCacheExplorer
@@ -707,7 +726,7 @@ export function FinancialsPage() {
         />
       )}
 
-      {tab === "overview" && activeConnection && hub && hub.restrictedAccounts.length > 0 && (
+      {tab === "overview" && hasBankData && hub && hub.restrictedAccounts.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Restricted funds</h2>
@@ -749,7 +768,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {tab === "overview" && activeConnection && (
+      {tab === "overview" && hasBankData && (
         <MobileFold
           title={`Budget vs actuals — FY ${budgetFiscalYear}`}
           summary={budgetRows.length === 0
@@ -853,14 +872,14 @@ export function FinancialsPage() {
         </MobileFold>
       )}
 
-      {tab === "transactions" && activeConnection && transactions && transactions.length > 0 && (
+      {tab === "transactions" && transactions && transactions.length > 0 && (
         <>
-        {focusedTransaction && (
+        {focusedTransactions.length > 0 && (
           <div className="callout callout--info">
             <Link2 size={16} />
             <div className="callout__body">
-              <strong className="callout__title">Linked accounting purchase</strong>
-              <div className="callout__note muted">{focusedTransaction.date} · {focusedTransaction.description} · {formatMoney(Math.abs(focusedTransaction.amountCents), { currency: accountsById.get(focusedTransaction.accountId)?.currency })}</div>
+              <strong className="callout__title">{focusedTransaction ? "Linked transaction" : `${focusedTransactions.length} linked transactions`}</strong>
+              {focusedTransaction && <div className="callout__note muted">{focusedTransaction.date} · {focusedTransaction.description} · {formatMoney(Math.abs(focusedTransaction.amountCents), { currency: accountsById.get(focusedTransaction.accountId)?.currency })}</div>}
             </div>
             <button className="btn btn--sm" onClick={() => navigate("/app/financials?tab=transactions")}>Show all transactions</button>
           </div>
@@ -985,17 +1004,19 @@ export function FinancialsPage() {
         </>
       )}
 
-      {tab === "transactions" && !activeConnection && (
+      {tab === "transactions" && transactions && transactions.length === 0 && (
         <div className="card financials-empty-card">
           <EmptyState
             icon={<PiggyBank size={18} />}
             title="No transactions yet"
-            description={(accounts ?? []).length > 0
-              ? "Import a bank CSV above, or connect a bookkeeping source to sync transactions."
-              : "Connect a bookkeeping source, or set up the chart of accounts so you can import a bank CSV."}
+            description={activeConnection
+              ? `Sync ${providerLabel(activeConnection.provider)} from the page menu, or import a bank CSV above.`
+              : (accounts ?? []).length > 0
+                ? "Import a bank CSV above, or connect a bookkeeping source to sync transactions."
+                : "Connect a bookkeeping source, or set up the chart of accounts so you can import a bank CSV."}
             action={
               <>
-                <button className="btn-action btn-action--primary" onClick={() => setTab("overview")}>Connect a source</button>
+                {!activeConnection && <button className="btn-action btn-action--primary" onClick={() => setTab("overview")}>Connect a source</button>}
                 <Link className="btn-action" to="/app/financials/accounting">Set up chart of accounts</Link>
               </>
             }
@@ -1241,9 +1262,12 @@ export function FinancialsPage() {
 function BankCsvImportCard({
   societyId,
   accounts,
+  onImported,
 }: {
   societyId: any;
   accounts: any[];
+  /** The page's transaction history is a loaded snapshot; reload it so the new rows show. */
+  onImported: () => void;
 }) {
   const { canWrite } = useFinancePermissions();
   const importCsv = useMutation(api.financialHub.importBankCsvTransactions);
@@ -1294,6 +1318,7 @@ function BankCsvImportCard({
       );
       setParsed(null);
       setFileName(null);
+      if (result.inserted > 0) onImported();
     } catch (err: any) {
       toast.error(err?.message ?? "Import failed");
     } finally {
