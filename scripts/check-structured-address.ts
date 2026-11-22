@@ -38,6 +38,15 @@ const office = saved.tables.organizationAddresses.find((row: any) => row.type ==
 assert.equal(office.country, "New Zealand"); assert.equal(office.street, "Needs review"); assert.equal(office.city, "Needs review");
 const mailing = saved.tables.organizationAddresses.find((row: any) => row.type === "mailing")!;
 assert.equal(mailing.street, "123 Example Road"); assert.equal(mailing.postalCode, "V1V 1V1"); assert.equal(mailing.city, "Needs review"); assert.equal(mailing.provinceState, ""); assert.equal(mailing.country, "Needs review");
+// Removing (or retiring) the current address clears its plain-text copy, so the profile's backfill can't recreate it.
+await client.mutation("organizationDetails:removeAddress", { id: mailing._id });
+await client.mutation("organizationDetails:upsertAddress", { id: office._id, societyId: created.societyId, type: "registered_office", status: "past", street: office.street, city: office.city, country: office.country });
+await client.mutation("organizationDetails:seedFromSocietyAddresses", { societyId: created.societyId });
+await client.mutation("organizationDetails:backfillFromExistingRecords", { societyId: created.societyId });
+const retired = client.exportLocalWorkspaceSnapshot();
+assert.equal(retired.tables.societies[0].mailingAddress, undefined);
+assert.equal(retired.tables.societies[0].registeredOfficeAddress, undefined);
+assert.deepEqual(retired.tables.organizationAddresses.map((row: any) => `${row.type}:${row.status}`), ["registered_office:past"]);
 
 const fixture = await createFixture({ "./society.js": () => import("../convex/society"), "./organizationDetails.js": () => import("../convex/organizationDetails") });
 const subject = "verified-native-sparse-address";

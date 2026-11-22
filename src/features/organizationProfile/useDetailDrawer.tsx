@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Drawer } from "../../components/ui";
@@ -79,6 +79,9 @@ export function useDetailDrawer(society: OrganizationRecord | null | undefined, 
   const removeIdentifier = useMutation(api.organizationDetails.removeIdentifier);
   const [kind, setKind] = useState<DrawerKind | null>(null);
   const [draft, setDraft] = useState<DetailDraft | null>(null);
+  // A save in flight: a second Save would send the same new row again and create a duplicate.
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const open = (next: DrawerKind, value: DetailDraft) => {
     setKind(next);
@@ -111,7 +114,9 @@ export function useDetailDrawer(society: OrganizationRecord | null | undefined, 
   const openIdentifier = (row: IdentifierRow | TaxIdentifierKind | "other") => open("identifier", typeof row === "string" ? newIdentifierDraft(row) : row);
 
   const save = async () => {
-    if (!kind || !draft || !society) return;
+    if (!kind || !draft || !society || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
       if (kind === "address") {
         await upsertAddress({
@@ -151,6 +156,9 @@ export function useDetailDrawer(society: OrganizationRecord | null | undefined, 
       close();
     } catch (error) {
       toast.error("Could not save record", error instanceof Error ? error.message : String(error));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -183,7 +191,7 @@ export function useDetailDrawer(society: OrganizationRecord | null | undefined, 
       footer={
         <>
           <button className="btn" type="button" onClick={close}>Cancel</button>
-          <button className="btn btn--accent" type="button" disabled={!canEdit} onClick={save}>Save</button>
+          <button className="btn btn--accent" type="button" disabled={!canEdit || saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
         </>
       }
     >
