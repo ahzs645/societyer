@@ -942,7 +942,23 @@ export class LocalDexieRowStore implements LocalRowStore {
     return this.attachmentsCache.filter((row) => !row.societyId || row.societyId === args.societyId);
   }
 
+  /**
+   * Whether this store was opened with seed rows to reset to (the bundled demo).
+   * An operator's own workspace is opened with an empty seed.
+   */
+  hasSeedRows() {
+    return Object.values(this.seed).some((rows) => rows.length > 0);
+  }
+
+  /**
+   * Reset the workspace to its seed: clears every stored record, history entry,
+   * attachment and file. Refused when there is no seed, since on a real local
+   * workspace that would erase its data and leave nothing in its place.
+   */
   async reseed() {
+    if (!this.hasSeedRows()) {
+      throw new Error("This workspace has no demo data to reseed from. Reseeding would erase its records, so it was not changed.");
+    }
     await this.database();
     this.loadTables(cloneLocalSeed(this.seed));
     this.deferred = new Map();

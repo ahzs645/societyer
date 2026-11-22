@@ -25,7 +25,7 @@ import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { MobileFold } from "../components/MobileFold";
 import { readFileDataUrl } from "../lib/readFileDataUrl";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
-import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
+import { canSeedDemoData, maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
@@ -853,6 +853,8 @@ export function SettingsPage() {
             </div>
           </div>
 
+          {/* Demo seeding resets the whole local store: never offer it in an operator's own workspace. */}
+          {canSeedDemoData() && (
           <div className="col" style={{ gap: 8, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontWeight: 500 }}>{t("settings.demoData")}</div>
             <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -904,6 +906,7 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
 

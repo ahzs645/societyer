@@ -490,6 +490,19 @@ for (const key of CORPORATION_DEMO_KEYS) {
   await client.close();
 }
 
+// A real local workspace is opened with an empty seed. Reseeding it must be
+// refused, not clear its records and report success (AUD-01).
+{
+  const client = new StaticConvexClient({ databaseName: `societyer-real-workspace-${process.pid}`, seed: { societies: [] } });
+  await client.whenLocalWorkspaceReady();
+  const created = await client.mutation("society:createWorkspace", { name: "Real Local Society", fiscalYearEnd: "03-31" }) as { societyId: string };
+  const reseed = await client.reseedStaticDemo().then(() => "reseeded", (error: unknown) => (error instanceof Error ? error.message : String(error)));
+  check(reseed !== "reseeded", "real workspace: reseed is refused when there is no demo seed");
+  const remaining = (await client.query("society:list", {})) as Array<{ _id: string }>;
+  check(remaining.some((row) => row._id === created.societyId), "real workspace: a refused reseed leaves its records in place");
+  await client.close();
+}
+
 // The checks above must catch broken data: each deliberate fault below has to
 // fail at least one check (the failures are then discarded).
 async function expectCaught(name: string, mutate: (demo: CorporationDemo) => void, run: (demo: CorporationDemo, label: string) => void | Promise<void>) {
