@@ -63,6 +63,13 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, workspac
   useEffect(() => { renderRevision.current++; setPdfBlob(null); }, [config, kind, longPreview]);
   useEffect(() => () => { renderRevision.current++; }, []);
 
+  // A receipt acknowledges one payment, so it has nothing to paginate; every other kind gets a long sample.
+  const canPaginate = kind !== "receipt", longSample = longPreview && canPaginate;
+  const statementRows = Array.from({ length: longSample ? 75 : 2 }, (_, index) => index % 2
+    ? { date: workspace.today, movement: `Payment PAY-${1000 + index}`, chargeCents: 0, creditCents: 5000 }
+    : { date: workspace.today, movement: `Invoice INV-${1000 + index}`, chargeCents: 17000, creditCents: 0 });
+  const statementBalanceCents = statementRows.reduce((sum, row) => sum + row.chargeCents - row.creditCents, 0);
+  const sampleAmount = (cents: number) => cents ? (cents / 100).toFixed(2) : "";
   const preview: InvoiceDocumentData = {
     documentKind: kind,
     ...defaultInvoicePayments(workspace.settings),
@@ -70,12 +77,12 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, workspac
     issueDate: workspace.today, dueDate: workspace.today, terms: "due_on_receipt", currency: workspace.ledger.workspaceCurrency,
     reference: "PO-1024", billToName: "Sample customer", billToEmail: "customer@example.test", billToAddress: "100 Main Street\nVancouver, BC", shipToName: "Sample customer — receiving", shipToAddress: "200 Warehouse Road\nVancouver, BC",
     documentTemplate: config,
-    lines: Array.from({ length: longPreview ? 75 : 3 }, (_, index) => ({ key: `sample-${index}`, item: index % 2 ? "Replacement component" : "Repair labour", description: "Inspection, testing and service", quantity: index % 2 ? 1 : 2, unit: index % 2 ? "each" : "hour", unitPriceCents: index % 2 ? 12500 : 8500, taxRatePercent: 5, taxLabel: "GST", sku: `SERVICE-${index + 1}` })),
+    lines: Array.from({ length: longSample ? 75 : 3 }, (_, index) => ({ key: `sample-${index}`, item: index % 2 ? "Replacement component" : "Repair labour", description: "Inspection, testing and service", quantity: index % 2 ? 1 : 2, unit: index % 2 ? "each" : "hour", unitPriceCents: index % 2 ? 12500 : 8500, taxRatePercent: 5, taxLabel: "GST", sku: `SERVICE-${index + 1}` })),
     memo: "Please contact us with any questions about this work.",
     ...(kind === "receipt" ? { lines: [{ key: "sample-payment", item: "Payment for INV-PREVIEW", quantity: 1, unit: "payment", unitPriceCents: 17000 }], documentDetails: [{ label: "Payment date", value: workspace.today }, { label: "Payment method", value: "E-transfer" }, { label: "Payment reference", value: "PAY-1024" }], status: "received" } : {}),
     ...(kind === "work_order" ? { documentDetails: [{ label: "Equipment", value: "Bicycle" }, { label: "Serial number", value: "FRAME-001" }, { label: "Reported problem", value: "Brake adjustment and safety inspection" }] } : {}),
     ...(kind === "quote" ? { documentDetails: [{ label: "Revision", value: "1" }, { label: "Valid until", value: workspace.today }], status: "draft" } : {}),
-    ...(kind === "statement" ? { documentFinancials: { totalCents: 12000, balanceCents: 12000 }, documentTable: { columns: [{ label: "Date" }, { label: "Movement", width: 2 }, { label: "Charges", align: "right" as const }, { label: "Payments", align: "right" as const }], rows: [[workspace.today, "Sample invoice", "170.00", ""], [workspace.today, "Sample payment", "", "50.00"]] }, documentSummary: [{ label: "Closing balance", value: `${workspace.ledger.workspaceCurrency} 120.00`, strong: true }] } : {}),
+    ...(kind === "statement" ? { documentFinancials: { totalCents: statementBalanceCents, balanceCents: statementBalanceCents }, documentTable: { columns: [{ label: "Date" }, { label: "Movement", width: 2 }, { label: "Charges", align: "right" as const }, { label: "Payments", align: "right" as const }], rows: statementRows.map((row) => [row.date, row.movement, sampleAmount(row.chargeCents), sampleAmount(row.creditCents)]) }, documentSummary: [{ label: "Closing balance", value: `${workspace.ledger.workspaceCurrency} ${sampleAmount(statementBalanceCents)}`, strong: true }] } : {}),
   };
 
   const renderPdf = async (download: boolean) => {
@@ -177,7 +184,7 @@ export function DocumentTemplateDesigner({ config, onChange, workspace, workspac
     </div>
     <aside className="document-designer__preview" id="document-design-preview" aria-label="Document preview">
       <button type="button" className="btn btn--sm document-designer__narrow-only" onClick={() => jumpTo("document-design-settings")}>Back to settings</button>
-      <div className="document-designer__preview-toolbar"><Field label="Preview document"><Select value={kind} onChange={(value) => setKind(value as PreviewKind)} options={[{ value: "invoice", label: "Invoice" }, { value: "receipt", label: "Payment receipt" }, { value: "work_order", label: "Work order" }, { value: "quote", label: "Quote" }, { value: "statement", label: "Customer statement" }]} /></Field><Checkbox label="Multi-page sample" checked={longPreview} onChange={setLongPreview} /><div className="invoice-commerce-actions"><button type="button" className="btn btn--sm" disabled={rendering} onClick={() => void renderPdf(false)}><FileSearch size={14} />{rendering ? "Rendering…" : "Preview PDF"}</button><button type="button" className="btn btn--sm" disabled={rendering} onClick={() => void renderPdf(true)}><Download size={14} /> Download sample PDF</button>{pdfBlob && <button type="button" className="btn btn--sm" onClick={() => setPdfBlob(null)}>Live preview</button>}</div><p className="muted">{pdfBlob ? "Actual generated PDF, including pagination and continuation headers/footers." : "Live content preview. Preview PDF shows the exact page breaks, fonts and page numbers."}</p></div>
+      <div className="document-designer__preview-toolbar"><Field label="Preview document"><Select value={kind} onChange={(value) => setKind(value as PreviewKind)} options={[{ value: "invoice", label: "Invoice" }, { value: "receipt", label: "Payment receipt" }, { value: "work_order", label: "Work order" }, { value: "quote", label: "Quote" }, { value: "statement", label: "Customer statement" }]} /></Field>{canPaginate && <Checkbox label="Multi-page sample" checked={longPreview} onChange={setLongPreview} />}<div className="invoice-commerce-actions"><button type="button" className="btn btn--sm" disabled={rendering} onClick={() => void renderPdf(false)}><FileSearch size={14} />{rendering ? "Rendering…" : "Preview PDF"}</button><button type="button" className="btn btn--sm" disabled={rendering} onClick={() => void renderPdf(true)}><Download size={14} /> Download sample PDF</button>{pdfBlob && <button type="button" className="btn btn--sm" onClick={() => setPdfBlob(null)}>Live preview</button>}</div><p className="muted">{pdfBlob ? "Actual generated PDF, including pagination and continuation headers/footers." : "Live content preview. Preview PDF shows the exact page breaks, fonts and page numbers."}</p></div>
       {pdfBlob ? <DocumentPdfViewer blob={pdfBlob} testId="designer-pdf-preview" /> : <FittedPaper width={pageWidth}><InvoiceDocument invoice={preview} organization={workspace.organization} paymentInstructions={workspace.settings.paymentInstructions} /></FittedPaper>}
     </aside>
   </div>;
