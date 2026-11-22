@@ -192,12 +192,9 @@ export function CurrentnessLine({ currentness }: { currentness: Currentness }) {
   if (currentness.state === "verified" && currentness.verification) {
     return <span className="gov-doc-row__title gov-doc-row__verified">{verificationLine(currentness.verification)}</span>;
   }
-  if (currentness.state === "unverified") {
-    return (
-      <span className="gov-doc-row__title">
-        Currentness not verified{currentness.staleVerification ? "; the copy verified earlier was replaced" : ""}.
-      </span>
-    );
+  // Unverified is the usual state and "Verify current" says so; only a replaced verified copy needs words.
+  if (currentness.state === "unverified" && currentness.staleVerification) {
+    return <span className="gov-doc-row__title">The copy verified earlier was replaced.</span>;
   }
   return null;
 }

@@ -77,8 +77,6 @@ export function PendingAdoptionsCard({
                 <RecordChip
                   to={`/app/meetings/${entry.meetingId}`}
                   preview={{ kind: "meeting", id: String(entry.meetingId), name: entry.meetingTitle }}
-                  tone={entry.meetingType === "AGM" ? "purple" : "gray"}
-                  avatar={(entry.meetingType || "MT").slice(0, 2).toUpperCase()}
                   label={<strong>{entry.meetingTitle}</strong>}
                 />
                 <span className="muted"> · {formatDate(entry.scheduledAt)}</span>

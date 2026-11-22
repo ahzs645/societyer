@@ -17,13 +17,12 @@ export type TranscriptQuotePick = {
 
 export const TranscriptQuoteContext = createContext<((quote: TranscriptQuotePick) => void) | null>(null);
 
-/** `?tab=notes&view=transcript&t=start-end` (or `t=start`): the notes surface's Transcript view at that moment. */
+/** `?tab=transcript&t=start-end` (or `t=start`): the Transcript tab at that moment. */
 export function notesTranscriptSearch(search: string, start: number, end?: number): string {
   const params = new URLSearchParams(search);
   params.delete("view");
   params.delete("t");
-  params.set("tab", "notes");
-  params.set("view", "transcript");
+  params.set("tab", "transcript");
   params.set("t", end === undefined || end === start ? `${start}` : `${start}-${end}`);
   return `?${params.toString()}`;
 }
@@ -42,7 +41,7 @@ export function notesTranscriptLink(start: number, end: number, location: { path
  *
  *   > “The honest truth is small pilots are where we learn the most.”
  *   >
- *   > — Priya Raman, [0:54](…?tab=notes&view=transcript&t=54-62)
+ *   > — Priya Raman, [0:54](…?tab=transcript&t=54-62)
  */
 export function transcriptQuoteMarkdown(quote: TranscriptQuotePick, href: string): string {
   const clean = (value: string) => value.replace(/\s+/g, " ").trim().replace(/^["“]+|["”]+$/g, "");

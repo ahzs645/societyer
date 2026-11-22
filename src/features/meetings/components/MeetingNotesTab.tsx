@@ -1,7 +1,9 @@
 /**
- * The Notes tab for a meeting that keeps informal notes (`recordKind:
- * "notes"`): one calm document that autosaves into `meetings.workingNotes`,
- * and "Turn notes into minutes".
+ * The Notes and Transcript tabs for a meeting that keeps informal notes
+ * (`recordKind: "notes"`): one calm document that autosaves into
+ * `meetings.workingNotes`, and "Turn notes into minutes". Both tabs are this
+ * one surface so the transcript can quote into the notes and opened views
+ * stay mounted.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -104,10 +106,16 @@ export function MeetingNotesTab({
   committees,
   tasks,
   transcriptView,
+  section,
+  onSection,
   phone = false,
   onOpenDetails,
 }: {
   meetingId: Id<"meetings">;
+  /** Which meeting tab is open: Notes, or the Transcript tab. */
+  section: "notes" | "transcript";
+  /** Opens the other tab; `view` also picks what the Notes tab shows. */
+  onSection: (section: "notes" | "transcript", view?: NotesView) => unknown;
   /** The Transcript view: the transcript workspace, or why it can't be read. */
   transcriptView?: ReactNode;
   phone?: boolean;
@@ -174,14 +182,22 @@ export function MeetingNotesTab({
   // While recording you write notes; afterwards the AI notes come first once drafted.
   // Chosen once when the tab opens, so a draft arriving never pulls you away from your notes.
   const [fallbackView] = useState<NotesView>(() => (recordingHere ? "notes" : meeting.notesDraft ? "ai" : "notes"));
-  const view: NotesView = isNotesView(requested) && (requested !== "actions" || phone) ? requested : fallbackView;
-  const setView = (next: NotesView) => setSearchParams((previous) => {
-    const params = new URLSearchParams(previous);
-    params.set("view", next);
-    return params;
-  }, { replace: true });
+  const notesView: NotesView = isNotesView(requested) && (requested !== "actions" || phone) ? requested : fallbackView;
+  const view: NotesView | "transcript" = section === "transcript" ? "transcript" : notesView;
+  /** Shows `next` in the Notes tab, leaving the Transcript tab if that's open. */
+  const setView = (next: NotesView) => {
+    if (section === "transcript") {
+      void onSection("notes", next);
+      return;
+    }
+    setSearchParams((previous) => {
+      const params = new URLSearchParams(previous);
+      params.set("view", next);
+      return params;
+    }, { replace: true });
+  };
   // Views stay mounted once opened (the editor's undo, a loaded recording); hidden ones pause their media.
-  const [visited, setVisited] = useState<ReadonlySet<NotesView>>(() => new Set([view]));
+  const [visited, setVisited] = useState<ReadonlySet<NotesView | "transcript">>(() => new Set([view]));
   useEffect(() => setVisited((current) => (current.has(view) ? current : new Set([...current, view]))), [view]);
   const surface = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -221,8 +237,12 @@ export function MeetingNotesTab({
     <NotesDocSwitcher
       doc={shownDoc}
       onDoc={setDoc}
+      view={notesView}
+      onView={setView}
       mine={myNotes}
       others={othersShared}
+      hasDraft={Boolean(meeting.notesDraft)}
+      actionCount={phone ? actionItems.filter((item) => !item.done).length : undefined}
       onAddMine={myNotes === null ? () => { void startMine(); } : undefined}
       adding={addingMine}
     />
@@ -261,20 +281,15 @@ export function MeetingNotesTab({
     <MentionPeopleContext.Provider value={mentionPeople}>
     <div className="meeting-notes-tab notes-surface" ref={surface}>
       <NotesSurfaceBar
-        view={view}
-        onView={setView}
-        phone={phone}
-        actionCount={actionItems.filter((item) => !item.done).length}
-        hasDraft={Boolean(meeting.notesDraft)}
+        switcher={section === "transcript" ? undefined : switcher}
         record={<RecordControl meetingId={meetingId} meetingTitle={meeting.title} joinUrl={meeting.remoteUrl} canWrite={canWrite} onStarted={() => setView("notes")} compact={phone} />}
         more={<NotesMoreMenu exportInput={exportInput} onOpenDetails={phone ? onOpenDetails : undefined} />}
       />
       <div className="notes-surface__view" hidden={view !== "notes"}>
-        {shownDoc === "mine" && myNotes && <MyNotesCard key={myNotes._id} meetingId={meetingId} row={myNotes} title={switcher} onDeleted={() => setDoc("team")} />}
-        {shownShared && <SharedNotesCard row={shownShared} title={switcher} />}
+        {shownDoc === "mine" && myNotes && <MyNotesCard key={myNotes._id} meetingId={meetingId} row={myNotes} onDeleted={() => setDoc("team")} />}
+        {shownShared && <SharedNotesCard row={shownShared} />}
         <div hidden={shownDoc !== "team"}>
         <NotesDocCard
-          title={switcher}
           notes={notes}
           canWrite={canWrite}
           converting={converting}
@@ -298,7 +313,7 @@ export function MeetingNotesTab({
             canWrite={canWrite && !converting}
             flushNotes={notes.flush}
             preferredTemplate={preferredTemplate}
-            onOpenTranscript={() => setView("transcript")}
+            onOpenTranscript={() => { void onSection("transcript"); }}
             onAddToNotes={(markdown) => { notes.onChange(appendMarkdown(notes.value, markdown)); toast.success("Added to the team notes."); }}
           />
         </div>
@@ -322,8 +337,7 @@ export function MeetingNotesTab({
 
 type NotesController = ReturnType<typeof useAutosavedNotes>;
 
-function NotesDocCard({ title, notes, canWrite, converting, tooLong, onPickTemplate }: {
-  title: ReactNode;
+function NotesDocCard({ notes, canWrite, converting, tooLong, onPickTemplate }: {
   notes: NotesController;
   canWrite: boolean;
   converting: boolean;
@@ -333,9 +347,6 @@ function NotesDocCard({ title, notes, canWrite, converting, tooLong, onPickTempl
   const confirm = useConfirm();
   return (
     <section className="card meeting-notes-doc" aria-label="Team notes">
-      <div className="card__head meeting-notes-doc__head">
-        {title}
-      </div>
       <div className="card__body meeting-notes-doc__body" onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) notes.flushInBackground();
       }}>

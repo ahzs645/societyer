@@ -2,7 +2,6 @@ import { calendarDateKey } from "../lib/calendarDates";
 import { useMemo } from "react";
 import { AlarmClock, BookTemplate, CheckCheck, CheckCircle2, ClipboardList, ExternalLink, Plus, RotateCcw, X } from "lucide-react";
 import type { MenuItem } from "../components/Menu";
-import { loadComplianceRulePacks } from "../lib/compliance/registry";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -10,18 +9,11 @@ import { useOrganizationWorkspace } from "../hooks/useOrganizationWorkspace";
 import { Badge } from "../components/ui";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ExpandableText } from "../components/ExpandableText";
+import { complianceMissingFacts } from "../features/compliance/ComplianceRulePacks";
 import { complianceFactsForOrganization, computeComplianceObligations, filterApplicableCompliancePacks } from "../lib/compliance";
-import type { ComplianceFacts, ComplianceObligationStatus } from "../lib/compliance";
+import type { ComplianceObligationStatus } from "../lib/compliance";
 import { formatDate, relative } from "../lib/format";
-import {
-  jurisdictionDisplayCopy,
-  jurisdictionModuleContract,
-} from "../../shared/jurisdictionWorkspace";
-import {
-  homeJurisdictionCode,
-  organizationEntityType,
-  organizationLabel,
-} from "../../shared/organizationDomain";
+import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { corporationPacketForComplianceObligation } from "../../shared/corporationDocumentPackets";
 import { isCorporation } from "../../shared/organizationDomain";
 import { annualReportForAgm, dateOnly, deriveAgmFacts, noAgmAnnualReportForYear } from "../../shared/agmEvidence";
@@ -33,7 +25,6 @@ import { acknowledgementText, snoozeText, useFindingSnooze } from "../features/d
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
 import { StatTile } from "../components/StatTile";
-import { ORG_HUB_OPTION_SETS } from "../lib/orgHubOptions";
 import {
   FIELD_TYPES,
   RecordListTable,
@@ -182,7 +173,6 @@ export function ComplianceObligationsPage() {
   const facts = factsList[0] ?? null;
   const obligations = useMemo(() => factsList.flatMap((item) => computeComplianceObligations(item)), [factsList]);
   const packs = useMemo(() => factsList.flatMap((item) => filterApplicableCompliancePacks(item)), [factsList]);
-  const packTitles = useMemo(() => new Map(loadComplianceRulePacks().map((pack) => [pack.packId, pack.title])), []);
 
   if (isLoading) return <PageLoading />;
   if (missingWorkspace || !organization || !society) return <SeedPrompt />;
@@ -190,17 +180,8 @@ export function ComplianceObligationsPage() {
   const today = facts?.asOfDate ?? calendarDateKey(new Date());
   const agmFacts = deriveAgmFacts(organization, meetings ?? [], today);
   const corporate = isCorporation(organization);
-  const jurisdictionCode = homeJurisdictionCode(organization);
   const jurisdictionCopy = jurisdictionDisplayCopy(organization);
-  const jurisdictionModule = jurisdictionModuleContract(organization);
-  const missingFacts = [
-    ...requiredFactLabels(facts),
-    ...(!facts?.formationInferredFromRecords && (["preparing", "submitted", "unverified_existing"].includes(organization.formationStatus ?? "") || organization.organizationStatus === "pre_incorporation") ? ["verified certificate evidence before legal duties activate"] : []),
-    ...factsList.filter(item => item.contextKind === "extra_provincial").flatMap(item => item.jurisdictionCode === "CA-ON-OBCA" && !item.commencedBusinessDate
-      ? [`Ontario business commencement date (${item.contextLabel ?? "registration"})`]
-      : item.jurisdictionCode === "CA-BC" && !item.registrationDate ? [`BC registration date (${item.contextLabel ?? "registration"})`] : []),
-    ...(facts?.legalSubtype && ["unlimited_liability_company", "community_contribution_company", "benefit_company", "other"].includes(facts.legalSubtype) ? ["reviewed subtype rule pack before automated deadlines"] : []),
-  ];
+  const missingFacts = complianceMissingFacts(organization, factsList);
   const filingMatches = new Map(
     (filings ?? []).map((filing) => [filingMatchKey(filing.kind, filing.dueDate, filing.sourceRegistrationId), filing]),
   );
@@ -523,56 +504,14 @@ export function ComplianceObligationsPage() {
         <StatTile label="Past calculated date" value={overdue} />
       </div>
 
-      <section className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
-          <div>
-            <h2 className="card__title">{organizationLabel(organization)}</h2>
-            <span className="card__subtitle">
-              {jurisdictionModule.registryPortalLabel} · {entityTypeLabel(organizationEntityType(organization))}
-            </span>
-          </div>
-          <Badge tone={packs.length ? "success" : "warn"}>
-            {packs.length ? "Rule pack matched" : "No executable pack"}
-          </Badge>
-        </div>
-        <div className="card__body">
-          {facts?.formationInferredFromRecords ? (
-            <p className="muted" style={{ marginTop: 0 }} role="status">
-              {organization.formationStatus === "unverified_existing"
-                ? <>The profile records this {jurisdictionCopy.entityLabel} as an existing organization whose incorporation evidence is not verified yet. {agmFacts.agmDates.length} held AGM</>
-                : <>The profile says this {jurisdictionCopy.entityLabel} is still being formed, but {agmFacts.agmDates.length} held AGM</>}
-              {agmFacts.agmDates.length === 1 ? " is" : "s are"} on record (latest {formatDate(agmFacts.annualMeetingDate ?? "")}).
-              Obligations below are computed provisionally from those meeting records.{" "}
-              <Link to="/app/society">{organization.formationStatus === "unverified_existing" ? "Verify the incorporation certificate and date" : "Confirm the formation status and incorporation date"}</Link> to remove this caveat.
-            </p>
-          ) : null}
-          {agmFacts.annualMeetingDate ? (
-            <p className="muted" style={{ marginTop: 0 }}>
-              Latest AGM on record: <strong>{formatDate(agmFacts.annualMeetingDate)}</strong>
-              {agmFacts.source === "meetings" ? " (from meeting records)" : " (from the society profile)"}.
-            </p>
-          ) : null}
-          {missingFacts.length ? (
-            <p className="muted" style={{ marginTop: 0 }}>
-              Missing facts: {missingFacts.join("; ")}. Add them to compute more obligations.
-            </p>
-          ) : (
-            <p className="muted" style={{ marginTop: 0 }}>
-              The date inputs for this schedule are recorded. The legal calendar boundary still requires review.
-            </p>
-          )}
-          {jurisdictionModule.compliancePackIds.length ? (
-            <details className="disclosure obligations-packs">
-              <summary>Rule packs ({jurisdictionModule.compliancePackIds.length})</summary>
-              <ul>
-                {jurisdictionModule.compliancePackIds.map((packId) => (
-                  <li key={packId} title={`${jurisdictionCode} · ${packId}`}>{packTitles.get(packId) ?? packId}</li>
-                ))}
-              </ul>
-            </details>
-          ) : <Badge tone="neutral">No configured pack</Badge>}
-        </div>
-      </section>
+      {missingFacts.length || facts?.formationInferredFromRecords ? (
+        <p className="muted" role="status">
+          {facts?.formationInferredFromRecords ? "Computed provisionally from meeting records. " : ""}
+          {missingFacts.length ? <>Missing facts: {missingFacts.join("; ")}. </> : null}
+          <Link to="/app/compliance-settings">Rule packs and facts in Compliance settings</Link>
+        </p>
+      ) : null}
+
 
       <section className="card">
         <div className="card__head">
@@ -693,13 +632,7 @@ export function ComplianceObligationsPage() {
 }
 
 // Entity types are stored as option keys ("corporation__business_"); show their label.
-function entityTypeLabel(value: string) {
-  return ORG_HUB_OPTION_SETS.entityTypes.find((option) => option.value === value)?.label ?? capitalize(value);
-}
 
-function capitalize(value: string) {
-  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
-}
 
 function filingMatchKey(kind: string, dueDate: string, sourceRegistrationId?: string | null) {
   return `${kind}\u0000${dueDate}\u0000${sourceRegistrationId ?? "home"}`;
@@ -715,16 +648,6 @@ function decisionPayload(societyId: any, obligation: ReturnType<typeof computeCo
   };
 }
 
-function requiredFactLabels(facts: ComplianceFacts | null) {
-  if (!facts) return [];
-  const missing: string[] = [];
-  if (!facts.incorporationDate) missing.push("incorporation date");
-  if (!facts.anniversaryDate) missing.push("anniversary date");
-  if (!facts.fiscalYearEnd) missing.push("fiscal year end");
-  if (facts.entityType === "society" && !facts.annualMeetingDate) missing.push("the date of the last AGM held (record it as a held AGM meeting or on the society profile) to compute the annual report deadline");
-  if (facts.entityType !== "society" && !facts.annualReferenceDate) missing.push("last annual meeting/annual reference date for subsequent meetings");
-  return missing;
-}
 
 function statusTone(status: ComplianceObligationStatus) {
   if (status === "overdue") return "warn";

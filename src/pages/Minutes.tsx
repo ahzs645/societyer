@@ -156,8 +156,6 @@ export function MinutesPage() {
                       to={`/app/meetings/${record.meetingId}`}
                       preview={{ kind: "meeting", id: String(record.meetingId), name: record.meeting }}
                       onClick={(e) => e.stopPropagation()}
-                      tone={record.meetingType === "AGM" ? "purple" : record.meetingType === "Committee" ? "turquoise" : "gray"}
-                      avatar={(record.meetingType || "MT").slice(0, 2).toUpperCase()}
                       label={<strong>{record.meeting}</strong>}
                     />
                   </>

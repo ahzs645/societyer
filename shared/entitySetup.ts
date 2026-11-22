@@ -10,10 +10,10 @@ export const FORMATION_STATUS_OPTIONS = [
 ];
 export const LEGAL_SUBTYPE_OPTIONS = PATHWAY_LEGAL_SUBTYPE_OPTIONS;
 export const TAX_STATUS_OPTIONS = [
-  { value: "unknown", label: "Unknown / needs assessment" },
-  { value: "not_required", label: "Assessed as not required" },
-  { value: "pending", label: "Pending / awaiting receipt" },
-  { value: "confirmed", label: "Confirmed — evidence received" },
+  { value: "unknown", label: "Not checked yet" },
+  { value: "not_required", label: "Not needed" },
+  { value: "pending", label: "Applied, waiting" },
+  { value: "confirmed", label: "Registered" },
 ];
 export const CHARITY_STATUS_OPTIONS = [
   { value: "unknown", label: "Unknown / not assessed" },

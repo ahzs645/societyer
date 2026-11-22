@@ -1,5 +1,5 @@
 import { Field } from "./ui";
-import { OptionSetName, normalizeOptionChoice, optionChoices } from "../lib/orgHubOptions";
+import { OptionSetName, normalizeOptionChoice, optionChoices, withoutDuplicateLabels } from "../lib/orgHubOptions";
 import { Select } from "./Select";
 
 type OptionSelectProps = {
@@ -12,7 +12,7 @@ type OptionSelectProps = {
 
 export function OptionSelect({ label, setName, value, onChange, emptyLabel }: OptionSelectProps) {
   const normalized = value ? normalizeOptionChoice(setName, value) : "";
-  const options = optionChoices(setName, normalized ? [normalized] : []);
+  const options = withoutDuplicateLabels(optionChoices(setName, normalized ? [normalized] : []), normalized ? [normalized] : []);
   return (
     <Field label={label}>
       <Select
@@ -40,7 +40,7 @@ type OptionMultiSelectProps = {
 };
 
 export function OptionMultiSelect({ label, setName, values = [], onChange, rows = 5, hideValues = [] }: OptionMultiSelectProps) {
-  const options = optionChoices(setName, values).filter((option) => !hideValues.includes(option.value) || values.includes(option.value));
+  const options = withoutDuplicateLabels(optionChoices(setName, values).filter((option) => !hideValues.includes(option.value) || values.includes(option.value)), values);
   return (
     <Field label={label}>
       <select

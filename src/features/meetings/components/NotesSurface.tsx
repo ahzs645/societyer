@@ -1,13 +1,12 @@
 /**
- * The pieces of the notes surface (MeetingNotesTab): the view switch with
- * Record and ••• beside it, the template starter for empty notes, and the
- * Ask bar that hands the meeting to the assistant.
+ * The pieces of the notes surface (MeetingNotesTab): the sticky bar (which
+ * notes, with Record and ••• beside it), the template starter for empty
+ * notes, and the Ask bar that hands the meeting to the assistant.
  */
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ChevronDown, Copy, Download, Info, Mic, MonitorUp, MoreHorizontal, Printer, Send, Sparkles, Square, Video } from "lucide-react";
 import { Menu, type MenuItem } from "@/components/Menu";
 import { useAiChatVisibility } from "@/hooks/useAiChatVisibility";
-import { Segmented } from "@/components/primitives";
 import { useToast } from "@/components/Toast";
 import { triggerBlobDownload } from "../../../lib/zip";
 import { printPdfDocument } from "../../../lib/pdf";
@@ -30,40 +29,28 @@ import {
   useMeetingRecorder,
 } from "../recorder/meetingRecorder";
 
-export type NotesView = "notes" | "ai" | "transcript" | "actions";
-export const NOTES_VIEWS: readonly NotesView[] = ["notes", "ai", "transcript", "actions"];
+/** What the "Which notes" select shows (`?view=`). The Transcript is a meeting tab of its own. */
+export type NotesView = "notes" | "ai" | "actions";
+export const NOTES_VIEWS: readonly NotesView[] = ["notes", "ai", "actions"];
 export function isNotesView(value: unknown): value is NotesView {
   return (NOTES_VIEWS as readonly unknown[]).includes(value);
 }
 
+/** `switcher`: the "Which notes" select; absent on the Transcript tab, which keeps only Record and •••. */
 export function NotesSurfaceBar({
-  view,
-  onView,
-  phone,
-  actionCount,
-  hasDraft,
+  switcher,
   record,
   more,
 }: {
-  view: NotesView;
-  onView: (view: NotesView) => void;
-  phone: boolean;
-  actionCount: number;
-  hasDraft: boolean;
+  switcher?: ReactNode;
   record: ReactNode;
   more: ReactNode;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const stuck = useStickyBar(bar);
-  const items = [
-    { id: "notes" as const, label: "Notes" },
-    { id: "ai" as const, label: "AI notes", ...(hasDraft ? {} : { ariaLabel: "AI notes (not drafted yet)" }) },
-    { id: "transcript" as const, label: "Transcript" },
-    ...(phone ? [{ id: "actions" as const, label: "Actions", count: actionCount }] : []),
-  ];
   return (
     <div ref={bar} className={`notes-surface__bar${stuck ? " is-stuck" : ""}`}>
-      <Segmented<NotesView> aria-label="Notes view" className="notes-surface__views" value={view} onChange={onView} items={items} />
+      {switcher}
       <div className="notes-surface__tools">
         {record}
         {more}

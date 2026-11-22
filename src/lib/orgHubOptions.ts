@@ -26,22 +26,22 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "north_west_territories", label: "Northwest Territories" },
     { value: "yukon", label: "Yukon" },
     { value: "foreign", label: "Foreign" },
-    { value: "CA-BC", label: "British Columbia (Societyer code)" },
-    { value: "CA-FED-CBCA", label: "Canada federal - CBCA (Societyer code)" },
-    { value: "CA-ON-OBCA", label: "Ontario - OBCA (Societyer code)" },
-    { value: "CA-FED", label: "Canada federal - other Acts (Societyer code)" },
-    { value: "CA-AB", label: "Alberta (Societyer code)" },
-    { value: "CA-MB", label: "Manitoba (Societyer code)" },
-    { value: "CA-NB", label: "New Brunswick (Societyer code)" },
-    { value: "CA-NL", label: "Newfoundland and Labrador (Societyer code)" },
-    { value: "CA-NS", label: "Nova Scotia (Societyer code)" },
-    { value: "CA-ON", label: "Ontario - other Acts (Societyer code)" },
-    { value: "CA-PE", label: "Prince Edward Island (Societyer code)" },
-    { value: "CA-QC", label: "Quebec (Societyer code)" },
-    { value: "CA-SK", label: "Saskatchewan (Societyer code)" },
-    { value: "CA-NT", label: "Northwest Territories (Societyer code)" },
-    { value: "CA-NU", label: "Nunavut (Societyer code)" },
-    { value: "CA-YT", label: "Yukon (Societyer code)" },
+    { value: "CA-BC", label: "British Columbia" },
+    { value: "CA-FED-CBCA", label: "Canada (federal) — CBCA" },
+    { value: "CA-ON-OBCA", label: "Ontario — OBCA" },
+    { value: "CA-FED", label: "Canada (federal) — other Acts" },
+    { value: "CA-AB", label: "Alberta" },
+    { value: "CA-MB", label: "Manitoba" },
+    { value: "CA-NB", label: "New Brunswick" },
+    { value: "CA-NL", label: "Newfoundland and Labrador" },
+    { value: "CA-NS", label: "Nova Scotia" },
+    { value: "CA-ON", label: "Ontario — other Acts" },
+    { value: "CA-PE", label: "Prince Edward Island" },
+    { value: "CA-QC", label: "Quebec" },
+    { value: "CA-SK", label: "Saskatchewan" },
+    { value: "CA-NT", label: "Northwest Territories" },
+    { value: "CA-NU", label: "Nunavut" },
+    { value: "CA-YT", label: "Yukon" },
   ],
   actsFormedUnder: [
     { value: "business_corporations_act", label: "Business Corporations Act (British Columbia — legacy alias)" },
@@ -551,6 +551,16 @@ export function optionChoices(setName: OptionSetName, currentValues: string[] = 
 }
 
 /** Client mirror of shared normalizeOptionValue: map a label to its code. */
+/**
+ * One choice per label for a picker. An older record value ("british_columbia")
+ * and the current code ("CA-BC") can share a label; the later entry (the
+ * current code) is kept unless the earlier one is selected now.
+ */
+export function withoutDuplicateLabels(options: readonly OptionChoice[], selected: readonly string[] = []): OptionChoice[] {
+  return options.filter((option, index) => selected.includes(option.value)
+    || !options.slice(index + 1).some((later) => later.label === option.label));
+}
+
 export function normalizeOptionChoice(setName: OptionSetName, value?: string | null): string {
   const text = String(value ?? "").trim();
   if (!text) return "";

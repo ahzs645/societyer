@@ -15,6 +15,14 @@ test.use({
   launchOptions: { ...(chromiumLaunchOptions() ?? {}), args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
 });
 
+/** The notes bar's "Which notes" select: Team notes, My notes, shared notes, AI notes (and Action items on phones). */
+const whichNotes = (page: Page) => page.getByRole("button", { name: "Which notes" });
+async function showNotes(page: Page, name: string | RegExp) {
+  await whichNotes(page).click();
+  await page.getByRole("option", { name }).click();
+}
+const transcriptTab = (page: Page) => page.getByRole("tab", { name: /Transcript/ });
+
 async function seed(page: Page) {
   await page.goto("/app", { waitUntil: "networkidle" });
   return page.evaluate(async () => {
@@ -50,8 +58,7 @@ test("working meeting notes: AI notes, action items and a task", async ({ page }
   await expect(page.getByRole("heading", { name: /Funder call — Example Foundation/ })).toBeVisible({ timeout: 60_000 });
   const meetingId = new URL(page.url()).pathname.split("/").pop()!;
   // A notes meeting opens on its notes: My notes, with action items below and the Ask bar.
-  const views = page.getByRole("group", { name: "Notes view" });
-  await expect(views.getByRole("button", { name: "Notes", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(whichNotes(page)).toContainText("Team notes");
   await expect(page.getByRole("heading", { name: "Action items" })).toBeVisible();
   // AI agents are off in this workspace, so there is no Ask bar.
   await expect(page.getByLabel("Ask about this meeting")).toHaveCount(0);
@@ -80,7 +87,7 @@ test("working meeting notes: AI notes, action items and a task", async ({ page }
     });
   }, meetingId);
 
-  await views.getByRole("button", { name: "AI notes" }).click();
+  await showNotes(page, /AI notes/);
   await expect(page).toHaveURL(/view=ai/);
   const aiNotes = page.getByRole("region", { name: "AI notes" });
   await expect(aiNotes.getByText("Example Foundation is open to a pilot")).toBeVisible();
@@ -120,7 +127,7 @@ test("working meeting notes: AI notes, action items and a task", async ({ page }
 
   // "Add to team notes" appends the draft under the team notes.
   await aiNotes.getByRole("button", { name: "Add to team notes" }).click();
-  await views.getByRole("button", { name: "Notes", exact: true }).click();
+  await showNotes(page, /Team notes/);
   await expect(notesEditor).toContainText("Foundation wants a pilot report");
   await expect(notesEditor.getByRole("heading", { name: "Summary" })).toBeVisible();
   await expect(notesEditor).toContainText("Example Foundation is open to a pilot");
@@ -150,11 +157,10 @@ test("notes tab on a phone keeps controls inside the screen", async ({ page }) =
     return id;
   });
   await page.goto(`/app/meetings/${meetingId}?tab=notes`);
-  // On a phone the action items are their own view.
-  const views = page.getByRole("group", { name: "Notes view" });
-  await expect(views.getByRole("button", { name: /Actions/ })).toBeVisible({ timeout: 60_000 });
+  // On a phone the action items are their own entry in the notes select.
+  await expect(whichNotes(page)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("heading", { name: "Action items" })).toHaveCount(0);
-  await views.getByRole("button", { name: /Actions/ }).click();
+  await showNotes(page, /Action items/);
   await expect(page.getByRole("heading", { name: "Action items" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -287,8 +293,8 @@ test("templates, export, Ask bar and recording on the notes surface", async ({ p
   await expect(bar.getByText(/doesn't keep recordings/)).toBeVisible({ timeout: 15_000 });
   await expect(bar.getByRole("button", { name: "Download" })).toBeVisible();
   await bar.getByRole("link", { name: "Open transcript" }).click();
-  // The recording opens in the Transcript view, ready to play or transcribe on this device.
-  await expect(page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "Transcript" })).toHaveAttribute("aria-pressed", "true");
+  // The recording opens in the Transcript tab, ready to play or transcribe on this device.
+  await expect(transcriptTab(page)).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: /Change recording/ })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/Weekly check-in .*\.(webm|m4a|ogg)/).first()).toBeVisible();
   expect(errors).toEqual([]);
@@ -326,7 +332,7 @@ test("Meetings timeline groups meetings by day", async ({ page }) => {
   await page.reload();
   await expect(page.getByLabel("Meetings by day")).toBeVisible({ timeout: 60_000 });
   await today.getByRole("link", { name: /Open notes: Funder call/ }).click();
-  await expect(page.getByRole("group", { name: "Notes view" })).toBeVisible();
+  await expect(whichNotes(page)).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -347,11 +353,10 @@ test("notes surface on a phone: one view at a time, ••• holds the rest", a
     return id;
   });
   await page.goto(`/app/meetings/${meetingId}`);
-  const views = page.getByRole("group", { name: "Notes view" });
-  await expect(views.getByRole("button", { name: "AI notes" })).toHaveAttribute("aria-pressed", "true", { timeout: 60_000 });
+  await expect(whichNotes(page)).toContainText("AI notes", { timeout: 60_000 });
   await expect(page.getByText("They'll fund a pilot.")).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/phone-ai-notes.png` });
-  await views.getByRole("button", { name: "Notes", exact: true }).click();
+  await showNotes(page, /Team notes/);
   await expect(page.getByText("Pilot funding")).toBeVisible();
   await page.getByRole("button", { name: "More: export and recap" }).click();
   await expect(page.getByRole("menuitem", { name: /Meeting details/ })).toBeVisible();
@@ -363,7 +368,7 @@ test("notes surface on a phone: one view at a time, ••• holds the rest", a
   await expect(page).toHaveURL(/tab=overview/);
   // And back: the Notes tab is the default for a notes meeting.
   await page.getByRole("tab", { name: /Notes/ }).first().click();
-  await expect(page.getByRole("group", { name: "Notes view" })).toBeVisible();
+  await expect(whichNotes(page)).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
@@ -398,9 +403,9 @@ test("quotes: Quote in notes from a transcript selection, and the AI notes' key 
   const keyQuotes = page.getByRole("region", { name: "Key quotes" });
   await expect(keyQuotes.getByText("“Small pilots are where we learn the most.”")).toBeVisible({ timeout: 60_000 });
   if (SHOTS) await keyQuotes.screenshot({ path: `${SHOTS}/key-quotes.png` });
-  // A quote's time opens the Transcript view at that moment.
+  // A quote's time opens the Transcript tab at that moment.
   await keyQuotes.getByRole("link", { name: "Open the transcript at 0:12" }).click();
-  await expect(page).toHaveURL(/view=transcript/);
+  await expect(page).toHaveURL(/tab=transcript/);
   await expect(page).toHaveURL(/t=12/);
   const line = page.locator("[data-segment]", { hasText: "Small pilots are where we learn the most." });
   await expect(line).toBeVisible({ timeout: 15_000 });
@@ -415,7 +420,8 @@ test("quotes: Quote in notes from a transcript selection, and the AI notes' key 
   });
   await page.getByRole("toolbar", { name: "Selected transcript text" }).getByRole("button", { name: "Quote in notes" }).click();
   await expect(page.getByText("Quoted in the team notes.")).toBeVisible();
-  await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "Notes", exact: true }).click();
+  await page.getByRole("tab", { name: /Notes/ }).first().click();
+  await showNotes(page, /Team notes/);
   const editor = page.locator(".meeting-notes-doc [contenteditable=\"true\"]");
   await expect(editor.locator("blockquote")).toContainText("“Small pilots are where we learn the most.”");
   await expect(editor.locator("blockquote")).toContainText("— SPEAKER_01, 0:12");
@@ -425,7 +431,7 @@ test("quotes: Quote in notes from a transcript selection, and the AI notes' key 
     return ((await client.query("meetings:get", { id })) as any)?.workingNotes as string;
   }, meetingId);
   // The editor saves standard Markdown escapes (SPEAKER\_01, \& in the link); the link still opens that moment.
-  expect(saved).toMatch(/> “Small pilots are where we learn the most\.”\n>\n> — SPEAKER\\?_01, \[0:12\]\(\/app\/meetings\/[^)]*tab=notes\\?&view=transcript\\?&t=12-18\)/);
+  expect(saved).toMatch(/> “Small pilots are where we learn the most\.”\n>\n> — SPEAKER\\?_01, \[0:12\]\(\/app\/meetings\/[^)]*tab=transcript\\?&t=12-18\)/);
   expect(errors).toEqual([]);
 });
 
@@ -443,11 +449,13 @@ test("recorder: Stop on the Notes tab keeps the file, closing asks first, an int
       electronic: true, status: "Held", attendeeIds: [], recordKind: "notes",
     });
   });
+  // An older link to the Transcript view inside Notes opens the Transcript tab.
   await page.goto(`/app/meetings/${meetingId}?tab=notes&view=transcript`);
-  await expect(page.getByRole("group", { name: "Notes view" })).toBeVisible({ timeout: 60_000 });
+  await expect(transcriptTab(page)).toHaveAttribute("aria-selected", "true", { timeout: 60_000 });
+  await expect(page).toHaveURL(/tab=transcript/);
   const bar = page.getByRole("region", { name: "Meeting recording" });
 
-  // Record with the Transcript view already open, and stop from the tab's own button.
+  // Record with the Transcript tab already open, and stop from the tab's own button.
   await page.getByRole("button", { name: /^Record/ }).click();
   await page.getByRole("menuitem", { name: /^Microphone/ }).first().click();
   await expect(bar.getByText("Recording", { exact: true })).toBeVisible({ timeout: 15_000 });
@@ -455,8 +463,8 @@ test("recorder: Stop on the Notes tab keeps the file, closing asks first, an int
   await page.getByRole("button", { name: /^Stop · / }).click();
   await expect(bar.getByText(/doesn't keep recordings/)).toBeVisible({ timeout: 15_000 });
   await expect(bar.getByRole("button", { name: "Download" })).toBeVisible();
-  // The Transcript view, opened before recording and kept mounted, picks the recording up.
-  await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "Transcript" }).click();
+  // Recording moved you to the notes; the Transcript tab, opened before and kept mounted, picks the recording up.
+  await transcriptTab(page).click();
   await expect(page.locator(".notes-surface__view--transcript").getByText(/Board prep .*\.(webm|m4a|ogg)/).first()).toBeVisible({ timeout: 15_000 });
 
   // Closing without keeping it asks first.
@@ -504,7 +512,7 @@ test("recorder: Stop on the Notes tab keeps the file, closing asks first, an int
   await expect(bar).toHaveCount(0);
   // Closed: not offered again.
   await page.reload();
-  await expect(page.getByRole("group", { name: "Notes view" })).toBeVisible({ timeout: 60_000 });
+  await expect(transcriptTab(page)).toBeVisible({ timeout: 60_000 });
   await page.waitForTimeout(1_500);
   await expect(bar).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -523,7 +531,7 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
     });
   });
   // A Teams-style VTT export, imported in the Transcript view.
-  await page.goto(`/app/meetings/${meetingId}?tab=notes&view=transcript`);
+  await page.goto(`/app/meetings/${meetingId}?tab=transcript`);
   const vtt = [
     "WEBVTT", "",
     "a/1-0", "00:00:01.000 --> 00:00:05.000", "<v Sam Rivera>Thanks for joining. We'd like to fund a pilot in the spring.</v>", "",
@@ -541,7 +549,8 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
   await page.getByRole("button", { name: "Done", exact: true }).last().click();
 
   // AI notes: built-in AI is off here, so draft with your own.
-  await page.getByRole("group", { name: "Notes view" }).getByRole("button", { name: "AI notes" }).click();
+  await page.getByRole("tab", { name: /Notes/ }).first().click();
+  await showNotes(page, /AI notes/);
   await page.getByRole("button", { name: "Use your own AI" }).click();
   const dialog = page.getByRole("dialog", { name: "Draft with your own AI" });
   await expect(dialog.getByText(/k characters/)).toBeVisible({ timeout: 15_000 });
@@ -589,7 +598,7 @@ test("use your own AI: import a VTT, copy the prompt, paste the JSON back, save 
       electronic: true, status: "Held", attendeeIds: [], recordKind: "notes",
     });
   });
-  await page.goto(`/app/meetings/${nextId}?tab=notes&view=transcript`);
+  await page.goto(`/app/meetings/${nextId}?tab=transcript`);
   await page.locator(".transcript-workspace input[type=file]").last().setInputFiles({ name: "Follow-up.vtt", mimeType: "text/vtt", buffer: Buffer.from(vtt) });
   await expect(page.getByText(/1 speaker assigned as last time/)).toBeVisible({ timeout: 60_000 });
   const linked = await page.evaluate(async (id) => {
@@ -629,10 +638,13 @@ test("team notes and my own notes: add, keep private, share, delete", async ({ p
   });
   await page.goto(`/app/meetings/${meetingId}?tab=notes&view=notes`);
   const team = page.getByRole("region", { name: "Team notes" });
-  await expect(team.getByRole("heading", { name: "Team notes" })).toBeVisible({ timeout: 60_000 });
-  // Nothing else to pick yet: no switcher, just "My notes".
-  await expect(page.getByRole("button", { name: "Which notes" })).toHaveCount(0);
-  await team.getByRole("button", { name: "My notes" }).click();
+  await expect(team).toBeVisible({ timeout: 60_000 });
+  // No notes of your own yet: Team notes and AI notes to pick from, and a "My notes" button.
+  await expect(whichNotes(page)).toContainText("Team notes");
+  await whichNotes(page).click();
+  await expect(page.getByRole("option", { name: /My notes/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "My notes", exact: true }).click();
 
   const mine = page.getByRole("region", { name: "My notes" });
   await expect(mine.getByText("Only you", { exact: true })).toBeVisible();
@@ -646,7 +658,7 @@ test("team notes and my own notes: add, keep private, share, delete", async ({ p
   await expect.poll(async () => (await readMine())?.body ?? "", { timeout: 15_000 }).toContain("Ask about the venue budget");
   expect((await readMine()).shared).toBe(false);
 
-  // Share them; the switcher now offers Team notes and My notes.
+  // Share them; the select now offers My notes too.
   await mine.getByText("Only you", { exact: true }).click();
   await expect(mine.getByText("Shared with the team", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Which notes" }).click();
@@ -665,8 +677,8 @@ test("team notes and my own notes: add, keep private, share, delete", async ({ p
   if (SHOTS) await mine.screenshot({ path: `${SHOTS}/my-notes.png` });
   await mine.getByRole("button", { name: "Delete my notes" }).click();
   await page.getByRole("dialog", { name: "Delete your notes?" }).getByRole("button", { name: "Delete" }).click();
-  await expect(team.getByRole("heading", { name: "Team notes" })).toBeVisible();
-  await expect(team.getByRole("button", { name: "My notes" })).toBeVisible();
+  await expect(whichNotes(page)).toContainText("Team notes");
+  await expect(page.getByRole("button", { name: "My notes", exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
 

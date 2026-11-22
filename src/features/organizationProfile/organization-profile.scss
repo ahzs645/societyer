@@ -126,28 +126,24 @@
   min-width: 0;
 }
 
-// "Rarely needed" fold on the Legal profile.
-.org-profile-more__summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: token('s-1') token('s-2');
-  padding: token('s-4');
-  cursor: pointer;
-}
-.org-profile-more__title { font-weight: 600; }
-.org-profile-more__hint { font-size: token('fs-sm'); }
-.org-profile-more__body {
+// Identity & formation → Status & registry history: the registry dates list.
+.org-profile-history {
   display: flex;
   flex-direction: column;
-  gap: token('s-4');
-  padding-top: 0;
+  gap: token('s-2');
 }
-.org-profile-more__group-head {
+.org-profile-history__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: token('s-2');
+}
+
+// Articles provisions (ArticlesCard): as tall as the text, so a locked provision reads in full.
+.org-profile-provision {
+  min-height: 0;
+  field-sizing: content;
+  resize: none;
 }
 
 .org-profile-legacy-addresses { padding: 0 token('s-4') token('s-3'); }
@@ -160,7 +156,7 @@
 .org-tax-row {
   display: grid;
   // A fixed action column keeps the status pickers lined up whether a row says "Edit" or "Add".
-  grid-template-columns: minmax(150px, 1.2fr) minmax(120px, 1fr) minmax(180px, 1.2fr) 4.5rem;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(120px, 1fr) minmax(180px, 1.2fr) 6.5rem;
   align-items: center;
   gap: token('s-2') token('s-3');
   padding: token('s-2') 0;
@@ -171,7 +167,16 @@
 .org-tax-rows:last-child { margin-bottom: 0; }
 .org-tax-row__label { font-weight: 500; }
 .org-tax-row > * { min-width: 0; }
-.org-tax-row__action { justify-self: end; }
+.org-tax-row__action {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
+}
+.org-tax-not-needed {
+  margin: 0 0 token('s-4');
+  font-size: token('fs-sm');
+}
 .org-tax-row__note {
   grid-column: 1 / -1;
   margin: 0;

@@ -155,6 +155,12 @@
   opacity: 0.92;
 }
 
+/* A summary is Societyer's wording, not the statute's: upright, and only a real quote is italic. */
+.citation-popover__quote--summary {
+  font-style: normal;
+  opacity: 1;
+}
+
 .citation-popover__caveat {
   margin: 0 0 6px;
   padding: 6px 8px;
@@ -173,13 +179,16 @@
 .citation-popover__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
 }
 
+/* On the dark popover the accent blue is unreadable, so links read in the popover's own colour. */
 .citation-popover__link {
   @include inline-flex-center;
   gap: 4px;
-  color: token('accent');
+  color: inherit;
   font-size: token('fs-xs');
   text-decoration: none;
 }
@@ -198,9 +207,15 @@
   font: inherit;
   font-size: token('fs-xs');
   line-height: 1.2;
+  text-decoration: none;
   cursor: pointer;
   opacity: 0.85;
   transition: background token('motion-fade-fast') token('ease-fade'), opacity token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
+}
+/* "Open source": the main action, so a little stronger than Copy link. */
+.citation-popover__copy--primary {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.32);
 }
 .citation-popover__copy:hover,
 .citation-popover__copy:focus-visible {

@@ -32,8 +32,8 @@ type LegalProfileProps = {
 };
 
 /**
- * Legal profile: identity and formation (the one status), business and year,
- * board meetings, and a fold for what is rarely needed.
+ * Legal profile: identity and formation (the one status, registry history and
+ * classification), business and year, and board meetings.
  *
  * Locks follow the saved organization: before incorporation, or while a field
  * is still empty, editing has no legal consequence, so no unlock is asked for.
@@ -57,7 +57,6 @@ export function LegalProfileTab({ society, form, set, setGoverningAct, canEdit, 
           <MeetingsCard form={form} set={set} />
         </div>
       </div>
-      <RarelyNeeded form={form} set={set} />
     </div>
   );
 }
@@ -135,6 +134,8 @@ function IdentityCard({ society, form, set, setGoverningAct, documents, onRecord
             </div>
           )}
         </LockedField>}
+        <StatusHistory form={form} set={set} />
+        <Classification form={form} set={set} />
       </div>
     </section>
   );
@@ -211,38 +212,40 @@ const LIFECYCLE_DATE_TYPES: { value: LifecycleDateKey; label: string }[] = [
   { value: "removedAtISO", label: "Removed date" },
 ];
 
-function RarelyNeeded({ form, set }: { form: ProfileForm; set: SetProfileField }) {
+/** After incorporation: the workspace status and registry events (continuance, amalgamation, archive, removal). */
+function StatusHistory({ form, set }: { form: ProfileForm; set: SetProfileField }) {
   // While preparing, the formation status is the one status; the workspace
   // status follows it (organizationStatusForFormation in shared/entitySetup).
   const preparing = isPreparingIncorporation(form);
   return (
-    <details id="rarely-needed" className="card org-profile-more">
-      <summary className="org-profile-more__summary">
-        <span className="org-profile-more__title">Rarely needed</span>
-        <span className="muted org-profile-more__hint">Workspace status, continuance and amalgamation dates, classification flags and trademark class.</span>
-      </summary>
-      <div className="card__body org-profile-more__body">
-        {!preparing && (
-          <div className="society-field-grid">
-            <OptionSelect label="Workspace status" setName="organizationStatuses" value={form.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />
-          </div>
-        )}
-        <LifecycleDates form={form} set={set} />
-        <section className="entity-setup-group">
-          <h3 className="entity-setup-group__title">Classification</h3>
-          <div className="society-field-grid">
-            <Field label="Nice classification" hint="Trademark class, if the organization holds a mark.">
-              <input className="input" value={form.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
-            </Field>
-          </div>
-          <div className="org-details-toggle-row">
-            <Toggle checked={!!form.numbered} onChange={(value) => set("numbered", value)} label="Numbered entity" />
-            <Toggle checked={!!form.distributing} onChange={(value) => set("distributing", value)} label="Distributing" />
-            <Toggle checked={!!form.solicitingPublicBenefit} onChange={(value) => set("solicitingPublicBenefit", value)} label="Soliciting / public benefit" />
-          </div>
-        </section>
+    <section className="entity-setup-group" id="status-history">
+      <h3 className="entity-setup-group__title">Status &amp; registry history</h3>
+      {!preparing && (
+        <div className="society-field-grid">
+          <OptionSelect label="Workspace status" setName="organizationStatuses" value={form.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />
+        </div>
+      )}
+      <LifecycleDates form={form} set={set} />
+    </section>
+  );
+}
+
+/** Classification flags and the trademark class. */
+function Classification({ form, set }: { form: ProfileForm; set: SetProfileField }) {
+  return (
+    <section className="entity-setup-group">
+      <h3 className="entity-setup-group__title">Classification</h3>
+      <div className="org-details-toggle-row">
+        <Toggle checked={!!form.numbered} onChange={(value) => set("numbered", value)} label="Numbered entity" />
+        <Toggle checked={!!form.distributing} onChange={(value) => set("distributing", value)} label="Distributing" />
+        <Toggle checked={!!form.solicitingPublicBenefit} onChange={(value) => set("solicitingPublicBenefit", value)} label="Soliciting / public benefit" />
       </div>
-    </details>
+      <div className="society-field-grid">
+        <Field label="Nice classification" hint="Trademark class, if the organization holds a mark.">
+          <input className="input" value={form.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
+        </Field>
+      </div>
+    </section>
   );
 }
 
@@ -266,9 +269,9 @@ function LifecycleDates({ form, set }: { form: ProfileForm; set: SetProfileField
     setAdding(false);
   };
   return (
-    <section className="entity-setup-group">
-      <div className="org-profile-more__group-head">
-        <h3 className="entity-setup-group__title">Lifecycle dates</h3>
+    <div className="org-profile-history">
+      <div className="org-profile-history__head">
+        <span className="field__label">Registry dates</span>
         <button className="btn btn--sm" type="button" onClick={start} disabled={adding || missing.length === 0}>
           <Plus size={12} /> Add date
         </button>
@@ -300,6 +303,6 @@ function LifecycleDates({ form, set }: { form: ProfileForm; set: SetProfileField
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }

@@ -325,7 +325,7 @@ const CitationPopover = forwardRef<HTMLDivElement, CitationPopoverProps>(
             <BookMarked size={12} aria-hidden="true" />
             <span>{citation.source}</span>
           </div>
-          {citation.quoteKind === "summary" ? <div className="citation-popover__quote"><strong>Rule summary. </strong>{citation.quote}</div> : <blockquote className="citation-popover__quote">&ldquo;{citation.quote}&rdquo;</blockquote>}
+          {citation.quoteKind === "summary" ? <div className="citation-popover__quote citation-popover__quote--summary"><strong>Rule summary. </strong>{citation.quote}</div> : <blockquote className="citation-popover__quote">&ldquo;{citation.quote}&rdquo;</blockquote>}
           {citation.caveat && (
             <div className="citation-popover__caveat">{citation.caveat}</div>
           )}
@@ -334,7 +334,7 @@ const CitationPopover = forwardRef<HTMLDivElement, CitationPopoverProps>(
           {citation.reviewedOnISO && <div className="citation-popover__meta">Reviewed {citation.reviewedOnISO}{citation.sourceStatus === "proposed" ? " · Proposed; not in force" : ""}</div>}
           <div className="citation-popover__actions">
             <a
-              className="citation-popover__link"
+              className="citation-popover__copy citation-popover__copy--primary"
               href={highlightUrl}
               target="_blank"
               rel="noreferrer"

@@ -1,5 +1,6 @@
-import { useMemo } from "react";
-import { KeyRound, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { KeyRound, Plus, X } from "lucide-react";
+import { Menu } from "@/components/Menu";
 import { Badge, type ToneVariant } from "../../components/ui";
 import { TooltipCopyable } from "../../components/TooltipCopyable";
 import { TaxEvidenceFields, TaxStatusSelect, type TaxStatusField } from "../../components/EntitySetupFields";
@@ -31,15 +32,19 @@ const IDENTIFIERS_TABLE = staticRecordTable({
 /** The kinds the Tax tab adds from its rows. */
 export type TaxIdentifierKind = "business_number" | "income_tax" | "gst" | "pst" | "payroll";
 
-type Program = { kind: TaxIdentifierKind; label: string; copyLabel: string; statusField?: TaxStatusField; bcOnly?: boolean };
+type Program = { kind: TaxIdentifierKind; label: string; copyLabel: string; statusField?: TaxStatusField; bcOnly?: boolean; optional?: boolean; hint?: string };
 
-/** The business number, one row per CRA program account, and BC PST where BC is relevant. */
+/**
+ * The business number, one row per CRA program account, and BC PST where BC
+ * is relevant. Optional accounts show once added, recorded or registered:
+ * an organization with no employees never sees a Payroll row.
+ */
 const PROGRAMS: readonly Program[] = [
   { kind: "business_number", label: "Business number (BN)", copyLabel: "business number", statusField: "craBnStatus" },
   { kind: "income_tax", label: "Corporation income tax (RC)", copyLabel: "corporation income tax account", statusField: "craRcStatus" },
-  { kind: "gst", label: "GST/HST (RT)", copyLabel: "organization GST/HST account", statusField: "gstHstStatus" },
-  { kind: "pst", label: "BC PST", copyLabel: "BC PST number", bcOnly: true },
-  { kind: "payroll", label: "Payroll (RP)", copyLabel: "payroll account", statusField: "payrollStatus" },
+  { kind: "gst", label: "GST/HST (RT)", copyLabel: "organization GST/HST account", statusField: "gstHstStatus", optional: true, hint: "Once taxable sales pass $30,000 in four quarters" },
+  { kind: "pst", label: "BC PST", copyLabel: "BC PST number", bcOnly: true, optional: true, hint: "Selling or leasing taxable goods or services in BC" },
+  { kind: "payroll", label: "Payroll (RP)", copyLabel: "payroll account", statusField: "payrollStatus", optional: true, hint: "Before the first payday for employees" },
 ];
 
 type TaxProps = {
@@ -71,7 +76,25 @@ export function TaxTab({ form, set, detail, canEdit, onNewIdentifier, onEditIden
   const identifiers = detail?.identifiers ?? [];
   const bcRelevant = isBcJurisdiction(homeJurisdictionCode(form))
     || (detail?.registrations ?? []).some((row) => isExtraProvincialRegistration(row) && row.status !== "inactive" && isBcJurisdiction(row.jurisdiction));
-  const programs = PROGRAMS.filter((program) => !program.bcOnly || bcRelevant);
+  const applicable = PROGRAMS.filter((program) => !program.bcOnly || bcRelevant);
+  // Optional accounts added this visit, before a number or status is saved.
+  const [added, setAdded] = useState<ReadonlySet<TaxIdentifierKind>>(() => new Set());
+  const statusOf = (program: Program) => (program.statusField ? form[program.statusField] : undefined);
+  const inUse = (program: Program) => !program.optional
+    || added.has(program.kind)
+    || Boolean(primaryIdentifier(identifiers, program.kind))
+    || statusOf(program) === "pending" || statusOf(program) === "confirmed";
+  const programs = applicable.filter(inUse);
+  const addable = applicable.filter((program) => !inUse(program));
+  const notNeeded = addable.filter((program) => statusOf(program) === "not_required");
+  const addProgram = (program: Program) => {
+    setAdded((current) => new Set([...current, program.kind]));
+    if (program.statusField && statusOf(program) === "not_required") set(program.statusField, "unknown");
+  };
+  const removeProgram = (program: Program) => {
+    setAdded((current) => new Set([...current].filter((kind) => kind !== program.kind)));
+    if (program.statusField) set(program.statusField, "not_required");
+  };
   const open = (kind: TaxIdentifierKind, row: IdentifierRow | undefined) => (row ? onEditIdentifier(row) : onNewIdentifier(kind));
   const gstReference = detail ? organizationGstAccountReference(identifiers, calendarDateKey(new Date())) : undefined;
   // The GST row shows the number; only a problem with the account needs words under it.
@@ -79,7 +102,18 @@ export function TaxTab({ form, set, detail, canEdit, onNewIdentifier, onEditIden
   return (
     <div className="org-profile-panel" id="tax-identifiers">
       <section className="card" aria-labelledby="org-cra-accounts">
-        <div className="card__head"><h2 className="card__title" id="org-cra-accounts">CRA accounts</h2></div>
+        <div className="card__head">
+          <h2 className="card__title" id="org-cra-accounts">CRA accounts</h2>
+          {canEdit && addable.length > 0 && (
+            <Menu
+              align="right"
+              described
+              sheetTitle="Add a tax account"
+              trigger={<button className="btn btn--sm org-profile-card-link" type="button"><Plus size={12} /> Account</button>}
+              sections={[{ id: "accounts", items: addable.map((program) => ({ id: program.kind, label: program.label, hint: program.hint, onSelect: () => addProgram(program) })) }]}
+            />
+          )}
+        </div>
         <div className="card__body">
           <div className="org-tax-rows">
             {programs.map((program) => {
@@ -100,12 +134,19 @@ export function TaxTab({ form, set, detail, canEdit, onNewIdentifier, onEditIden
                         {row ? "Edit" : <><Plus size={12} /> Add</>}
                       </button>
                     )}
+                    {/* An optional account with nothing recorded can go: it is marked not needed. */}
+                    {canEdit && program.optional && !row && (
+                      <button className="btn btn--ghost btn--sm btn--icon" type="button" aria-label={`Not needed: remove ${program.label}`} title="Not needed" onClick={() => removeProgram(program)}>
+                        <X size={12} />
+                      </button>
+                    )}
                   </span>
                   {program.kind === "gst" && gstWarning && <p className="org-tax-row__note muted" role="status">{gstWarning}</p>}
                 </div>
               );
             })}
           </div>
+          {notNeeded.length > 0 && <p className="muted org-tax-not-needed">Not needed: {notNeeded.map((program) => program.label).join(", ")}.</p>}
           <TaxEvidenceFields form={form} set={set} />
         </div>
       </section>

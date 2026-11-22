@@ -2,13 +2,13 @@
  * Notes beside the team notes: your own (private until you share them) and
  * notes others have shared. Handlers: shared/functions/meetingPersonalNotes.ts.
  *
- * The notes card's title is a switcher: Team notes, then My notes once you've
- * added them, then each person who shared theirs. With nothing else to show
- * it's just "Team notes" and a "My notes" button.
+ * The notes bar's "Which notes" select: Team notes, then My notes once you've
+ * added them, then each person who shared theirs, then AI notes (and Action
+ * items on phones). A "My notes" button sits beside it until you add yours.
  */
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { useMutation } from "convex/react";
-import { FileText, Plus, Trash2, Users } from "lucide-react";
+import { FileText, ListChecks, Lock, Plus, Sparkles, Trash2, Users } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { EditorSaveStatus } from "@/components/EditorSaveStatus";
@@ -17,6 +17,7 @@ import { Toggle } from "@/components/Controls";
 import { useConfirm } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { formatDateTime } from "@/lib/format";
+import type { NotesView } from "./NotesSurface";
 import { createNotesAutosave } from "../lib/notesAutosave";
 import type { PersonalNotes } from "../../../../shared/functions/meetingPersonalNotes";
 
@@ -25,35 +26,46 @@ export type NotesDocId = "team" | "mine" | `shared:${string}`;
 export function NotesDocSwitcher({
   doc,
   onDoc,
+  view,
+  onView,
   mine,
   others,
+  hasDraft,
+  actionCount,
   onAddMine,
   adding,
 }: {
   doc: NotesDocId;
   onDoc: (doc: NotesDocId) => void;
+  view: NotesView;
+  onView: (view: NotesView) => void;
   mine: PersonalNotes | null | undefined;
   others: readonly PersonalNotes[];
+  hasDraft: boolean;
+  /** Open action items; set on phones, where they get their own entry. */
+  actionCount?: number;
   /** Absent when the person can't keep notes here. */
   onAddMine?: () => void;
   adding?: boolean;
 }) {
   const options = [
-    { value: "team", label: "Team notes", hint: "Everyone who can edit the meeting" },
-    ...(mine ? [{ value: "mine", label: "My notes", hint: mine.shared ? "Shared with the team" : "Only you" }] : []),
-    ...others.map((row) => ({ value: `shared:${row._id}`, label: `${row.authorName}'s notes`, hint: "Shared" })),
+    { value: "team", label: "Team notes", hint: "Everyone who can edit the meeting", icon: <FileText size={14} /> },
+    ...(mine ? [{ value: "mine", label: "My notes", hint: mine.shared ? "Shared with the team" : "Only you", icon: <Lock size={14} /> }] : []),
+    ...others.map((row) => ({ value: `shared:${row._id}`, label: `${row.authorName}'s notes`, hint: "Shared", icon: <Users size={14} /> })),
+    { value: "ai", label: "AI notes", hint: hasDraft ? "Drafted from the notes and transcript" : "Not drafted yet", icon: <Sparkles size={14} /> },
+    ...(actionCount !== undefined ? [{ value: "actions", label: actionCount ? `Action items (${actionCount})` : "Action items", hint: "Who does what", icon: <ListChecks size={14} /> }] : []),
   ];
+  const pick = (value: string) => {
+    if (value === "ai" || value === "actions") return onView(value);
+    onDoc(value as NotesDocId);
+    onView("notes");
+  };
   return (
     <div className="notes-doc-switch">
-      <FileText size={14} aria-hidden="true" />
-      {options.length > 1 ? (
-        <div className="notes-doc-switch__select">
-          <Select aria-label="Which notes" value={doc} onChange={(value) => onDoc(value as NotesDocId)} options={options} />
-        </div>
-      ) : (
-        <h2 className="card__title">Team notes</h2>
-      )}
-      {!mine && onAddMine && (
+      <div className="notes-doc-switch__select">
+        <Select aria-label="Which notes" value={view === "notes" ? doc : view} onChange={pick} options={options} />
+      </div>
+      {!mine && onAddMine && view === "notes" && (
         <button type="button" className="btn-action notes-doc-switch__add" onClick={onAddMine} disabled={adding} title="Private notes only you can see, unless you share them">
           <Plus size={12} aria-hidden="true" /> My notes
         </button>
@@ -63,7 +75,7 @@ export function NotesDocSwitcher({
 }
 
 /** Your own notes: autosaved, private until you share them. */
-export function MyNotesCard({ meetingId, row, title, onDeleted }: { meetingId: string; row: PersonalNotes; title: ReactNode; onDeleted: () => void }) {
+export function MyNotesCard({ meetingId, row, onDeleted }: { meetingId: string; row: PersonalNotes; onDeleted: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const save = useMutation(api.meetingPersonalNotes.save);
@@ -110,9 +122,6 @@ export function MyNotesCard({ meetingId, row, title, onDeleted }: { meetingId: s
 
   return (
     <section className="card meeting-notes-doc" aria-label="My notes">
-      <div className="card__head meeting-notes-doc__head">
-        {title}
-      </div>
       <div className="card__body meeting-notes-doc__body" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) flush(); }}>
         <MarkdownEditor
           className="markdown-editor--document"
@@ -142,11 +151,10 @@ export function MyNotesCard({ meetingId, row, title, onDeleted }: { meetingId: s
 }
 
 /** Someone else's shared notes: read only. */
-export function SharedNotesCard({ row, title }: { row: PersonalNotes; title: ReactNode }) {
+export function SharedNotesCard({ row }: { row: PersonalNotes }) {
   return (
     <section className="card meeting-notes-doc" aria-label={`${row.authorName}'s notes`}>
       <div className="card__head meeting-notes-doc__head">
-        {title}
         <span className="meeting-notes-doc__status muted"><Users size={12} aria-hidden="true" /> Shared · updated {formatDateTime(row.updatedAtISO)}</span>
       </div>
       <div className="card__body meeting-notes-doc__body">

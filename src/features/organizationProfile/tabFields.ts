@@ -14,6 +14,9 @@ export const PROFILE_TAB_FIELDS: Readonly<Record<ProfileTab, readonly string[]>>
     "name", "entityType", "jurisdictionCode", "actFormedUnder", "legalSubtype", "isMemberFunded",
     "formationStatus", "incorporationNumber", "incorporationDate",
     "certificateEvidenceDocumentId", "certificateReference", "certificateDate",
+    // Identity & formation → status & registry history, classification
+    "organizationStatus", "continuanceDate", "amalgamationDate", "archivedAtISO", "removedAtISO",
+    "numbered", "distributing", "solicitingPublicBenefit", "niceClassification",
     // Articles
     "articlesMinDirectors", "articlesMaxDirectors", "articlesShareTransferRestrictions",
     "articlesBusinessRestrictions", "articlesOtherProvisions", "articlesSourceDocumentId",
@@ -22,9 +25,6 @@ export const PROFILE_TAB_FIELDS: Readonly<Record<ProfileTab, readonly string[]>>
     ...ENTITY_DATE_FIELDS.map((field) => field.value), "annualMeetingYear", "agmExtensionEvidence",
     // Meetings
     "boardCadence", "boardCadenceDayOfWeek", "boardCadenceTime", "boardCadenceNotes",
-    // Rarely needed
-    "organizationStatus", "continuanceDate", "amalgamationDate", "archivedAtISO", "removedAtISO",
-    "numbered", "distributing", "solicitingPublicBenefit", "niceClassification",
   ],
   registrations: [],
   offices: ["officialEmail", "privacyOfficerName", "privacyOfficerEmail"],
@@ -57,5 +57,6 @@ export const PROFILE_ANCHOR_TABS: Readonly<Record<string, ProfileTab>> = {
   articles: "legal",
   "business-year": "legal",
   "rarely-needed": "legal",
+  "status-history": "legal",
   "governing-documents": "documents",
 };

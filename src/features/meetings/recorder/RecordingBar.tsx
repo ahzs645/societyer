@@ -83,7 +83,7 @@ export function RecordingBar() {
   }
 
   const id = recorder.meetingId!;
-  const transcriptHref = `/app/meetings/${id}?tab=notes&view=transcript`;
+  const transcriptHref = `/app/meetings/${id}?tab=transcript`;
   const unkept = Boolean(recorder.file) && save.status !== "saved" && !downloaded;
 
   const close = async () => {

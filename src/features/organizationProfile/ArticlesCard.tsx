@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, type TextareaHTMLAttributes } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -20,6 +21,22 @@ export function articlesError(form: Pick<ProfileForm, "articlesMinDirectors" | "
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
+}
+
+/**
+ * A provision box as tall as its text, locked or not: articles are read far
+ * more often than edited, so the whole provision shows without scrolling.
+ */
+function FitTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    // `field-sizing: content` (the stylesheet) does this where supported.
+    if (!node || CSS.supports?.("field-sizing", "content")) return;
+    node.style.height = "auto";
+    node.style.height = `${node.scrollHeight + 2}px`;
+  }, [props.value]);
+  return <textarea ref={ref} rows={2} {...props} className="textarea org-profile-provision" />;
 }
 
 function numberValue(text: string): number | undefined {
@@ -48,7 +65,7 @@ export function ArticlesCard({ society, form, set, documents }: {
   const classes = ledger?.classes?.filter((row) => row.status !== "inactive");
   const textArea = (key: "articlesShareTransferRestrictions" | "articlesBusinessRestrictions" | "articlesOtherProvisions", label: string, placeholder: string) => (
     <LockedField label={label} requireUnlock={lockWhenSet(society[key])} reason={AMENDMENT_REASON}>
-      {(locked) => <textarea className="input" rows={3} disabled={locked} value={form[key] ?? ""} placeholder={placeholder} onChange={(event) => set(key, event.target.value)} />}
+      {(locked) => <FitTextarea disabled={locked} value={form[key] ?? ""} placeholder={placeholder} onChange={(event) => set(key, event.target.value)} />}
     </LockedField>
   );
   return (

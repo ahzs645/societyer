@@ -29,7 +29,7 @@ export function jurisdictionChoices(base: readonly SelectOption[], current?: str
   for (const place of INCORPORATION_JURISDICTIONS) {
     if (known.has(place.code)) continue;
     known.add(place.code);
-    extra.push({ value: place.code, label: place.level === "federal" ? "Canada federal - other Acts" : place.code === "CA-ON" ? "Ontario - other Acts" : place.name, hint: SUPPORT_LABELS.records_only.badge });
+    extra.push({ value: place.code, label: place.level === "federal" ? "Canada (federal) — other Acts" : place.code === "CA-ON" ? "Ontario — other Acts" : place.name, hint: SUPPORT_LABELS.records_only.badge });
   }
   if (current && !known.has(current)) extra.push({ value: current, label: incorporationJurisdictionForCode(current)?.name ?? current });
   return [...base, ...extra];

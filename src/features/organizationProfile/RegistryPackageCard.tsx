@@ -17,7 +17,7 @@ type PackageRow = { document: ProfileDocument; status: string; tone: ToneVariant
 /** "BC", or the jurisdiction's name without the internal-code note, for a short status pill. */
 function shortJurisdiction(jurisdiction: string | undefined) {
   if (isBcJurisdiction(jurisdiction)) return "BC";
-  return optionLabel("entityJurisdictions", jurisdiction).replace(/ \(Societyer code\)$/, "");
+  return optionLabel("entityJurisdictions", jurisdiction);
 }
 
 /** The registry package: each document with what the profile uses it for. */
@@ -90,7 +90,6 @@ export function RegistryPackageCard({ society, detail, documents, canEdit, onImp
               </table>
             </div>
           )}
-        <p className="muted org-profile-card-note">Every director can open these documents, so the information sheet and the ISC filing are best kept elsewhere.</p>
       </div>
     </section>
   );

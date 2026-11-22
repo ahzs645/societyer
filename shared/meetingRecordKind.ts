@@ -43,8 +43,8 @@ export type MeetingDetailTabId = (typeof MEETING_DETAIL_TABS)[number];
 
 const TABS_BY_KIND: Record<MeetingRecordKind, readonly MeetingDetailTabId[]> = {
   minutes: ["overview", "minutes", "transcript", "motions", "package", "export", "sources"],
-  // The transcript is a view inside Notes (quote into the notes from it), not a tab of its own.
-  notes: ["overview", "notes", "package", "sources"],
+  // Notes and Transcript share one surface (quote into the notes from the transcript); MeetingNotesTab draws both.
+  notes: ["overview", "notes", "transcript", "package", "sources"],
   meeting: ["overview", "transcript", "package", "sources"],
 };
 
@@ -56,15 +56,14 @@ export function visibleMeetingTabs(kind: MeetingRecordKind): readonly MeetingDet
 /**
  * The tab to show for a requested `?tab=` value. Deep links keep working
  * across kinds: `minutes` on a notes meeting opens Notes and `notes` on a
- * minutes meeting opens Agenda & minutes, and `transcript` on a notes meeting
- * opens Notes (MeetingDetail switches it to the Transcript view). Anything else
- * hidden falls back to Overview.
+ * minutes meeting opens Agenda & minutes. Anything else hidden falls back to
+ * Overview. (An older `?tab=notes&view=transcript` link on a notes meeting is
+ * moved to the Transcript tab by MeetingDetail.)
  */
 export function resolveMeetingTab(requested: string | null | undefined, kind: MeetingRecordKind): MeetingDetailTabId {
   const visible = visibleMeetingTabs(kind);
   if (requested === "minutes" && kind === "notes") return "notes";
   if (requested === "notes" && kind === "minutes") return "minutes";
-  if (requested === "transcript" && kind === "notes") return "notes";
   // A notes meeting opens on its notes, the way a notepad does.
   if (!requested && kind === "notes") return "notes";
   const match = visible.find((tab) => tab === requested);

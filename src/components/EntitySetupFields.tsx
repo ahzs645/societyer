@@ -66,7 +66,7 @@ export function TaxEvidenceFields({ form, set }: EntitySetupProps) {
       {!corporation && <Field label="Charitable registration profile claim" hint="This records an unreviewed profile claim. Use Charity registration and evidence on Donations and receipts to record reviewed decisions and effective dates; this claim does not authorize official receipts."><Select value={form.charityStatus ?? (form.isCharity ? "registered" : "unknown")} onChange={(value) => { set("isCharity", value === "registered"); set("charityStatus", value); }} options={CHARITY_STATUS_OPTIONS} /></Field>}
       <Field label={corporation ? "Tax evidence reference" : "Tax / charity evidence reference"} hint="Reference the CRA receipt or approval document; do not include account credentials."><input className="input" value={form.taxStatusEvidence ?? ""} onChange={(event) => set("taxStatusEvidence", event.target.value)} /></Field>
     </div>
-    <p className="entity-setup-group__note">BC and federal incorporations usually get a BN and RC account automatically, so check for them before requesting new ones. GST/HST, payroll{corporation ? "" : " and charitable registration"} are registered separately.</p>
+    <p className="entity-setup-group__note">BC and federal incorporations usually get a BN and RC account automatically, so check for them before requesting new ones. {corporation ? "GST/HST and payroll are" : "GST/HST, payroll and charitable registration are"} registered separately.</p>
   </div>;
 }
 

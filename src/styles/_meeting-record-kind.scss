@@ -1031,7 +1031,7 @@ html:has(.markdown-link-popover) .notes-ask__prompts {
   &:hover { color: token("text-primary"); }
 }
 @media (max-width: 640px) {
-  /* One row: the view switch takes the room left by the mic and ••• icons. */
+  /* One row: the notes select takes the room left by the mic and ••• icons. */
   .notes-surface__bar {
     flex-wrap: nowrap;
     gap: token("s-1");
@@ -1045,26 +1045,22 @@ html:has(.markdown-link-popover) .notes-ask__prompts {
   html:has(.markdown-link-popover) .notes-ask {
     display: none;
   }
-  .notes-surface__views {
+  .notes-surface__bar .notes-doc-switch {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: token("s-1");
+  }
+  .notes-surface__bar .notes-doc-switch__select {
     flex: 1 1 auto;
     min-width: 0;
-    .segmented__btn {
-      flex: 1 1 auto;
-      min-width: 0;
-      padding-inline: 6px;
-      white-space: nowrap;
-      overflow: hidden;
-    }
+  }
+  .notes-doc-switch__add {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
   .notes-surface__tools {
     flex: 0 0 auto;
     gap: token("s-1");
-  }
-  @media (max-width: 380px) {
-    .notes-surface__views .segmented__btn {
-      padding-inline: 4px;
-      font-size: token("fs-xs");
-    }
   }
   /* Cards run to the screen edges on phones (see _layout-workbench), so the bar does too. */
   @media (max-width: 560px) {

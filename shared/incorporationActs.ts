@@ -88,7 +88,7 @@ export const ENTITY_KIND_LABELS: Record<IncorporationEntityKind, { label: string
 };
 
 export const SUPPORT_LABELS: Record<IncorporationSupport, { badge: string; description: string }> = {
-  full: { badge: "Core governance profile", description: "Reviewed core governance rules for this Act. Formation preparation and individual actions have separate coverage and evidence requirements." },
+  full: { badge: "Core governance profile", description: "Societyer checks this Act's core governance rules: directors, meetings and records. Incorporating and one-off actions such as amendments are checked separately." },
   records_only: { badge: "Records only", description: "No reviewed guidance yet. Keep records, documents and tasks; check rules and deadlines with the registry or an adviser." },
 };
 

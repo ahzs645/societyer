@@ -413,24 +413,26 @@ function MeetingDetailWorkspace() {
   const recordKind = meetingRecordKind(meeting);
   const visibleTabs = visibleMeetingTabs(recordKind);
   const activeTab: MeetingDetailTab = resolveMeetingTab(searchParams.get("tab"), recordKind);
-  // Notes meetings keep the transcript in the Notes view switch: an old
-  // `?tab=transcript` link (Sources, Teams imports, task back-links) opens
-  // Notes → Transcript, keeping its `t=` range and `intent=`.
-  const transcriptTabOnNotes = recordKind === "notes" && searchParams.get("tab") === "transcript";
+  // Notes meetings used to keep the transcript as a view inside Notes: an old
+  // `?tab=notes&view=transcript` link (quotes in notes, task back-links) opens
+  // the Transcript tab, keeping its `t=` range and `intent=`.
+  const oldNotesTranscriptLink = recordKind === "notes" && activeTab === "notes" && searchParams.get("view") === "transcript";
   useEffect(() => {
-    if (!transcriptTabOnNotes) return;
+    if (!oldNotesTranscriptLink) return;
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
-      params.delete("tab");
-      params.set("view", "transcript");
+      params.delete("view");
+      params.set("tab", "transcript");
       return params;
     }, { replace: true });
-  }, [transcriptTabOnNotes, setSearchParams]);
-  const setActiveTab = async (next: MeetingDetailTab) => {
+  }, [oldNotesTranscriptLink, setSearchParams]);
+  /** `also`: other params to set in the same navigation (two setSearchParams in one tick keep only the last). */
+  const setActiveTab = async (next: MeetingDetailTab, also?: Record<string, string>) => {
     if (next !== activeTab && !(await confirmLeave())) return;
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(also ?? {})) params.set(key, value);
         // The default tab (Overview, or Notes for a notes meeting) needs no ?tab=.
         if (next === resolveMeetingTab(null, recordKind)) params.delete("tab");
         else params.set("tab", next);
@@ -2579,14 +2581,15 @@ function MeetingDetailWorkspace() {
 
       <UnsavedPanelsProvider value={unsavedPanels}>
       <div className="meeting-detail-tabpanel">
-        {activeTab === "transcript" && !transcriptAccess && <TeamsSpeakerLinks societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} />}
-        {activeTab === "transcript" && transcriptAccess && (
+        {/* Notes meetings draw their Transcript tab in the notes surface below, which quotes into the notes. */}
+        {activeTab === "transcript" && recordKind !== "notes" && !transcriptAccess && <TeamsSpeakerLinks societyId={meeting.societyId} meetingId={meeting._id} transcript={workspaceTranscript} />}
+        {activeTab === "transcript" && recordKind !== "notes" && transcriptAccess && (
           <TranscriptAccessNotice
             reason={transcriptAccess}
-            onReadMinutes={recordKind === "minutes" ? () => setActiveTab("minutes") : recordKind === "notes" ? () => setActiveTab("notes") : undefined}
+            onReadMinutes={recordKind === "minutes" ? () => setActiveTab("minutes") : undefined}
           />
         )}
-        {activeTab === "transcript" && !transcriptAccess && transcriptWorkspace}
+        {activeTab === "transcript" && recordKind !== "notes" && !transcriptAccess && transcriptWorkspace}
         {/* Also in the Transcript view, where its recordings play. */}
         {activeTab === "sources" && <MeetingSourcesCard societyId={meeting.societyId} meetingId={meeting._id} canWrite={canMeetingsWrite} canDraft={canMinutesWrite} canReadTranscript={canReadTranscript} />}
         {(activeTab === "overview" || activeTab === "sources") && (
@@ -2606,9 +2609,11 @@ function MeetingDetailWorkspace() {
             onSwitched={setActiveTab}
           />
         )}
-        {activeTab === "notes" && (
+        {(activeTab === "notes" || (activeTab === "transcript" && recordKind === "notes")) && (
           <MeetingNotesTab
             key={meeting._id}
+            section={activeTab === "transcript" ? "transcript" : "notes"}
+            onSection={(section, view) => setActiveTab(section, view ? { view } : undefined)}
             meetingId={meeting._id}
             workingNotes={meeting.workingNotes}
             canWrite={canMeetingsWrite}

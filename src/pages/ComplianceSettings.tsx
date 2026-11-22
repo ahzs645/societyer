@@ -33,6 +33,7 @@ import { annualGovernanceSettings } from "../../shared/annualGovernanceEvidence"
 import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
 import { CitationBadge } from "../components/CitationTooltip";
 import { OperativeArticlesSettings } from "../features/corporation/OperativeArticlesSettings";
+import { ComplianceRulePacksSection } from "../features/compliance/ComplianceRulePacks";
 
 /**
  * Compliance settings → deadlines. Surfaces the YCN Corporation_Settings idea:
@@ -258,6 +259,8 @@ export function ComplianceSettingsPage() {
           />
 
           <OperativeArticlesSettings society={society} canWrite={canSaveSettings} />
+
+          <ComplianceRulePacksSection />
 
           <section className="card settings-section">
             <h2 className="settings-section__title">Documents</h2>
