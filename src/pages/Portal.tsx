@@ -24,6 +24,18 @@ export function PortalPage() {
     api.meetings.list,
     society ? { societyId: society._id } : "skip",
   );
+  // The intake pages' own context queries: a CTA shows only when the page it
+  // opens would take a submission (public intake on, module on and, for
+  // funding, a grant open to public applications).
+  const publicSlug = society?.publicSlug;
+  const volunteerIntake = useQuery(
+    api.publicPortal.volunteerIntakeContext,
+    publicSlug && volunteersEnabled ? { slug: publicSlug } : "skip",
+  );
+  const grantIntake = useQuery(
+    api.publicPortal.grantIntakeContext,
+    publicSlug && grantsEnabled ? { slug: publicSlug } : "skip",
+  );
   const myElections = useQuery(
     api.elections.listMine,
     society && currentUser && votingEnabled
@@ -48,7 +60,11 @@ export function PortalPage() {
         meeting.status === "Scheduled" &&
         new Date(meeting.scheduledAt).getTime() >= Date.now(),
     )
+    // The list comes newest first; show the next five, soonest first.
+    .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
     .slice(0, 5);
+  const volunteerIntakeOpen = Boolean(volunteerIntake);
+  const grantIntakeOpen = Boolean(grantIntake);
 
   return (
     <div className="landing" style={{ minHeight: "100vh" }}>
@@ -135,9 +151,9 @@ export function PortalPage() {
             </div>
           </div>
 
-          {society.publicSlug && (volunteersEnabled || grantsEnabled) && (
+          {society.publicSlug && (volunteerIntakeOpen || grantIntakeOpen) && (
             <div className="two-col" style={{ marginTop: 24 }}>
-              {volunteersEnabled && (
+              {volunteerIntakeOpen && (
                 <div className="card">
                   <div className="card__head">
                     <h2 className="card__title">Volunteer intake</h2>
@@ -153,7 +169,7 @@ export function PortalPage() {
                 </div>
               )}
 
-              {grantsEnabled && (
+              {grantIntakeOpen && (
                 <div className="card">
                   <div className="card__head">
                     <h2 className="card__title">Funding intake</h2>
