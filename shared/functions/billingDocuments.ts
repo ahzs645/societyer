@@ -25,6 +25,12 @@ async function rows(ctx: Ctx, table: string, societyId: string, limit = 10000) {
   return found;
 }
 async function actor(ctx: Ctx, societyId: string) { return principalUserId(ctx, societyId); }
+/** The quote's invoice while it still exists. Deleting the draft clears the link; older rows can still point at a deleted draft. */
+async function liveConvertedInvoiceId(ctx: Ctx, value: Row): Promise<string | undefined> {
+  if (!value.convertedInvoiceId) return undefined;
+  const invoice = await ctx.db.get<Row>(value.convertedInvoiceId, "invoices");
+  return invoice?.societyId === value.societyId ? value.convertedInvoiceId : undefined;
+}
 async function quote(ctx: Ctx, id: string) { const found = await requireOwnedRow<Row>(ctx, "billingQuotes", id); await read(ctx, found.societyId); return found; }
 async function repair(ctx: Ctx, id: string) { const found = await requireOwnedRow<Row>(ctx, "repairJobs", id); await write(ctx, found.societyId); return found; }
 async function operations(ctx: Ctx, id: string) { return ctx.db.query<Row>("repairOperations").withIndex("by_repair_job", (q) => q.eq("repairJobId", id)).first(); }
@@ -89,12 +95,15 @@ export async function workspacePortable(ctx: Ctx, args: WorkspaceArgs) {
   const collection = args.collection ?? (quoteId ? "quote" : "quotes"), status = args.status ?? "all";
   if (!["quotes", "quote", "statements", "revisions"].includes(collection) || !["all", ...QUOTE_STATUSES].includes(status)) throw new Error("Choose a supported document collection and status.");
   const today = await calendarToday(ctx, societyId);
-  const effective = (row: Row) => ({ ...row, effectiveStatus: row.status === "sent" && row.fields.validUntil < today ? "expired" : row.status });
-  const empty = { quotes: [] as Row[], revisions: [] as Row[], statements: [] as Row[], quote: null as ReturnType<typeof effective> | null, isDone: true, continueCursor: "" };
+  const effective = async ({ convertedInvoiceId: storedLink, ...row }: Row) => {
+    const convertedInvoiceId = await liveConvertedInvoiceId(ctx, { ...row, convertedInvoiceId: storedLink });
+    return { ...row, ...(convertedInvoiceId ? { convertedInvoiceId } : {}), effectiveStatus: row.status === "sent" && row.fields.validUntil < today ? "expired" : row.status };
+  };
+  const empty = { quotes: [] as Row[], revisions: [] as Row[], statements: [] as Row[], quote: null as Awaited<ReturnType<typeof effective>> | null, isDone: true, continueCursor: "" };
   if (collection === "quote" || collection === "revisions") {
     if (!quoteId) throw new Error("Choose a quote.");
     const value = await getOwned<Row>(ctx, "billingQuotes", quoteId, societyId);
-    if (collection === "quote") return { ...empty, quote: effective(value) };
+    if (collection === "quote") return { ...empty, quote: await effective(value) };
   }
   const scope = JSON.stringify([societyId, collection, status, quoteId ?? "", args.customerKey ?? "", args.currency ?? ""]);
   let cursor: DocumentCursor = { scope, cursor: null };
@@ -116,12 +125,12 @@ export async function workspacePortable(ctx: Ctx, args: WorkspaceArgs) {
   const result = await query.order("desc").paginate({ numItems: 4, cursor: cursor.cursor });
   const nextPhase = collection === "quotes" && status === "expired" && cursor.phase !== "stored_expired" && result.isDone;
   const isDone = result.isDone && !nextPhase;
-  return { ...empty, [collection]: collection === "quotes" ? result.page.map(effective) : result.page, isDone, continueCursor: isDone ? "" : JSON.stringify({ scope, ...(nextPhase || cursor.phase ? { phase: "stored_expired" } : {}), cursor: nextPhase ? null : result.continueCursor }) };
+  return { ...empty, [collection]: collection === "quotes" ? await Promise.all(result.page.map(effective)) : result.page, isDone, continueCursor: isDone ? "" : JSON.stringify({ scope, ...(nextPhase || cursor.phase ? { phase: "stored_expired" } : {}), cursor: nextPhase ? null : result.continueCursor }) };
 }
 export async function upsertQuotePortable(ctx: PortableMutationCtx, args: { societyId: string; id?: string; fields: QuoteFields }) {
   await write(ctx, args.societyId);
   const old = args.id ? await getOwned<Row>(ctx, "billingQuotes", args.id, args.societyId) : null;
-  if (old && (old.status !== "draft" || old.convertedInvoiceId)) throw new Error("Published quotes are immutable. Create a new revision before editing.");
+  if (old && (old.status !== "draft" || await liveConvertedInvoiceId(ctx, old))) throw new Error("Published quotes are immutable. Create a new revision before editing.");
   const fields = await cleanQuoteFields(ctx, args.societyId, args.fields);
   if (old && taxTransactionContextChanged(old.fields, fields)) fields.lines = reassessTaxLines(fields.lines, fields.issueDate);
   const patch = { fields, totalCents: computeInvoiceTotals(fields.lines, fields.discount, fields.money).totalCents, updatedAtISO: now() };
@@ -131,7 +140,7 @@ export async function upsertQuotePortable(ctx: PortableMutationCtx, args: { soci
 }
 export async function setQuoteStatusPortable(ctx: PortableMutationCtx, args: { id: string; status: QuoteStatus; note?: string }) {
   const value = await quote(ctx, args.id); await write(ctx, value.societyId);
-  if (value.convertedInvoiceId) throw new Error("This quote is already converted to an invoice.");
+  if (await liveConvertedInvoiceId(ctx, value)) throw new Error("This quote is already converted to an invoice.");
   if (value.status === args.status) return value._id;
   if (!(QUOTE_STATUSES as readonly string[]).includes(args.status)) throw new Error("Choose a quote status.");
   if (args.status === "sent") {
@@ -151,14 +160,15 @@ export async function setQuoteStatusPortable(ctx: PortableMutationCtx, args: { i
 }
 export async function reviseQuotePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const value = await quote(ctx, id); await write(ctx, value.societyId);
-  if (value.convertedInvoiceId) throw new Error("A converted quote cannot be revised; duplicate its invoice or create a new quote.");
+  if (await liveConvertedInvoiceId(ctx, value)) throw new Error("A converted quote cannot be revised; duplicate its invoice or create a new quote.");
   if (value.status === "draft") return id;
   await snapshotQuote(ctx, value);
-  await ctx.db.patch(id, { revision: value.revision + 1, status: "draft", updatedAtISO: now(), timeline: [...value.timeline, { atISO: now(), actorUserId: await actor(ctx, value.societyId), action: `Revision ${value.revision + 1} started` }] }); return id;
+  await ctx.db.patch(id, { revision: value.revision + 1, status: "draft", convertedInvoiceId: undefined, updatedAtISO: now(), timeline: [...value.timeline, { atISO: now(), actorUserId: await actor(ctx, value.societyId), action: `Revision ${value.revision + 1} started` }] }); return id;
 }
 export async function convertQuotePortable(ctx: PortableMutationCtx, { id, issueDate, terms = "net_30" }: { id: string; issueDate: string; terms?: string }) {
   const value = await quote(ctx, id); await write(ctx, value.societyId);
-  if (value.convertedInvoiceId) { await getOwned(ctx, "invoices", value.convertedInvoiceId, value.societyId); return value.convertedInvoiceId; }
+  const linked = await liveConvertedInvoiceId(ctx, value);
+  if (linked) return linked;
   if (value.status !== "accepted") throw new Error("Record customer acceptance before converting the quote.");
   const fields = await cleanQuoteFields(ctx, value.societyId, value.fields);
   fields.lines = reassessTaxLines(fields.lines, issueDate);

@@ -36,6 +36,18 @@ assert.equal(convertedInvoice.documentTemplate.name, "Offer design");
 assert.equal(convertedInvoice.documentExtras.termsAndConditions, fields.termsAndConditions);
 assert.match(convertedInvoice.reference, /revision 2/);
 await assert.rejects(() => documents.reviseQuotePortable(ctx, { id: quoteId }), /converted/);
+// Deleting the unpaid converted draft releases the quote instead of stranding it on a deleted invoice.
+await invoices.removePortable(ctx, { id: converted });
+const releasedQuote: any = await db.get(quoteId);
+assert.equal(releasedQuote.convertedInvoiceId, undefined, "draft deletion clears the quote's invoice link");
+assert.equal(releasedQuote.timeline.at(-1).action, "Converted draft invoice deleted");
+const reconverted = await documents.convertQuotePortable(ctx, { id: quoteId, issueDate: today });
+assert.notEqual(reconverted, converted, "the released quote converts to a fresh draft");
+// Rows written before that cleanup can still point at a deleted draft: reads hide the link and conversion recovers.
+await db.delete(reconverted);
+assert.equal((await documents.workspacePortable(ctx, { societyId, collection: "quote", quoteId })).quote?.convertedInvoiceId, undefined, "a dangling link is not offered as View invoice");
+const recovered = await documents.convertQuotePortable(ctx, { id: quoteId, issueDate: today });
+assert.equal(((await db.get(quoteId)) as any).convertedInvoiceId, recovered, "converting over a dangling link relinks the new draft");
 const workspace = await documents.workspacePortable(ctx, { societyId, collection: "revisions", quoteId });
 assert.equal(workspace.revisions.length, 2);
 assert.equal(workspace.revisions[0].status, "sent", "revision snapshot records the published offer rather than a draft label");
