@@ -1,4 +1,5 @@
-import { DEFAULT_BYLAW_RULES, bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
+import { DEFAULT_BYLAW_RULES, bylawBaselineForOrganization } from "../bylawBaselines";
+import { bylawRuleSetForDate } from "../bylawRuleSelection";
 /**
  * PORTABLE FUNCTIONS: the bylaw-rules domain
  * (getActive / getForDate / list / upsertActive / resetToDefault).
@@ -7,8 +8,9 @@ import { DEFAULT_BYLAW_RULES, bylawBaselineForOrganization, contextualBylawRules
  * unchanged on hosted Convex, the local Dexie runtime, and the convex-test
  * oracle.
  *
- * The rule-resolution helpers (`getActiveBylawRuleSet`, `getBylawRuleSetForDate`,
- * `getNextBylawRuleVersion`, `getDefaultBylawRules`) are portable copies of
+ * Rule selection by calendar day lives in shared/bylawRuleSelection.ts (shared
+ * with meetings and minutes). `getNextBylawRuleVersion` and
+ * `getDefaultBylawRules` are portable copies of
  * `convex/lib/bylawRules.ts`: that module imports `_generated`, so its pure
  * `ctx.db`-only logic is inlined here on the portable contract rather than
  * reaching into the Convex-typed lib module.
@@ -25,29 +27,11 @@ export function getDefaultBylawRules(societyId: string, organization?: any) {
   return bylawBaselineForOrganization(organization, societyId);
 }
 
-async function getBylawRuleSetForDate(
-  ctx: PortableQueryCtx | PortableMutationCtx,
-  societyId: string,
-  dateISO: string,
-): Promise<Record<string, any>> {
-  const rows = await ctx.db
-    .query("bylawRuleSets")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
-  const targetTs = timestampOrInfinity(dateISO);
-  const eligible = rows
-    .filter((row) => row.status !== "Draft")
-    .filter((row) => effectiveTimestamp(row) <= targetTs);
-  const selected = eligible.sort(compareRuleSetsDesc)[0];
-  const organization = await ctx.db.get(societyId);
-  return contextualBylawRules(organization, societyId, selected);
-}
-
 export async function getActiveBylawRuleSet(
   ctx: PortableQueryCtx | PortableMutationCtx,
   societyId: string,
 ) {
-  return getBylawRuleSetForDate(ctx, societyId, new Date().toISOString());
+  return bylawRuleSetForDate(ctx, societyId, new Date().toISOString());
 }
 
 async function getNextBylawRuleVersion(
@@ -61,34 +45,6 @@ async function getNextBylawRuleVersion(
   return Math.max(0, ...rows.map((row) => row.version)) + 1;
 }
 
-// Versions are effective from a calendar day. "Reset to defaults" stamps the
-// click instant while "Save new version" stamps midnight of the chosen day, so
-// two versions effective the same day are ordered by version, not by time.
-function compareRuleSetsDesc(a: any, b: any) {
-  const byDay = effectiveDay(b).localeCompare(effectiveDay(a));
-  if (byDay !== 0) return byDay;
-  return (Number(b.version) || 0) - (Number(a.version) || 0);
-}
-
-function effectiveDay(row: any) {
-  return typeof row.effectiveFromISO === "string" ? row.effectiveFromISO.slice(0, 10) : "";
-}
-
-function effectiveTimestamp(row: any) {
-  return timestampOrNegativeInfinity(row.effectiveFromISO);
-}
-
-function timestampOrInfinity(value: string) {
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.POSITIVE_INFINITY;
-}
-
-function timestampOrNegativeInfinity(value?: string) {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
-}
-
 export async function getActivePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
   const active = await getActiveBylawRuleSet(ctx, societyId);
@@ -100,7 +56,7 @@ export async function getActivePortable(ctx: PortableQueryCtx, { societyId }: { 
 
 export async function getForDatePortable(ctx: PortableQueryCtx, { societyId, dateISO }: { societyId: string; dateISO: string }) {
   await requireSocietyMembership(ctx, societyId);
-  const rules = await getBylawRuleSetForDate(ctx, societyId, dateISO);
+  const rules = await bylawRuleSetForDate(ctx, societyId, dateISO);
   return {
     ...rules,
     isFallback: !rules._id,
