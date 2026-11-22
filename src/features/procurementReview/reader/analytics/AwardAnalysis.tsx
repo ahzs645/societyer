@@ -20,7 +20,7 @@
  * Where the awards carry no codes, or an older server ignores the filter,
  * the analysis says so instead of showing figures for every commodity.
  */
-import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from "react";
 import { Crosshair, List, SlidersHorizontal } from "lucide-react";
 import { InfoPopover } from "../../../../components/InfoPopover";
 import { Banner, Pill } from "../../../../components/ui";
@@ -126,7 +126,14 @@ function ServerAwardAnalysis({ view, title }: { view: AwardView; title: string }
   const { nav, filters, buyerLevel, setFilters, setBuyerLevel, setExclusions, exclude } = useAnalysisFilters();
   const [dialog, setDialog] = useState<"filters" | "exclusions" | null>(null);
   const result = source.useAnalysis!({ view, buyerLevel, filters, year: nav.params.get("year") ?? "", search: nav.params.get("rankq") ?? "", offset: Number(nav.params.get("rankpage") ?? 0) });
-  const data = result.result?.type === "award" ? result.result.data : null;
+  const fresh = result.result?.type === "award" ? result.result.data : null;
+  // While the next request for this view loads (each keystroke in a directory
+  // search is a new one), keep its last figures on screen rather than a
+  // skeleton, so the view and its search box stay mounted and keep focus.
+  const lastFigures = useRef<{ view: AwardView; data: NonNullable<typeof fresh> } | null>(null);
+  if (fresh) lastFigures.current = { view, data: fresh };
+  const stale = !fresh && result.state === "preparing" && lastFigures.current?.view === view;
+  const data = fresh ?? (stale ? lastFigures.current?.data ?? null : null);
   // An analysis from before the commodity filter returns no commodity choices, and ignores the filter.
   const choices: FilterChoices | null = data?.meta ?? null;
   const commodityUnsupported = !!filters.commodity && !!choices && !choices.commodities;
@@ -154,7 +161,7 @@ function ServerAwardAnalysis({ view, title }: { view: AwardView; title: string }
     />
     {view !== "quality" && <FilterChips filters={filters} commodityTitle={commodityTitle} onChange={(next, level) => setFilters(next, { buyerLevel: level })} buyerLevel={buyerLevel} onBuyerLevel={setBuyerLevel} onShowExclusions={() => setDialog("exclusions")} />}
     {view !== "quality" && filters.commodity && (commodityUnsupported || commodityUnmatched) && <CommodityProblem code={filters.commodity} unsupported={commodityUnsupported} onClear={() => setFilters(withoutCommodity(filters))} />}
-    {result.state === "failed" ? <Banner tone="danger">{result.error} <button type="button" className="btn btn--sm" onClick={result.retry}>Retry analysis</button></Banner> : !data ? <ViewSkeleton /> : commodityUnsupported && view !== "quality" ? null : <div className="procurement-analytics__stack">
+    {result.state === "failed" ? <Banner tone="danger">{result.error} <button type="button" className="btn btn--sm" onClick={result.retry}>Retry analysis</button></Banner> : !data ? <ViewSkeleton /> : commodityUnsupported && view !== "quality" ? null : <div className="procurement-analytics__stack" aria-busy={stale || undefined}>
       <AwardViews view={view} ctx={ctx} />
       {view === "compare" && <ComparisonView data={data} ctx={ctx} />}
       {view === "quality" && <QualityView ctx={ctx} meta={data.meta} />}
