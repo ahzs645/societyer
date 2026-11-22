@@ -1350,6 +1350,12 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   if (row.status !== "draft" || (row.payments ?? []).length || row.issuerSnapshot || row.issuerTaxRegistrationsSnapshot || row.reopenedAtISO) throw new Error("Only unpaid drafts that have not been prepared can be deleted. Void an issued or prepared invoice instead.");
   if (await ctx.db.query("invoiceDocumentRevisions").withIndex("by_invoice", q => q.eq("invoiceId", id)).first()) throw new Error("This invoice has a retained previous version. Void it instead of deleting it.");
   await ctx.db.delete(id);
+  // A draft converted from a quote: release the quote so it can be converted again or revised.
+  const quotes = await ctx.db.query<Row>("billingQuotes").withIndex("by_converted_invoice", (q) => q.eq("convertedInvoiceId", id)).take(10);
+  for (const quote of quotes.filter((candidate) => candidate.societyId === row.societyId)) {
+    const at = nowISO();
+    await ctx.db.patch(quote._id, { convertedInvoiceId: undefined, updatedAtISO: at, timeline: [...(quote.timeline ?? []), { atISO: at, actorUserId: await principalUserId(ctx, row.societyId), action: "Converted draft invoice deleted" }] });
+  }
 }
 
 /** A money-in bank line this invoice may link: this workspace's, not linked to another payment, not matched elsewhere. */

@@ -212,6 +212,7 @@
   align-items: start;
 }
 .invoice-builder__form { display: flex; flex-direction: column; gap: token(s-3); min-width: 0; }
+.invoice-builder__feedback { display: flex; flex-direction: column; gap: token(s-3); scroll-margin-top: token(s-12); }
 .invoice-builder__section {
   padding: token(s-4);
   border: 1px solid token(border);
@@ -279,12 +280,16 @@
 }
 
 .invoice-builder__preview { position: sticky; top: calc(#{token(s-12)} + #{token(s-2)}); min-width: 0; }
+/* The preview column is under 400px wide at 1101px with the sidebar open: let
+ * the buttons wrap below the label rather than stacking it letter by letter. */
 .invoice-builder__preview-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: token(s-1);
   margin-bottom: token(s-2);
-  > span { margin-right: auto; }
+  > span { margin-right: auto; white-space: nowrap; }
   color: token(text-tertiary);
   font-size: token(fs-xs);
   font-weight: token(fw-semibold);

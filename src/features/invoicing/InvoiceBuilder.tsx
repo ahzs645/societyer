@@ -186,6 +186,12 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   // Soft duplicate check for a new invoice: same customer and total within 14 days.
   const [duplicateOk, setDuplicateOk] = useState(false);
   const [duplicateRetry, setDuplicateRetry] = useState<null | (() => void)>(null);
+  // Save feedback renders in the Edit pane, which the phone Preview tab hides: switch back and bring it into view.
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  const [feedbackRequest, setFeedbackRequest] = useState(0);
+  const revealFeedback = () => { setMobileView("edit"); setFeedbackRequest((count) => count + 1); };
+  useEffect(() => { if (feedbackRequest) feedbackRef.current?.scrollIntoView({ block: "nearest" }); }, [feedbackRequest]);
+  const reportProblem = (message: string) => { setError(message); revealFeedback(); };
 
   const documentLocked = Boolean(invoice && (invoice.lifecycle !== "draft" || invoice.issuerSnapshot || invoice.issuerTaxRegistrationsSnapshot));
   const readOnly = !canWrite || documentLocked || finalizing;
@@ -270,6 +276,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const guardDuplicate = (retry: () => void) => {
     if (!likelyDuplicate || duplicateOk) return false;
     setDuplicateRetry(() => retry);
+    revealFeedback();
     return true;
   };
 
@@ -287,7 +294,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const save = async (navigateAfterSave = true): Promise<string | null> => {
     const problem = validate();
     if (problem) {
-      setError(problem);
+      reportProblem(problem);
       return null;
     }
     setBusy(true);
@@ -346,7 +353,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
       if (!invoice && navigateAfterSave) onSaved(id);
       return id;
     } catch (err: any) {
-      setError(err?.message ?? "Could not save the invoice.");
+      reportProblem(err?.message ?? "Could not save the invoice.");
       return null;
     } finally {
       setBusy(false);
@@ -364,7 +371,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     if (!force && guardDuplicate(() => void finalizeInvoice(download, true))) return;
     const unpriced = lines.find((line) => !line.unitPriceCents && activeCatalog.some((item) => item._id === line.catalogItemId && item.openPrice));
     if (unpriced) {
-      setError(`${unpriced.item} has no set price. Enter the amount before finalizing.`);
+      reportProblem(`${unpriced.item} has no set price. Enter the amount before finalizing.`);
       return;
     }
     finalizationInFlight.current = true;
@@ -523,6 +530,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
             <Banner tone="info" title="Payments recorded"><Money cents={invoice.paidCents} currency={draft.currency} /> has been recorded against this invoice. Use the invoice panel to review payments and adjustments.</Banner>
           )}
           {invoice && invoice.lifecycle !== "draft" && invoice.lines.some((line) => line.taxAssessment) && <Banner tone="info" title="Issued tax assessment">The supply, tax decisions, recipient, delivery details and date are fixed to this invoice. Void and replace it if those facts need to change.</Banner>}
+          {(error || (duplicateRetry && likelyDuplicate)) && <div ref={feedbackRef} className="invoice-builder__feedback">
           {error && <Banner tone="danger" title="Check the invoice">{error}</Banner>}
           {duplicateRetry && likelyDuplicate && (
             <Banner tone="warn" title={`Looks like a duplicate of ${likelyDuplicate.title} (${formatDate(likelyDuplicate.date)})`}>
@@ -533,6 +541,7 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
               </span>
             </Banner>
           )}
+          </div>}
 
           <section className="invoice-builder__section" aria-labelledby="ib-billto">
             <h2 id="ib-billto" className="invoice-builder__heading">Bill to</h2>
