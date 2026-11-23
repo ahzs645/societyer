@@ -45,12 +45,7 @@
   background: token('bg-subtle');
   border: 1px solid token('border');
   border-radius: token('r-md');
-  transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade');
-
-  &:focus-within {
-    border-color: token('accent');
-    box-shadow: 0 0 0 token('focus-ring-width') token('accent-soft');
-  }
+  @include field-shell-focus;
 }
 
 .nl-filter__icon {

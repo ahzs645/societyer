@@ -6,7 +6,7 @@ import { filterAndSortRecords } from "../src/platform/record-engine/record-table
 import { deserializeViewFiltersFromUrl, serializeViewFiltersToUrl } from "../src/platform/record-engine/record-table/utils/viewFilterGroups";
 import { adaptLegacyDataTableView } from "../src/platform/record-engine/record-table/utils/legacyDataTableView";
 import { hydrateHydratedView } from "../src/platform/record-engine/types";
-import { filterRecords, parseSearchTerms } from "../src/platform/record-engine/record-table/utils/filterRecords";
+import { filterRecords, parseSearchTerms, suggestSearchCorrection } from "../src/platform/record-engine/record-table/utils/filterRecords";
 import { sortRecords } from "../src/platform/record-engine/record-table/utils/sortRecords";
 import { distinctFieldValues, searchDistinctValues, supportsValuePicker } from "../src/platform/record-engine/record-table/utils/distinctFieldValues";
 import {
@@ -255,8 +255,35 @@ assert.equal(
   assert.deepEqual(search('"snow removal"'), ["c"], "a quoted phrase matches as written");
   assert.deepEqual(search('"snow'), ["c", "d"], "a stray quote is ignored");
   assert.deepEqual(search("cityof"), [], "words of letters only don't match across spaces");
-  assert.deepEqual(parseSearchTerms("Is27-NRI  is27-nri"), [{ text: "is27-nri", compact: "is27nri" }], "repeated words count once");
+  assert.deepEqual(parseSearchTerms("Is27-NRI  is27-nri"), [{ text: "is27-nri", compact: "is27nri", singular: null }], "repeated words count once");
   assert.deepEqual(parseSearchTerms("   "), []);
+}
+
+// --- Quick search: plurals find singulars, misspellings get a suggestion ------
+{
+  const columns = [field("w-title", "title", FIELD_TYPES.TEXT), field("w-buyer", "buyer", FIELD_TYPES.TEXT)];
+  const rows = [
+    { _id: "a", title: "Civic Facilities Roof Replacement", buyer: "City of Prince George" },
+    { _id: "b", title: "Janitorial Services - City Hall", buyer: "City of Surrey" },
+    { _id: "c", title: "Office supply standing offer", buyer: "BC Hydro" },
+    { _id: "d", title: "Glass and boxes", buyer: "Ministry of Transportation" },
+  ];
+  const search = (term: string) => filterRecords({ records: rows, columns, filters: [], searchTerm: term }).map((row) => row._id);
+  const suggest = (term: string) => suggestSearchCorrection({ records: rows, columns, filters: [], searchTerm: term });
+  assert.deepEqual(search("roof replacements"), ["a"], "a plural finds the singular");
+  assert.deepEqual(search("supplies"), ["c"], "-ies plurals too");
+  assert.deepEqual(search("box"), ["d"], "and the singular still finds the plural");
+  assert.deepEqual(search("glasses"), ["d"], "-sses plurals drop -es");
+  assert.deepEqual(search('"roof replacements"'), [], "a quoted phrase stays as written");
+  assert.equal(parseSearchTerms("status")[0].singular, null, "words that only look plural are left alone");
+  assert.equal(parseSearchTerms("analysis")[0].singular, null);
+  assert.equal(suggest("janitoral"), "janitorial", "a misspelt word gets the closest word in the records");
+  assert.equal(suggest("Janitoral servcies"), "janitorial services", "every misspelt word is corrected");
+  assert.equal(suggest("roof replacment"), "roof replacement");
+  assert.equal(suggest("janitorial"), null, "a word in the records needs no correction");
+  assert.equal(suggest("zebra"), null, "nor is there one for a word with nothing close");
+  assert.equal(suggest("rof"), null, "short words are left alone");
+  assert.equal(suggest("janitoral hydro"), null, "a correction that still finds nothing isn't offered");
 }
 
 // --- Distinct values for the free-text filter picker ---------------------------

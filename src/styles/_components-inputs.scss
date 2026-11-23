@@ -292,9 +292,7 @@ $check-anim-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
 }
 .text-input:hover:not(.is-disabled) { border-color: token('border-strong'); }
 .text-input:focus-within {
-  outline: none;
-  border-color: token('accent');
-  box-shadow: 0 0 0 3px token('accent-soft');
+  @include field-focus-ring;
 }
 .text-input.is-invalid {
   border-color: token('danger');

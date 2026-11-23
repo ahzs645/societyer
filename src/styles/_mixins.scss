@@ -177,3 +177,32 @@
     transform: translate(-50%, -50%);
   }
 }
+
+// ---------- Field focus ----------
+// The one focus look for a text field: accent border and a soft 3px halo
+// that follows the field's own corners. `.input`, `.text-input` and every
+// bordered box that holds an input (search pills, chip inputs, composers)
+// use it, so focusing any field looks the same.
+@mixin field-focus-ring {
+  outline: none;
+  border-color: token('accent');
+  box-shadow: 0 0 0 3px token('accent-soft');
+}
+
+// A bordered box with a bare <input>/<textarea> inside: the box takes the
+// field ring while the input has focus, and the input drops the global
+// :focus-visible outline (_foundations.scss loads late, so a plain
+// `outline: none` on the input loses to it and draws a square ring inside
+// the rounded box). `outline-color: transparent` keeps an outline in
+// forced-colors mode.
+@mixin field-shell-focus {
+  transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade'), background-color token('motion-fade-fast') token('ease-fade');
+
+  &:focus-within {
+    @include field-focus-ring;
+  }
+
+  :is(input, textarea):focus-visible {
+    outline-color: transparent;
+  }
+}

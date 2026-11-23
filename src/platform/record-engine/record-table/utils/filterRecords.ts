@@ -67,9 +67,10 @@ export function filterRecords<T extends object>({
 /**
  * One word (or "quoted phrase") of a quick search, folded like the records'
  * text. `compact` is the word without its separators, for a word with a digit
- * or punctuation in it (a reference number), else null.
+ * or punctuation in it (a reference number), else null. `singular` is a plural
+ * word's singular ("replacements" → "replacement"), else null.
  */
-export type SearchTerm = { text: string; compact: string | null };
+export type SearchTerm = { text: string; compact: string | null; singular: string | null };
 
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
 const NOT_ASCII = /[\u0080-\uffff]/;
@@ -89,6 +90,9 @@ export function foldSearchText(value: string): string {
  * whole. Case and accents don't matter, and a word with a digit or
  * punctuation in it also matches with the separators left out on either side,
  * so "is27nri014" finds "IS27-NRI-014" and "rfp-0219" finds "RFP 0219".
+ * A plural word also finds its singular as a whole word, so "roof
+ * replacements" finds "Roof Replacement" (the singular already finds the
+ * plural, as a substring).
  */
 export function parseSearchTerms(searchTerm: string): SearchTerm[] {
   const folded = foldSearchText(searchTerm.trim());
@@ -98,9 +102,38 @@ export function parseSearchTerms(searchTerm: string): SearchTerm[] {
     const text = (match[1] ?? match[2].replace(/^"+|"+$/g, "")).trim();
     if (!text || terms.some((term) => term.text === text)) continue;
     const compact = NEEDS_COMPACT.test(text) ? text.replace(SEPARATORS, "") : "";
-    terms.push({ text, compact: compact.length >= 2 ? compact : null });
+    terms.push({ text, compact: compact.length >= 2 ? compact : null, singular: match[1] ? null : singularOf(text) });
   }
   return terms;
+}
+
+const PLAIN_WORD = /^\p{L}{4,}$/u;
+
+/**
+ * An English plural's singular, for words of letters only: "supplies" →
+ * "supply", "boxes" → "box", "services" → "service". Null for a word that
+ * doesn't read as a plural ("analysis", "status", "glass").
+ */
+function singularOf(word: string): string | null {
+  if (!PLAIN_WORD.test(word)) return null;
+  if (word.endsWith("ies") && word.length > 4) return `${word.slice(0, -3)}y`;
+  if (/(?:ss|x|z|ch|sh)es$/.test(word)) return word.slice(0, -2);
+  if (word.endsWith("s") && !/(?:ss|us|is)$/.test(word)) return word.slice(0, -1);
+  return null;
+}
+
+const LETTER = /\p{L}/u;
+
+/**
+ * Whether `word` is in `text` at the end of a word, so the singular of
+ * "forests" finds "forest" and "rainforest" but not "forestry".
+ */
+function includesWordEnd(text: string, word: string): boolean {
+  for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
+    const next = text[at + word.length];
+    if (next === undefined || !LETTER.test(next)) return true;
+  }
+  return false;
 }
 
 /** Whether every word of the search is in the record's text. */
@@ -108,11 +141,111 @@ export function recordMatchesSearch(record: FilterableRecord, fields: FieldMetad
   const corpus = searchCorpus(record, fields);
   for (const term of terms) {
     if (corpus.text.includes(term.text)) continue;
+    if (term.singular && includesWordEnd(corpus.text, term.singular)) continue;
     if (!term.compact) return false;
     corpus.compact ??= corpus.text.replace(SEPARATORS, "");
     if (!corpus.compact.includes(term.compact)) return false;
   }
   return true;
+}
+
+/* ---------------------------- search correction --------------------------- */
+
+/**
+ * For a search that finds nothing because of a misspelt word: the same search
+ * with each word that is in no record swapped for the closest word that is
+ * ("janitoral services" → "janitorial services"), when that search does find
+ * records under the same filters. Null otherwise. Quoted phrases, reference
+ * numbers and words under four letters are left as typed.
+ */
+export function suggestSearchCorrection<T extends object>({
+  records,
+  columns,
+  filters,
+  filterGroups,
+  searchTerm,
+  dateContext,
+}: {
+  records: T[];
+  columns: RecordField[];
+  filters: ViewFilter[];
+  filterGroups?: ViewFilterGroup[];
+  searchTerm: string;
+  dateContext?: DateRangeContext;
+}): string | null {
+  const terms = parseSearchTerms(searchTerm);
+  if (terms.length === 0 || records.length === 0) return null;
+  const fields = columns.map((column) => column.field);
+  const texts = records.map((record) => searchCorpus(record as FilterableRecord, fields).text);
+  let vocabulary: Map<string, number> | null = null;
+  let changed = false;
+  const words = terms.map((term) => {
+    const typed = term.text.includes(" ") ? `"${term.text}"` : term.text;
+    if (!PLAIN_WORD.test(term.text)) return typed;
+    if (texts.some((text) => text.includes(term.text) || (term.singular !== null && includesWordEnd(text, term.singular)))) return typed;
+    vocabulary ??= wordCounts(texts);
+    const closest = closestWord(term.text, vocabulary);
+    if (!closest) return typed;
+    changed = true;
+    return closest;
+  });
+  if (!changed) return null;
+  const suggestion = words.join(" ");
+  return filterRecords({ records, columns, filters, filterGroups, searchTerm: suggestion, dateContext }).length > 0 ? suggestion : null;
+}
+
+/** How often each word of three or more letters appears across `texts`. */
+function wordCounts(texts: readonly string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const text of texts) {
+    for (const word of text.split(/[^\p{L}]+/u)) {
+      if (word.length >= 3) counts.set(word, (counts.get(word) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/**
+ * The vocabulary word nearest `word` by edits (a letter added, dropped,
+ * changed or two swapped): one edit for words up to five letters, two beyond.
+ * Ties go to the more common word.
+ */
+function closestWord(word: string, vocabulary: Map<string, number>): string | null {
+  const limit = word.length <= 5 ? 1 : 2;
+  let best: string | null = null;
+  let bestDistance = limit + 1;
+  let bestCount = 0;
+  for (const [candidate, count] of vocabulary) {
+    if (Math.abs(candidate.length - word.length) > limit) continue;
+    const distance = editDistance(word, candidate, bestDistance);
+    if (distance < bestDistance || (distance === bestDistance && count > bestCount)) {
+      best = candidate;
+      bestDistance = distance;
+      bestCount = count;
+    }
+  }
+  return bestDistance <= limit ? best : null;
+}
+
+/** Optimal string alignment distance, giving up (returning `stop`) once it can't be under `stop`. */
+function editDistance(a: string, b: string, stop: number): number {
+  let previous2: number[] = [];
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let value = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) value = Math.min(value, previous2[j - 2] + 1);
+      current.push(value);
+      if (value < rowMin) rowMin = value;
+    }
+    if (rowMin >= stop) return stop;
+    previous2 = previous;
+    previous = current;
+  }
+  return Math.min(previous[b.length], stop);
 }
 
 /* ------------------------------ search text ------------------------------ */

@@ -1,4 +1,5 @@
 @use "tokens" as *;
+@use "mixins" as *;
 
 /* Transaction rules, second pass: the rule as a sentence, overlap and
  * "needs attention" flags, the "is any of" chip input and editor notices.
@@ -91,10 +92,7 @@
   border-radius: token(r-sm);
   background: token(bg-panel);
   cursor: text;
-  &:focus-within {
-    border-color: token(accent);
-    box-shadow: 0 0 0 token(focus-ring-width) token(focus-ring-color);
-  }
+  @include field-shell-focus;
 }
 .value-chips__chip {
   display: inline-flex;

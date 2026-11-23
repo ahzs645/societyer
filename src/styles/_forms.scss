@@ -346,9 +346,7 @@ select.select:hover:not(:disabled) {
 .input:focus,
 .select:focus,
 .textarea:focus {
-  outline: none;
-  border-color: token('accent');
-  box-shadow: 0 0 0 3px token('accent-soft');
+  @include field-focus-ring;
 }
 .input[aria-invalid="true"],
 .select[aria-invalid="true"],

@@ -14,7 +14,7 @@ import { RecordTableGroupRowCells } from "./RecordTableGroupRow";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { RecordTableHeader } from "./RecordTableHeader";
 import { RecordTableRow, useRecordRowClassName } from "./RecordTableRow";
-import { RecordTableEmpty } from "./RecordTableEmpty";
+import { RecordTableEmpty, RecordTableSearchSuggestion } from "./RecordTableEmpty";
 import { RecordTableCardList, type RecordTableCardRenderer } from "./RecordTableCardList";
 import { useAutoPhoneCard } from "./RecordTableAutoPhoneCard";
 import { RecordTableAggregateFooter, RecordTableAggregateFooterRow } from "./RecordTableAggregateFooter";
@@ -954,6 +954,7 @@ export function RecordTable({
           }.`}
           action={
             <>
+              {activeSearch && <RecordTableSearchSuggestion search={activeSearch} />}
               {activeSearch && (
                 <button type="button" className="btn btn--sm" onClick={() => handle.get().setSearchTerm("")}>
                   Clear search

@@ -730,8 +730,8 @@
 .shortcut-help__search input::-webkit-search-cancel-button {
   display: none;
 }
-.shortcut-help__search:focus-within {
-  border-color: token('border-focus');
+.shortcut-help__search {
+  @include field-shell-focus;
 }
 .shortcut-help__search button {
   display: grid;

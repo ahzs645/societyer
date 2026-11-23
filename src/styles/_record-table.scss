@@ -219,6 +219,16 @@
   min-width: 0;
   max-width: 420px;
   flex: 1;
+  cursor: text;
+  @include field-shell-focus;
+
+  &:hover:not(:focus-within) {
+    border-color: token('border-strong');
+  }
+
+  &:focus-within {
+    background: token('bg-base');
+  }
 
   svg {
     color: token('text-tertiary');

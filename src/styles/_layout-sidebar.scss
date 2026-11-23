@@ -316,6 +316,9 @@
 .sidebar__nav-filter input:focus {
   outline: none;
 }
+.sidebar__nav-filter {
+  @include field-shell-focus;
+}
 .sidebar__nav-filter button {
   @include inline-flex-center;
   flex-shrink: 0;

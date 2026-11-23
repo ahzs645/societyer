@@ -462,8 +462,7 @@
 }
 
 .global-ai-composer__box:focus-within {
-  border-color: token('accent');
-  box-shadow: 0 0 0 3px token('accent-soft');
+  @include field-focus-ring;
 }
 
 .global-ai-composer__box textarea {
