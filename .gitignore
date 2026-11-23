@@ -76,3 +76,4 @@ packages/react-devtools-shell/dist
 packages/react-devtools-timeline/dist
 .claude/settings.local.json
 dist-procurement-catalog/
+dist-procurement-publisher/

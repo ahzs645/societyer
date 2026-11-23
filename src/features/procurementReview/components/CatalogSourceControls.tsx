@@ -3,6 +3,8 @@ import { useMutation, useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../../lib/convexApi";
 import { useToast } from "../../../components/Toast";
+import { useSociety } from "../../../hooks/useSociety";
+import { PublisherConnectionControls } from "./PublisherConnectionControls";
 
 /** Only mounted for settings editors; the server enforces the same permission. */
 export function CatalogSourceControls({ societyId, previewReady = false, onClose }: {
@@ -16,6 +18,7 @@ export function CatalogSourceControls({ societyId, previewReady = false, onClose
   const changeSource = useMutation(api.procurementCatalog.setSource);
   const [params, setParams] = useSearchParams(), [saving, setSaving] = useState(false);
   const toast = useToast(), preview = params.get("catalogPreview") === "service";
+  const folder = useSociety()?.integrationSettings?.procurementReviewFolder;
   if (!configuration?.serviceAvailable) return null;
   const verified = configuration.qualifiedPublications ?? 0;
   const showPreview = (enabled: boolean) => setParams(current => {
@@ -45,8 +48,9 @@ export function CatalogSourceControls({ societyId, previewReady = false, onClose
           {preview && <button type="button" className="btn btn--accent" disabled={saving || verified < 3 || !previewReady} onClick={() => void save("service")}>{saving ? "Switching…" : "Use catalog service"}</button>}
         </>}
         {configuration.source === "service" && configuration.convexFallbackAvailable !== false && <button type="button" className="btn" disabled={saving} onClick={() => void save("convex")}>{saving ? "Switching…" : "Use Convex fallback"}</button>}
-        {onClose && <button type="button" className="btn btn--ghost" disabled={saving} onClick={onClose}>Close</button>}
       </div>
+      {folder && <PublisherConnectionControls societyId={societyId} folder={folder} />}
+      {onClose && <div className="row"><button type="button" className="btn btn--ghost" disabled={saving} onClick={onClose}>Close</button></div>}
     </div>
   </section>;
 }

@@ -56,6 +56,9 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "procurementTriage:set",
   "procurementCatalogActions:grant",
   "procurementCatalog:setSource",
+  // The server-side publisher key reaches the hosted HTTP route only; snapshot readers have no publisher.
+  "procurementPublisher:configure",
+  "procurementPublisher:revoke",
   // Hosted publication-summary scheduling; snapshot readers compute their own analytics.
   "procurementAnalytics:request",
   "financialHub:sync",

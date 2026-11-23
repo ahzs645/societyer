@@ -486,7 +486,8 @@
     "test:payroll-propagation": "playwright test --config playwright.payroll-propagation.config.ts",
     "test:responsive": "npm run test:responsive-shell && npm run test:responsive-payroll && npm run test:responsive-roe && npm run test:responsive-remittance && npm run test:responsive-finance && npm run test:responsive-invoices && npm run test:payroll-propagation",
     "test:procurement-analytics": "tsx scripts/check-procurement-analytics.ts && tsx scripts/check-procurement-precomputed.ts",
-    "test:procurement-integrity": "python3 scripts/procurement/test-export.py && python3 scripts/procurement/test-integrity.py && tsx scripts/check-procurement-publication.ts && tsx scripts/check-procurement-source-status.ts && tsx scripts/check-procurement-operator.ts",
+    "test:procurement-integrity": "python3 scripts/procurement/test-export.py && python3 scripts/procurement/test-integrity.py && tsx scripts/check-procurement-publication.ts && tsx scripts/check-procurement-source-status.ts && tsx scripts/check-procurement-operator.ts && tsx scripts/check-procurement-publisher.ts",
+    "test:procurement-publisher": "tsx scripts/check-procurement-publisher.ts",
     "test:procurement-operator": "tsx scripts/check-procurement-operator.ts",
     "test:procurement-browser": "playwright test --config playwright.procurement.config.ts",
     "test:procurement-precomputed": "tsx scripts/check-procurement-precomputed.ts",
@@ -511,6 +512,7 @@
     "test:interaction-audit:focused": "tsx scripts/check-interaction-task-contract.ts && tsx scripts/check-interaction-scheduling.ts && tsx scripts/check-interaction-transcript.ts && tsx scripts/check-interaction-navigation.ts && tsx scripts/check-interaction-write-inventory.ts && npm run test:app-route-hrefs && npm run test:transcript-export && npm run test:minutes-transcript-export && npm run test:interface-checks",
     "test:invoice-pdf-export": "tsx scripts/check-invoice-pdf-export.tsx",
     "catalog:build": "node scripts/procurement/build-catalog-service.mjs",
+    "procurement-publisher:build": "node scripts/procurement/build-publisher-tools.mjs",
     "catalog:typecheck": "tsc -p server/procurement-catalog/tsconfig.json --noEmit",
     "test:procurement-catalog": "tsx scripts/check-procurement-catalog-db.ts && tsx scripts/check-procurement-catalog-grants.ts && tsx scripts/check-procurement-catalog-authority.ts && tsx scripts/check-procurement-catalog-service.ts && tsx scripts/check-procurement-catalog-client.ts && python3 scripts/procurement/test-catalog-ssh-gateway.py"
   },

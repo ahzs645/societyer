@@ -262,6 +262,72 @@ the two new service tables are explicitly non-exportable operator state and have
 reviewed workspace-transfer skip policies. Transferred workspaces reset their
 source choice to Convex and do not inherit deployment-bound service receipts.
 
+## Server-side publishing from Zoer
+
+Status: **built, not deployed.** Nothing below is on the shared Convex
+deployment or either Pages frontend yet, and no key has been issued. Until it
+is deployed and a real wave has been verified, the Mac watcher above remains the
+only working publisher.
+
+The intended publisher is Zoer's backend pod, not anyone's Mac. It publishes the
+catalog to `catalog.ddcnorth.com` over the existing restricted SSH gateway and
+never imports catalog rows into Convex. It needs no Convex CLI login or deploy
+key: three small status calls reach Convex through one workspace key.
+
+- **Key.** Catalog source settings → *Zoer publisher* (settings editors only).
+  The browser generates 32 random bytes; Convex stores only the SHA-256 in
+  `procurementPublisherConnections` (one per workspace). Replacing the key stops
+  the old one at once; *Turn off* and *Remove* refuse it. The key also stops
+  working if the person who created it loses settings access.
+- **Connection string,** shown once:
+  `societyer-publisher:v1:` + base64url (no padding) of JSON
+  `{ endpoint, key, societyId, folder }`, in that field order. The encoder and
+  strict decoder are `shared/procurementReview/publisherConnection.ts`; Zoer
+  decodes the same format.
+- **Endpoint.** `POST <deployment>.convex.site/procurement-publisher` with
+  `Authorization: Bearer <64 lowercase hex>` and a JSON body
+  `{ operation, data }` of at most 64 KB. Operations: `status` (workspace,
+  folder, catalog source, whether service-only publishing is allowed),
+  `reportSource` (the source receipt `report-source-publication.ts` validates),
+  `publicationPolicy`, and `recordPublication` (`{ receiptJson }`). Each acts
+  only on the key's workspace and reuses the existing internal functions and
+  their validation. Unknown, replaced, disabled or orphaned keys get 403
+  `{"error":"Access denied."}`; any other refusal gets 409 with a fixed message,
+  and the reason is shown to settings editors instead. Responses are
+  `Cache-Control: no-store`; there is no CORS.
+- **Scripts.** `report-source-publication.ts` and `publish-catalog-service.ts`
+  take `--publisher-endpoint URL --publisher-key-file PATH` instead of
+  `--deployment NAME` (exactly one). The key file must be a regular file with
+  mode 0600 or stricter. `--deployment` behaves as before.
+- **Bundle.** `node scripts/procurement/build-publisher-tools.mjs` writes
+  `dist-procurement-publisher/`: `report-source-publication.mjs`,
+  `publish-catalog-service.mjs`, `precompute-analytics.mjs` (Node 22, only
+  `node:*` built-ins; the CLI-login transport is stubbed out), `python/`
+  (`export-convex.py`, `integrity.py`, `delta.py`, `review-profile.json`,
+  Python 3 standard library plus system tz data), and `manifest.json` with the
+  Societyer commit and each file's SHA-256.
+
+A service-only wave in endpoint mode, with `E` the endpoint and `K` the key file:
+
+```sh
+node report-source-publication.mjs --publisher-endpoint E --publisher-key-file K --input SOURCE_RECEIPT_JSON
+python3 python/export-convex.py --config SHAREPOINT_APP_JSON --society-id ID --folder FOLDER --output NEW_EXPORT_DIR
+node publish-catalog-service.mjs --input NEW_EXPORT_DIR --config CATALOG_PUBLISHER_JSON --publisher-endpoint E --publisher-key-file K --service-only
+node report-source-publication.mjs --publisher-endpoint E --publisher-key-file K --input READY_SOURCE_RECEIPT_JSON
+```
+
+`--baseline` is only for Convex incremental imports and is not needed in
+service-only mode; the service builder updates unchanged pages itself. The
+service also prepares its own analytical views, so `precompute-analytics.mjs`
+is not required for service-only publishing. `publish-catalog-service` still
+needs `/usr/bin/ssh`, `python3` (for its SSH wrapper), pinned `sqlite3_rsync`
+3.54.1, the restricted key and verified known-hosts file, as in the
+[service README](../server/procurement-catalog/README.md). Running it on the
+pod needs the same runtime and credential qualification described above.
+
+Deploy order when this ships: Convex (new table, functions and route) before
+Pages (the settings section).
+
 ## Continuing operations
 
 1. Keep the reviewed local watcher running. While a workspace uses parallel

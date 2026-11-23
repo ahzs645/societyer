@@ -167,6 +167,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (domain === "microsoftMeetings" || domain === "microsoftMeetingsActions") return "settings:write";
   if (name === "procurementCatalog:setSource") return "settings:write";
   if (domain === "procurementCatalog" || domain === "procurementCatalogActions") return "documents:read";
+  // The server-side publisher key is workspace configuration; its handlers also require a signed-in person.
+  if (domain === "procurementPublisher") return kind === "query" ? "settings:read" : "settings:write";
   // Things attached to a task read and change with the task.
   if (domain === "taskAttachments") return kind === "query" ? "tasks:read" : "tasks:write";
   // Named list views are shared with the workspace: every member may choose one;

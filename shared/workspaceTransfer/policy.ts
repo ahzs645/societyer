@@ -88,6 +88,7 @@ export const TRANSFER_POLICY: Readonly<Record<string, TablePolicy>> = {
   ...Object.fromEntries(TRANSFER_COPY_TABLES.map((table) => [table, { mode: "copy", reason: RECORDS } satisfies TablePolicy])),
   procurementServicePublications: skip(OPERATOR),
   procurementServiceRollouts: skip(OPERATOR),
+  procurementPublisherConnections: skip("Publisher key hash bound to this deployment's endpoint; create a new connection key on the destination."),
 
   // Copied with changes.
   societies: {

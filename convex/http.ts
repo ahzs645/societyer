@@ -32,12 +32,14 @@ import { registerMcpOAuthRoutes } from "./mcpOAuthHttp";
 import { developmentMailConfigured } from "../shared/developmentMailConfiguration";
 
 import { registerMeetingTranscriptionRoutes } from "./meetingTranscriptionHttp";
+import { registerProcurementPublisherRoutes } from "./procurementPublisherHttp";
 import { registerWorkspaceMfaRoutes } from "./workspaceMfaHttp";
 
 const http = httpRouter();
 registerMeetingTranscriptionRoutes(http);
 registerSharePointRoutes(http);
 registerProcurementReviewRoutes(http);
+registerProcurementPublisherRoutes(http);
 registerMeetingSourceRoutes(http);
 registerMcpRoutes(http);
 registerMcpOAuthRoutes(http);

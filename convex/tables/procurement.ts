@@ -83,6 +83,11 @@ export const procurementTables = {
       verification: v.optional(v.object({ snapshotSha256: v.string(), verifiedAt: v.number() })),
     })),
   }).index("by_society", ["societyId"]),
+  // One server-side publisher key per workspace. Only the key's SHA-256 is stored.
+  procurementPublisherConnections: defineTable({
+    societyId: v.id("societies"), keyHash: v.string(), createdBy: v.id("users"), createdAt: v.number(), updatedAt: v.number(), enabled: v.boolean(),
+    lastUsedAt: v.optional(v.number()), lastOperation: v.optional(v.string()), lastError: v.optional(v.string()),
+  }).index("by_society", ["societyId"]).index("by_keyHash", ["keyHash"]),
   procurementSourcePublications: defineTable({
     societyId: v.id("societies"), folder: v.string(), publicationId: v.string(), sourceSnapshotId: v.string(), generation: v.string(),
     publishedAt: v.string(), publishedAtMs: v.number(), collectedAt: v.optional(v.string()), complete: v.boolean(), coverageJson: v.optional(v.string()),

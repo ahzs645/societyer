@@ -4,18 +4,34 @@ import { createHash, randomUUID } from "node:crypto";
 import { buildCatalog, openCatalog, verifyCatalog } from "../../server/procurement-catalog/database";
 import { validateExport } from "./verify-export";
 import { publisherConfig, remoteCommand, processOutput, sshArguments, sshWrapper } from "./catalog-transport";
-import { createPersistentOperator } from "./operator-client";
+import { createPublisherClient } from "./publisher-client";
+
+// Loaded only in --deployment mode: the server-side tools bundle has no Convex CLI login.
+const createPersistentOperator = async (deployment: string) => (await import("./operator-client")).createPersistentOperator(deployment);
 
 const args = process.argv.slice(2), value = (name: string) => args[args.indexOf(name) + 1];
-if (!["--input", "--config", "--deployment"].every(name => args.includes(name) && value(name))) throw new Error("Usage: tsx publish-catalog-service.ts --input VERIFIED_EXPORT --config PRIVATE_PUBLISHER_JSON --deployment NAME [--dry-run] [--full-copy]");
+// Exactly one transport: the operator's Convex CLI login, or a server-side publisher key.
+const endpointMode = args.includes("--publisher-endpoint") || args.includes("--publisher-key-file");
+if (!["--input", "--config", ...(endpointMode ? ["--publisher-endpoint", "--publisher-key-file"] : ["--deployment"])].every(name => args.includes(name) && value(name)) || (endpointMode && args.includes("--deployment"))) throw new Error("Usage: tsx publish-catalog-service.ts --input VERIFIED_EXPORT --config PRIVATE_PUBLISHER_JSON (--deployment NAME | --publisher-endpoint URL --publisher-key-file PATH) [--dry-run] [--full-copy] [--service-only]");
 const input = resolve(value("--input")), config = publisherConfig(resolve(value("--config"))), deployment = value("--deployment");
+const publisher = endpointMode ? createPublisherClient(value("--publisher-endpoint"), value("--publisher-key-file")) : null;
+async function operatorCall(name: "procurementCatalogOperator:publicationPolicy" | "procurementCatalog:recordPublication", body: Record<string, unknown>) {
+  if (publisher) return publisher.run(name === "procurementCatalog:recordPublication" ? "recordPublication" : "publicationPolicy", body);
+  const operator = await createPersistentOperator(deployment);
+  try { return await operator.run(name, JSON.stringify(body)); }
+  finally { operator.close(); }
+}
 const { activation } = await validateExport(input, { skipAnalytics: true });
 if (activation.societyId !== config.societyId || activation.folder !== config.folder) throw new Error("Publisher configuration belongs to another workspace or folder.");
 if (args.includes("--dry-run")) { console.log(JSON.stringify({ action: "Verified export and explicit SSH prerequisites; no network request or origin update.", publicationId: activation.publicationId })); process.exit(0); }
+if (publisher) {
+  // Fail before building anything when the key belongs to another workspace or folder.
+  const status = await publisher.status();
+  if (status.societyId !== config.societyId || status.folder !== config.folder) throw new Error("The publisher key belongs to another workspace or folder.");
+}
 if (args.includes("--service-only")) {
-  const operator = await createPersistentOperator(deployment);
-  try { const policy = await operator.run("procurementCatalogOperator:publicationPolicy", JSON.stringify({ societyId: config.societyId })) as { serviceOnlyAllowed: boolean }; if (!policy.serviceOnlyAllowed) throw new Error("Continue parallel publishing until the qualified service has completed its 14-day Convex fallback period."); }
-  finally { operator.close(); }
+  const policy = await operatorCall("procurementCatalogOperator:publicationPolicy", { societyId: config.societyId }) as { serviceOnlyAllowed: boolean };
+  if (!policy.serviceOnlyAllowed) throw new Error("Continue parallel publishing until the qualified service has completed its 14-day Convex fallback period.");
 }
 const directory = dirname(config.originFile), lock = config.originFile + ".publisher-lock";
 mkdirSync(directory, { recursive: true, mode: 0o700 }); mkdirSync(lock, { mode: 0o700 });
@@ -48,8 +64,6 @@ try {
   if (receipt.state !== "ready") throw new Error("Service has not completed activation.");
   // Record the immutable serving receipt only after activation and independent readback.
   const receiptJson = JSON.stringify(receipt), receiptPath = join(input, "catalog-service-receipt.json"); writeFileSync(receiptPath, receiptJson + "\n", { mode: 0o600 });
-  const operator = await createPersistentOperator(deployment);
-  try { await operator.run("procurementCatalog:recordPublication", JSON.stringify({ societyId: config.societyId, receiptJson })); }
-  finally { operator.close(); }
+  await operatorCall("procurementCatalog:recordPublication", { societyId: config.societyId, receiptJson });
   console.log(JSON.stringify({ state: "ready", publicationId: receipt.publicationId, inventoryHash: receipt.inventoryHash, bytesReceived, counts: receipt.counts, receiptPath }));
 } finally { rmSync(lock, { recursive: true, force: true }); }

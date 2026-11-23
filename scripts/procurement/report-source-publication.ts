@@ -4,11 +4,15 @@ import { resolve, dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { validateWorkspaceProcurementReviewFolder } from "../../shared/procurementReview/paths";
+import { createPublisherClient } from "./publisher-client";
 
 const args=process.argv.slice(2);
 const value=(flag:string)=>{const index=args.indexOf(flag);return index<0?undefined:args[index+1];};
 const deployment=value("--deployment"),input=value("--input");
-if(!deployment||!input)throw new Error("Usage: tsx scripts/procurement/report-source-publication.ts --deployment NAME --input PRIVATE_SOURCE_RECEIPT_JSON [--dry-run]");
+// Exactly one transport: the operator's Convex CLI login, or a server-side publisher key.
+const endpointMode=args.includes("--publisher-endpoint")||args.includes("--publisher-key-file"),endpoint=value("--publisher-endpoint"),keyFile=value("--publisher-key-file");
+if(!input||(endpointMode?!endpoint||!keyFile||args.includes("--deployment"):!deployment))throw new Error("Usage: tsx scripts/procurement/report-source-publication.ts (--deployment NAME | --publisher-endpoint URL --publisher-key-file PATH) --input PRIVATE_SOURCE_RECEIPT_JSON [--dry-run]");
+const publisher=endpointMode?createPublisherClient(endpoint!,keyFile!):null;
 const path=resolve(input),stat=lstatSync(path);
 if(!stat.isFile()||stat.isSymbolicLink()||stat.size>64000)throw new Error("Source receipt must be a regular JSON file under 64KB.");
 const receipt=JSON.parse(readFileSync(path,"utf8"));
@@ -23,9 +27,14 @@ if(receipt.coverage!==undefined){
 }
 if(args.includes("--dry-run")){
   console.log(JSON.stringify({publicationId:receipt.publicationId,state:receipt.state,action:"Validated source receipt locally; no network request or serving-data mutation."}));
+}else if(publisher){
+  let result:unknown;
+  try{result=await publisher.run("reportSource",receipt);}
+  catch(error){throw new Error("Source-publication receipt reporting failed; the local receipt remains available for an exact retry. "+(error instanceof Error?error.message:""));}
+  console.log(JSON.stringify(result));
 }else{
   const require=createRequire(import.meta.url),pkgPath=require.resolve("convex/package.json"),cliPath=join(dirname(pkgPath),JSON.parse(readFileSync(pkgPath,"utf8")).bin.convex);
   const runner='const fs=require("node:fs");const a=JSON.parse(fs.readFileSync(0,"utf8"));process.argv=[process.execPath,a[0],...a.slice(1)];require(a[0]);';
-  const result=spawnSync(process.execPath,["-e",runner],{input:JSON.stringify([cliPath,"run","procurementStatus:reportSource",JSON.stringify(receipt),"--deployment",deployment]),encoding:"utf8",stdio:["pipe","inherit","inherit"]});
+  const result=spawnSync(process.execPath,["-e",runner],{input:JSON.stringify([cliPath,"run","procurementStatus:reportSource",JSON.stringify(receipt),"--deployment",deployment!]),encoding:"utf8",stdio:["pipe","inherit","inherit"]});
   if(result.status!==0)throw new Error("Source-publication receipt reporting failed; the local receipt remains available for an exact retry.");
 }
