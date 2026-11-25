@@ -311,7 +311,7 @@ function sourceCatalogForRecords(records: any[]) {
       continue;
     }
 
-    if (record.recordKind === "documentCandidate" && record.importedTargets?.documents) {
+    if (record.recordKind === "documentCandidate") {
       const payload = record.payload ?? {};
       const externalIds = unique([
         ...(record.sourceExternalIds ?? []),
@@ -321,7 +321,7 @@ function sourceCatalogForRecords(records: any[]) {
       ]);
       for (const externalId of externalIds) {
         const existing = catalog.get(externalId) ?? {};
-        catalog.set(externalId, { ...existing, documentId: record.importedTargets.documents });
+        catalog.set(externalId, { ...payload, ...existing, ...(record.importedTargets?.documents ? { documentId: record.importedTargets.documents } : {}) });
       }
     }
   }

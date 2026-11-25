@@ -1,6 +1,6 @@
 import { exactDay } from './evidenceReview';
 export function currentRenewalPolicies(policies:any[], asOf:string) {
-  const active=policies.filter(row=>row.status==='Active'&&exactDay(row.renewalDate)&&(!row.startDate||row.startDate<=asOf));
+  const active=policies.filter(row=>!row.archivedAtISO&&row.status==='Active'&&exactDay(row.renewalDate)&&(!row.startDate||row.startDate<=asOf));
   const current=new Map<string,any>();
   for(const row of active){const key=row.policySeriesKey||String(row._id);const before=current.get(key);if(!before||String(row.startDate??'')>String(before.startDate??'')||String(row.endDate??'')>String(before.endDate??''))current.set(key,row);}
   return [...current.values()];

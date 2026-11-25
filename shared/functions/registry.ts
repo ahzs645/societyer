@@ -76,6 +76,7 @@ import * as peopleDirectoryFns from "./peopleDirectory";
 const memberProposalsFns = lazyHandlers(() => import("./memberProposals"), "memberProposals");
 import * as commandMenuItemsFns from "./commandMenuItems";
 const expenseReportsFns = lazyHandlers(() => import("./expenseReports"), "expenseReports");
+import * as clauseChecks from "./insuranceClauses";
 import * as insuranceFns from "./insurance";
 const libraryFns = lazyHandlers(() => import("./library"), "library");
 import * as registerHistoryFns from "./registerHistory";
@@ -369,6 +370,12 @@ const GOVERNING_EVIDENCE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "society:setGoverningDocumentEvidence", handler: governingDocumentEvidenceFns.setGoverningDocumentEvidencePortable }),
   definePortableMutation({ name: "society:verifyGoverningDocumentCurrent", handler: governingDocumentEvidenceFns.verifyGoverningDocumentCurrentPortable }),
   definePortableMutation({ name: "society:recordPrivacyReview", handler: governingDocumentEvidenceFns.recordPrivacyReviewPortable }),
+];
+
+const INSURANCE_CLAUSE_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableQuery({ name: "insurance:clauseChecksFor", handler: clauseChecks.readChecks }),
+  definePortableMutation({ name: "insurance:saveClause", handler: clauseChecks.saveCheck }),
+  definePortableMutation({ name: "insurance:confirmClause", handler: clauseChecks.confirmCheck }),
 ];
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
@@ -756,6 +763,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "expenseReports:decidePolicyChange", handler: expenseReportsFns.decidePolicyChangePortable }),
 
   // insurance
+  ...INSURANCE_CLAUSE_FUNCTIONS,
   definePortableQuery({ name: "insurance:list", handler: insuranceFns.listPortable }),
   definePortableMutation({ name: "insurance:create", handler: insuranceFns.createPortable }),
   definePortableMutation({ name: "insurance:appendOperations", handler: insuranceFns.appendOperations }),

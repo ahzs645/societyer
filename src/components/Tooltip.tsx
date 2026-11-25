@@ -12,9 +12,10 @@ type Props = {
   /** Hide on its own after N ms; 0 = sticky. Default 0. */
   duration?: number;
   disabled?: boolean;
+  dismissOnEscapeFirst?: boolean;
 };
 
-export function Tooltip({ content, children, placement = "top", delay = 350, duration = 0, disabled }: Props) {
+export function Tooltip({ content, children, placement = "top", delay = 350, duration = 0, disabled, dismissOnEscapeFirst = false }: Props) {
   const triggerRef = useRef<HTMLElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -86,7 +87,12 @@ export function Tooltip({ content, children, placement = "top", delay = 350, dur
     if (!open) return;
     const onMove = () => place();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") hide();
+      if (event.key !== "Escape") return;
+      if (dismissOnEscapeFirst) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      hide();
     };
     window.addEventListener("scroll", onMove, true);
     window.addEventListener("resize", onMove);
@@ -96,7 +102,7 @@ export function Tooltip({ content, children, placement = "top", delay = 350, dur
       window.removeEventListener("resize", onMove);
       document.removeEventListener("keydown", onKey, true);
     };
-  }, [open]);
+  }, [open, dismissOnEscapeFirst]);
 
   // Keep the tooltip on screen: a trigger near an edge (or a 320px phone,
   // narrower than the tooltip's max width) would push it off the side.

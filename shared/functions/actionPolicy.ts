@@ -97,6 +97,8 @@ const PUBLIC_HANDLERS = new Set(["http:authCapabilities", "workspaceDomains:reso
 // references. Keep the exceptions endpoint-specific: targetId and other row
 // references in the same request still require workspace ownership.
 const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
+  // A coverage line is embedded in its owned policy term. confirmClause verifies both together.
+  "insurance:confirmClause": ["lineId"],
   "payrollRules:saveDraft": ["baseOfficialId"],
   // Provider run/worker identities are retained text, not local table IDs.
   "payroll:savePayRun": ["providerRunId", "correctionOfProviderRunId", "providerEmployeeId"],

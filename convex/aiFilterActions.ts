@@ -25,6 +25,9 @@ import {
   type AiFilterSuggestion,
 } from "../shared/nlFilterAi";
 
+import { clauseOriginArgs } from "./validators/insuranceClause";
+import { clausePrompt, readClauseProposals, type Clause } from "../shared/insuranceClauses";
+
 const PROVIDER_TIMEOUT_MS = 20_000;
 
 const schemaFieldValidator = v.object({
@@ -140,5 +143,32 @@ export const suggestRecordFilter = authorizedAction("aiFilterActions:suggestReco
       outputTokens: usage?.outputTokens,
     });
     return { ok: true, ...validation };
+  },
+});
+
+export const extractInsuranceClauses = authorizedAction("aiFilterActions:extractInsuranceClauses", action, args => ({societyId:args.societyId}))({
+  args: {...clauseOriginArgs, text:v.string()},
+  returns:v.any(),
+  handler:async(ctx,args):Promise<Clause[]> => {
+    const {text,...origin} = args;
+    const prompt = clausePrompt(text);
+    await ctx.runQuery((api as any).insurance.clauseChecksFor,origin);
+    const runtime = await resolveAiRuntimeConfig(ctx,args.societyId,undefined);
+    if (runtime.settingScope !== "workspace" || !runtime.model) throw new Error("Configure a workspace AI provider to label insurance clauses.");
+    const event = await ctx.runMutation((internal as any).aiFilter._beginFilterSuggestion,{societyId:args.societyId,purpose:"insurance_clauses",objectNameSingular:"insuranceClause",fieldCount:0,queryLength:text.length,provider:runtime.provider,modelId:runtime.modelId});
+    if (event.limited) throw new Error("Too many AI requests. Try again in a minute.");
+    const finish = (outcome:string) => ctx.runMutation((internal as any).aiFilter._finishFilterSuggestion,{societyId:args.societyId,eventId:event.eventId,outcome});
+    let reply;
+    try {
+      reply = await generateText({model:runtime.model,system:prompt.system,prompt:prompt.user,temperature:0,maxOutputTokens:4000,abortSignal:AbortSignal.timeout(45000)} as any);
+    } catch {
+      await finish("provider_error");
+      throw new Error("The AI provider could not label these clauses. Retry or enter a clause manually.");
+    }
+    let clauses;
+    try { clauses = readClauseProposals(reply.text,text); }
+    catch(error) { await finish("invalid_output"); throw error; }
+    await finish("ok");
+    return clauses;
   },
 });

@@ -124,3 +124,8 @@
 .agreement-quick-filters .segmented__btn {
   white-space: nowrap;
 }
+
+// The shared insurance panel sits between the header and the agreement cards.
+.insurance-clauses + .agreement-detail__grid { margin-top: token(s-4); }
+.agreement-detail__grid > .card { min-width: 0; }
+.agreement-detail__rows { margin-block: 0; }

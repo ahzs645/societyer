@@ -83,6 +83,14 @@ export function Modal({
 }: ModalProps) {
   const titleId = useStableDomId("modal-title");
   const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    // An immediate Escape belongs to the newly opened dialog while its
+    // preferred control is still waiting to receive focus.
+    if (open && dialog && !dialog.contains(document.activeElement)) {
+      dialog.focus({ preventScroll: true });
+    }
+  }, [open, dialogRef]);
   const stackSlot = useDialogStackSlot(open);
   // Default: everything but the small confirmation/quick-pick size is a form
   // worth resizing. Small `sm` dialogs (and the single-field Prompt below) stay

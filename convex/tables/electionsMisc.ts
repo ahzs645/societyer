@@ -1,3 +1,5 @@
+import { clauseOriginArgs, clauseFields, clauseSource, evidenceSelection } from "../validators/insuranceClause";
+import { coverageItem, insuranceTermFields } from "../validators/insurance";
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { corporateElectionReviewValidator } from "../lib/electionValidators";
@@ -8,7 +10,14 @@ import { receiptDocumentKindValidator, receiptIssuerSnapshotValidator, receiptGi
  * Extracted from convex/schema.ts (modularization); spread back into defineSchema.
  */
 export const electionsMiscTables = {
+  insuranceClauseChecks: defineTable({
+    ...clauseOriginArgs, originKey:v.optional(v.string()), agreementId:v.optional(v.id("agreements")), clause:clauseFields, source:clauseSource, revision:v.number(), reviewedBy:v.id("users"), reviewedAt:v.string(),
+    proof:v.optional(v.object({...evidenceSelection,stamp:v.string(),confirmedBy:v.id("users"),confirmedAt:v.string()})),
+  }).index("by_society",["societyId"]).index("by_origin",["societyId","origin","originKey"]).index("by_agreement",["societyId","agreementId"]),
   insurancePolicies: defineTable({
+    ...insuranceTermFields,
+    archivedAtISO: v.optional(v.string()),
+    archivedBy: v.optional(v.id("users")),
     moneyEntries: v.optional(v.array(v.any())),
     amendments: v.optional(v.array(v.any())),
     requirementChecks: v.optional(v.array(v.any())),
@@ -36,16 +45,7 @@ export const electionsMiscTables = {
       citationId: v.optional(v.string()),
       notes: v.optional(v.string()),
     }))),
-    coverageItems: v.optional(v.array(v.object({
-      label: v.string(),
-      coverageType: v.optional(v.string()),
-      coveredClass: v.optional(v.string()),
-      limitCents: v.optional(v.number()),
-      deductibleCents: v.optional(v.number()),
-      summary: v.optional(v.string()),
-      sourceExternalIds: v.optional(v.array(v.string())),
-      citationId: v.optional(v.string()),
-    }))),
+    coverageItems: v.optional(v.array(coverageItem)),
     coveredLocations: v.optional(v.array(v.object({
       label: v.string(),
       address: v.optional(v.string()),

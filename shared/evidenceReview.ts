@@ -12,11 +12,11 @@ export function partialDate(value: unknown): boolean {
 export function evidenceUrl(value: unknown): boolean {
   try { return ['https:', 'http:'].includes(new URL(String(value)).protocol); } catch { return false; }
 }
-export function requireEvidence(row: Record<string, unknown>) {
+export function requireEvidence(row: Record<string, unknown>, hasCheckedDocument = false) {
   const externalIds = row.sourceExternalIds;
   if (externalIds != null && (!Array.isArray(externalIds) || externalIds.some(id => typeof id !== 'string' || !id.trim()) || new Set(externalIds).size !== externalIds.length)) throw new Error('Invalid source external IDs.');
   const alternate = row.reviewStatus !== 'verified' && Array.isArray(externalIds) && externalIds.length > 0;
-  if ((!evidenceUrl(row.sourceUrl) && !alternate) || typeof row.sourceReference !== 'string' || !row.sourceReference.trim()) throw new Error('Record a source URL (or external IDs for unverified evidence) and a page, section or cell citation.');
+  if ((!hasCheckedDocument && !evidenceUrl(row.sourceUrl) && !alternate) || typeof row.sourceReference !== 'string' || !row.sourceReference.trim()) throw new Error('Record a source URL (or external IDs for unverified evidence) and a page, section or cell citation.');
 }
 export function uniqueRows(rows: Record<string, unknown>[]) {
   const ids = rows.map(row => row.id);

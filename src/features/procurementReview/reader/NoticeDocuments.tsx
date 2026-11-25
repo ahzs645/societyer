@@ -7,12 +7,17 @@
  * a notice with none gets one line rather than an empty card, pointing to the
  * source, where they may be.
  */
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useContext, useState } from "react";
 import { ChevronDown, Download, ExternalLink, Eye, FileText, Paperclip } from "lucide-react";
 import { FilePreviewDialog, MAX_FILE_PREVIEW_BYTES } from "../../../components/FilePreviewDialog";
 import type { StoredProcurementDocument } from "../lib/documents";
 import { noticeDocumentRows, onDocumentSource, onSource, type NoticeModel } from "../lib/notice";
 import { useReaderSource } from "./source";
+
+import { ProcurementInsuranceWorkspace } from "./insuranceWorkspace";
+import { insuranceSourceParts, type ClauseInput } from "../../insurance/clauseSources";
+
+const InsuranceClausePanel = lazy(() => import("../../insurance/InsuranceClausePanel").then(m => ({default:m.InsuranceClausePanel})));
 
 function size(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -43,6 +48,7 @@ function kindOf(name: string, mediaType = "") {
 export function NoticeDocuments({ recordKey, model, id, defaultOpen = false }: { recordKey: string; model: NoticeModel; id: string; defaultOpen?: boolean }) {
   const source = useReaderSource();
   const [open, setOpen] = useState(defaultOpen);
+  const workspace = useContext(ProcurementInsuranceWorkspace);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const documents = source.useDocuments(recordKey, cursors[cursors.length - 1]);
   const [preview, setPreview] = useState<StoredProcurementDocument | null>(null);
@@ -75,8 +81,7 @@ export function NoticeDocuments({ recordKey, model, id, defaultOpen = false }: {
   const nothing = documents && rows.length === 0 && cursors.length === 1;
   const where = onSource(model.source);
 
-  if (nothing)
-    return (
+  const documentSection = nothing ? (
       <section className="procurement-notice__nodocs" id={id} aria-labelledby={`${id}-title`}>
         <Paperclip size={14} aria-hidden="true" />
         <h2 className="procurement-notice__nodocs-title" id={`${id}-title`}>No documents attached</h2>
@@ -90,9 +95,7 @@ export function NoticeDocuments({ recordKey, model, id, defaultOpen = false }: {
           </>
         )}
       </section>
-    );
-
-  return (
+    ) : (
     <details className="card procurement-notice__docs-card" id={id} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary>
         <h2 className="card__title" id={`${id}-title`}>
@@ -164,4 +167,15 @@ export function NoticeDocuments({ recordKey, model, id, defaultOpen = false }: {
       )}
     </details>
   );
+  if (!workspace || model.kind !== "opportunity") return documentSection;
+  const inputs:ClauseInput[] = model.description ? [{key:"description",label:"Published bid description",parts:[{text:model.description,location:"Notice description"}]}] : [];
+  for (const doc of documents?.page ?? []) {
+    if (doc.available && /\.(pdf|docx|txt)$/i.test(doc.name)) inputs.push({
+      key:doc.documentKey,label:doc.name,version:doc.sha256,
+      load:async()=>insuranceSourceParts(doc.name,await source.readDocument(doc)),
+    });
+  }
+  return <>{documentSection}<Suspense fallback={null}><InsuranceClausePanel key={workspace.societyId + recordKey} societyId={workspace.societyId}
+    origin="procurement" originKey={recordKey} contextVersion={source.catalog.publicationId || source.catalog.generation}
+    defaultInsured={workspace.name} inputs={inputs}/></Suspense></>;
 }

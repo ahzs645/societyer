@@ -1,3 +1,4 @@
+import { ProcurementInsuranceWorkspace } from "../reader/insuranceWorkspace";
 import { lazy, Suspense, useEffect, useMemo, useState, useRef, useCallback, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
@@ -41,8 +42,9 @@ export function ProcurementReviewPage() {
 function HostedSourceChoice() {
   const society = useSociety();
   const [params] = useSearchParams(), preview = params.get("catalogPreview") === "service";
-  return society && (society.integrationSettings?.procurementCatalogSource === "service" || preview) && society.integrationSettings?.procurementReviewFolder
+  const reader = society && (society.integrationSettings?.procurementCatalogSource === "service" || preview) && society.integrationSettings?.procurementReviewFolder
     ? <ServiceHost key={society._id} societyId={society._id} preview={preview} /> : <HostedProcurementReview />;
+  return <ProcurementInsuranceWorkspace.Provider value={society ? {societyId:society._id, name:society.name} : null}>{reader}</ProcurementInsuranceWorkspace.Provider>;
 }
 function ServiceHost({ societyId, preview }: { societyId: string; preview: boolean }) {
   const configuration = useQuery(api.procurementCatalog.configuration, { societyId, preview }) as { source: string; baseUrl: string | null } | undefined;

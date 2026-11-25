@@ -131,6 +131,22 @@ export function validateInsurancePolicyInput(input: Record<string, any>, options
   checkDateRange(errors, input.startDate, input.endDate, "endDate", "The end date must be on or after the start date.");
   checkMoney(errors, "coverageCents", input.coverageCents, "Coverage");
   checkMoney(errors, "premiumCents", input.premiumCents, "Premium");
+  checkMoney(errors, "grossReceiptsCents", input.grossReceiptsCents, "Gross receipts");
+  if (input.minimumRetainedPremiumPercent != null && (!Number.isFinite(input.minimumRetainedPremiumPercent) || input.minimumRetainedPremiumPercent < 0 || input.minimumRetainedPremiumPercent > 100)) errors.minimumRetainedPremiumPercent = "Enter a percentage from 0 to 100.";
+  if (input.currency && !/^[A-Z]{3}$/.test(input.currency)) errors.currency = "Enter a three-letter currency code.";
+  const ids = new Set<string>();
+  if (input.coverageItems != null && !Array.isArray(input.coverageItems)) errors.coverageItems = "Enter coverage lines as a list.";
+  for (const line of Array.isArray(input.coverageItems) ? input.coverageItems : []) {
+    if (!line || typeof line !== "object") { errors.coverageItems = "Check the coverage line."; continue; }
+    if (typeof line.label !== "string" || !line.label.trim()) errors.coverageItems = "Enter a label for each coverage line.";
+    if (line.lineId && ids.has(line.lineId)) errors.coverageItems = "Coverage line identifiers must be unique.";
+    if (line.lineId) ids.add(line.lineId);
+    if (line.currency && !/^[A-Z]{3}$/.test(line.currency)) errors.coverageItems = "Enter a three-letter coverage currency.";
+    for (const key of ["limitCents", "deductibleCents", "allocatedPremiumCents"]) {
+      if (line[key] != null && (!Number.isSafeInteger(line[key]) || line[key] < 0)) errors.coverageItems = "Enter nonnegative whole cents for coverage amounts.";
+    }
+    if ([line.effectiveDate, line.expiryDate].some(d => d && !isIsoDate(d)) || (line.effectiveDate && line.expiryDate && line.effectiveDate > line.expiryDate)) errors.coverageItems = "Check the coverage dates.";
+  }
   checkMoney(errors, "policyFeeCents", input.policyFeeCents, "Policy fee");
   checkMoney(errors, "totalCostCents", input.totalCostCents, "Total cost");
   checkMoney(errors, "deductibleCents", input.deductibleCents, "Deductible");

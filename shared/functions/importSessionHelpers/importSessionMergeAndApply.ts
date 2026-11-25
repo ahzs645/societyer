@@ -1,3 +1,6 @@
+import { assertValid, validateInsurancePolicyInput } from "../../recordValidation";
+import { exactDay } from "../../evidenceReview";
+import { addressCoverageLines } from "../../insuranceRegister";
 import { EVIDENCE_FIELDS, mergeImportedEvidence, normalizeImportedEvidence } from "../../evidenceReview";
 import { mergeMeetingHistory, normalizeMeetingHistory } from "../../meetingHistory";
 import { assertMeetingHistoryReferences, syncMotionsForMinutes, resolveMinutesMotions } from "../minutes";
@@ -307,7 +310,7 @@ async function ensureImportSourceDocuments(
       byExternalId.set(externalId, { _id: source.documentId });
     }
   }
-  if (byExternalId.size < externalIds.length) {
+  if (externalIds.some(id => !byExternalId.has(id))) {
     for (const externalId of externalIds) {
       if (byExternalId.has(externalId)) continue;
       const evidence = await ctx.db
@@ -368,6 +371,7 @@ async function ensureImportSourceDocuments(
         source?.sensitivity === "restricted" ? "restricted" : undefined,
       ].filter(Boolean),
     });
+    sourceCatalog?.set(externalId, { ...source, documentId: id });
     ids.push(id);
   }
   return ids;
@@ -511,10 +515,39 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
     const riskFlags = unique([...(record.riskFlags ?? []), ...arrayOf(payload.riskFlags).map(String)])
       .map(cleanText)
       .filter(Boolean);
+    const externalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
+    const invoices = arrayOf(payload.invoiceObservations).map((invoice: any) => {
+      const index = externalIds.indexOf(invoice.sourceExternalId);
+      if (index < 0 || !sourceDocumentIds[index] || !exactDay(invoice.observedDate) ||
+          (invoice.dueDate && !exactDay(invoice.dueDate)) || !/^[A-Z]{3}$/.test(invoice.currency) ||
+          (invoice.amountCents != null && (!Number.isSafeInteger(invoice.amountCents) || invoice.amountCents < 0))) {
+        throw new Error("Review the invoice currency, amount, date and original document.");
+      }
+      return {
+        id: invoice.sourceExternalId, kind: "invoice", observedDate: invoice.observedDate,
+        dueDate: cleanDate(invoice.dueDate), currency: invoice.currency, amountCents: invoice.amountCents,
+        reference: cleanText(invoice.reference), itemNumber: cleanText(invoice.itemNumber),
+        sourceDocumentId: sourceDocumentIds[index], sourceReference: cleanText(invoice.sourceReference) || "Invoice",
+        reviewStatus: "pending",
+      };
+    });
+    assertValid(validateInsurancePolicyInput({
+      currency: payload.currency, grossReceiptsCents: payload.grossReceiptsCents,
+      minimumRetainedPremiumPercent: payload.minimumRetainedPremiumPercent, coverageItems: normalizeCoverageItems(payload.coverageItems),
+    }, { partial: true }));
     return await ctx.db.insert("insurancePolicies", {
       societyId,
       kind: cleanText(payload.kind) || "Other",
       insurer: cleanText(payload.insurer) || "Needs review",
+      ...(invoices.length ? { moneyEntries: invoices } : {}),
+      namedInsured: cleanText(payload.namedInsured),
+      currency: cleanText(payload.currency)?.toUpperCase(),
+      coverholder: cleanText(payload.coverholder),
+      brokerCustomerNumber: cleanText(payload.brokerCustomerNumber),
+      billingMethod: cleanText(payload.billingMethod),
+      declaredOperations: cleanText(payload.declaredOperations),
+      grossReceiptsCents: numberOrUndefined(payload.grossReceiptsCents),
+      minimumRetainedPremiumPercent: numberOrUndefined(payload.minimumRetainedPremiumPercent),
       broker: cleanText(payload.broker),
       policyNumber: cleanText(payload.policyNumber) || "Needs review",
       policySeriesKey: cleanText(payload.policySeriesKey) || insurancePolicySeriesKey(payload),
@@ -529,7 +562,7 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       coverageSummary: cleanText(payload.coverageSummary),
       additionalInsureds: arrayOf(payload.additionalInsureds).map(String).map(cleanText).filter(Boolean),
       coveredParties: normalizeCoveredParties(payload.coveredParties),
-      coverageItems: normalizeCoverageItems(payload.coverageItems),
+      coverageItems: addressCoverageLines(normalizeCoverageItems(payload.coverageItems)),
       coveredLocations: normalizeCoveredLocations(payload.coveredLocations),
       policyDefinitions: normalizePolicyDefinitions(payload.policyDefinitions),
       policyExclusions: normalizePolicyExclusions(payload.policyExclusions),

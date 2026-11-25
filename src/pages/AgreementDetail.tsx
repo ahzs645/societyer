@@ -1,3 +1,4 @@
+import { InsuranceClausePanel } from "../features/insurance/InsuranceClausePanel";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, Ban, CheckCircle2, FileSignature, FileText, GitBranch, Pencil, RefreshCcw, Trash2 } from "lucide-react";
@@ -229,6 +230,9 @@ export function AgreementDetailPage() {
         </div>
       )}
 
+      <InsuranceClausePanel key={agreement._id} societyId={society._id} origin="agreement" originKey={agreement._id}
+        defaultInsured={society.name} contextVersion={agreement.updatedAtISO}
+        inputs={agreement.summary ? [{key:"summary",label:"Agreement summary",parts:[{text:agreement.summary,location:"Summary"}]}] : []}/>
       <div className="agreement-detail__grid">
         <section className="card" aria-labelledby="agreement-parties">
           <div className="card__head"><h2 className="card__title" id="agreement-parties">Parties</h2></div>

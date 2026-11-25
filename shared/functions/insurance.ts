@@ -10,9 +10,11 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
 import { renewalPolicyDraft } from "../insuranceHistory";
 import { assertValid, validateInsurancePolicyInput } from "../recordValidation";
+import { addressCoverageLines, optionalPolicyFields } from "../insuranceRegister";
 import { todayDateOnly } from "../dateOnly";
 import { requirePermissionPortable } from "./permissions";
 import { exactDay, requireEvidence, uniqueRows } from "../evidenceReview";
+import { requireDocumentAccess } from "./documents";
 import { currentRenewalPolicies } from "../insuranceOperations";
 
 export async function createRenewalPortable(ctx: PortableMutationCtx, args: {
@@ -64,11 +66,13 @@ export async function createPortable(ctx: PortableMutationCtx, args: Record<stri
   await requireSocietyMembership(ctx, String(args.societyId));
   for (const documentId of Array.isArray(args.sourceDocumentIds) ? args.sourceDocumentIds : []) {
     await getOwned(ctx, "documents", String(documentId), String(args.societyId));
+    await requireDocumentAccess(ctx, String(documentId));
   }
   assertValid(validateInsurancePolicyInput(args));
   const now = new Date().toISOString();
   return await ctx.db.insert("insurancePolicies", {
     ...args,
+    ...(args.coverageItems ? { coverageItems: addressCoverageLines(args.coverageItems) } : {}),
     createdAtISO: now,
     updatedAtISO: now,
   });
@@ -76,7 +80,7 @@ export async function createPortable(ctx: PortableMutationCtx, args: Record<stri
 
 export async function updatePortable(
   ctx: PortableMutationCtx,
-  { id, patch }: { id: string; patch: Record<string, any> },
+  { id, patch, clearFields = [] }: { id: string; patch: Record<string, any>; clearFields?: string[] },
 ) {
   const candidate = await ctx.db.get(id, "insurancePolicies");
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("insurancePolicies not found.");
@@ -92,8 +96,11 @@ export async function updatePortable(
   }
   for (const documentId of Array.isArray(patch.sourceDocumentIds) ? patch.sourceDocumentIds : []) {
     await getOwned(ctx, "documents", String(documentId), candidate.societyId);
+    await requireDocumentAccess(ctx, String(documentId));
   }
-  await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
+  if (clearFields.some(field => !optionalPolicyFields.has(field) || patch[field] != null)) throw new Error("Invalid optional policy field to clear.");
+  const cleared = Object.fromEntries(clearFields.map(field => [field, undefined]));
+  await ctx.db.patch(id, { ...patch, ...cleared, ...(patch.coverageItems ? { coverageItems: addressCoverageLines(patch.coverageItems) } : {}), updatedAtISO: new Date().toISOString() });
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
@@ -101,7 +108,9 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("insurancePolicies not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "insurancePolicies", id, candidate.societyId);
-  await ctx.db.delete(id);
+  if (candidate.archivedAtISO) return;
+  const now = new Date().toISOString();
+  await ctx.db.patch(id, { archivedAtISO: now, archivedBy: await principalUserId(ctx, candidate.societyId), updatedAtISO: now });
 }
 
 export async function appendOperations(ctx: PortableMutationCtx, args: { id:string; moneyEntries?:any[]; amendments?:any[]; requirementChecks?:any[] }) {
@@ -111,9 +120,15 @@ export async function appendOperations(ctx: PortableMutationCtx, args: { id:stri
   const patch:any={updatedAtISO:new Date().toISOString()};
   for(const field of ['moneyEntries','amendments','requirementChecks'] as const){
     const additions=args[field]??[];uniqueRows(additions);
-    for(const row of additions){requireEvidence(row);if(!exactDay(row.observedDate))throw new Error('Operations require a valid evidenced day.');
+    for(const row of additions){
+      if (row.sourceDocumentId) {
+        await getOwned(ctx, "documents", row.sourceDocumentId, societyId);
+        await requireDocumentAccess(ctx, row.sourceDocumentId);
+      }
+      requireEvidence(row, Boolean(row.sourceDocumentId));if(!exactDay(row.observedDate))throw new Error('Operations require a valid evidenced day.');
       if(!['pending','verified','rejected'].includes(row.reviewStatus))throw new Error('Invalid review status.');
       if(field==='moneyEntries'){
+        if (row.dueDate && !exactDay(row.dueDate)) throw new Error('Enter a valid invoice due date.');
         if(!['invoice','payment','refund','credit','claim_cost','recovery'].includes(row.kind)||!String(row.currency??'').trim())throw new Error('Record an entry kind and currency.');
         if(row.amountCents!=null&&(!Number.isSafeInteger(row.amountCents)||row.amountCents<0))throw new Error('Amounts must be nonnegative cents or unknown; entry kind determines the sign.');
       }

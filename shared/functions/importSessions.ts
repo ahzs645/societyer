@@ -882,6 +882,7 @@ export async function applyApprovedDocumentsPortable(
 
   let documents = 0;
   const resolveExternalDocument = externalDocumentResolver(ctx, societyId);
+  const resolvePlaceholder = externalDocumentResolver(ctx, societyId, true);
   for (const record of candidates) {
     const existingTarget = await existingImportTarget(ctx, societyId, record);
     if (existingTarget) { await patchRecordImportTarget(ctx, record, "documents", existingTarget); continue; }
@@ -895,6 +896,19 @@ export async function applyApprovedDocumentsPortable(
     ]);
     const externalId = sourceExternalIds[0];
     const externalSystem = cleanText(payload.externalSystem) || sourceSystemFromExternalId(externalId);
+    const priorId = await resolvePlaceholder(externalId);
+    if (priorId) {
+      const prior = await requireDocumentAccess(ctx, priorId, "manage");
+      if (String(prior.societyId) !== societyId) throw new Error("documents not found.");
+      const meta = {
+        title: cleanText(payload.title), category: cleanText(payload.category) && normalizeDocumentCategory(payload.category),
+        fileName: cleanText(payload.fileName), mimeType: cleanText(payload.mimeType), fileSizeBytes: numberOrUndefined(payload.fileSizeBytes),
+      };
+      await ctx.db.patch(priorId, Object.fromEntries(Object.entries(meta).filter(([,value]) => value !== undefined)));
+      await rememberImportTarget(ctx, societyId, record, priorId);
+      await patchRecordImportTarget(ctx, record, "documents", priorId);
+      continue;
+    }
     const paperlessId = externalSystem === "paperless" && externalId ? externalId : undefined;
     const sections = Array.isArray(payload.sections) ? payload.sections.map(String) : [];
     const sourceTags = Array.isArray(payload.tags) ? payload.tags.map(String) : [];
@@ -989,14 +1003,16 @@ export async function applyApprovedSectionRecordsPortable(
   const externalIds = unique(sectionRecords.flatMap((record: any) => [
     ...(record.sourceExternalIds ?? []), ...(record.payload?.sourceExternalIds ?? []),
   ]));
+  const resolvePlaceholder = externalDocumentResolver(ctx, societyId, true);
   for (const externalId of externalIds) {
     let documentId = sourceCatalog.get(externalId)?.documentId;
     if (!documentId) {
       const evidence = await ctx.db.query("sourceEvidence")
         .withIndex("by_society_external", q => q.eq("societyId", societyId).eq("externalId", externalId)).first();
-      documentId = evidence?.sourceDocumentId;
+      documentId = evidence?.sourceDocumentId ?? await resolvePlaceholder(externalId);
     }
     if (documentId) {
+      sourceCatalog.set(externalId, { ...sourceCatalog.get(externalId), documentId });
       const candidate = await ctx.db.get(documentId, "documents");
       if (String(candidate?.societyId) !== societyId) throw new Error("documents not found.");
       const document = await requireDocumentAccess(ctx, documentId);
@@ -1252,7 +1268,7 @@ export async function applyWaitingDependentsPortable(ctx: PortableMutationCtx, s
  * external-id tags and the externalId kept in content), case-insensitively, so
  * an import can name the document it supersedes or duplicates by source id.
  */
-function externalDocumentResolver(ctx: PortableMutationCtx, societyId: string) {
+function externalDocumentResolver(ctx: PortableMutationCtx, societyId: string, placeholdersOnly = false) {
   let index: Map<string, string> | null = null;
   return async (externalId: unknown) => {
     const key = cleanText(externalId)?.toLowerCase();
@@ -1262,7 +1278,8 @@ function externalDocumentResolver(ctx: PortableMutationCtx, societyId: string) {
       const docs = await ctx.db.query("documents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
       for (const doc of docs as any[]) {
         if (isImportRecord(doc) || isImportSession(doc)) continue;
-        const ids: unknown[] = [...(doc.sourceExternalIds ?? []), ...(doc.tags ?? [])];
+        if (placeholdersOnly && !doc.tags?.includes("transposed-source")) continue;
+        const ids: unknown[] = placeholdersOnly ? [] : [...(doc.sourceExternalIds ?? []), ...(doc.tags ?? [])];
         if (typeof doc.content === "string" && doc.content.includes("externalId")) {
           const content = parseJson(doc.content);
           if (content && typeof content === "object") ids.push(content.externalId, ...(Array.isArray(content.sourceExternalIds) ? content.sourceExternalIds : []));

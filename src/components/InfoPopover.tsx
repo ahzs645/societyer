@@ -9,19 +9,26 @@ import { Tooltip } from "./Tooltip";
  * touch), anchored to the button, and closes on outside tap or Escape.
  * Optional hover hints show the same content without moving keyboard focus.
  */
-export function InfoPopover({ label = "About this page", children, hover = false }: { label?: string; children: ReactNode; hover?: boolean }) {
+export function InfoPopover({ label = "About this page", children, hover = false, hint }: { label?: string; children: ReactNode; hover?: boolean; hint?: string }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const close = useCallback(() => setOpen(false), []);
   return (
     <>
-      <Tooltip content={children} disabled={!hover || open} delay={250}><button
+      <Tooltip content={hint ?? children} dismissOnEscapeFirst={Boolean(hint)} disabled={!hover || open} delay={250}><button
         ref={anchorRef}
         type="button"
         className="info-popover__trigger"
         aria-label={label}
         aria-expanded={open}
         aria-haspopup="dialog"
+        onKeyDown={event => {
+          if (open && event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+          }
+        }}
         onClick={() => setOpen((value) => !value)}
       >
         <Info size={14} aria-hidden="true" />

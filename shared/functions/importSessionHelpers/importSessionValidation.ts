@@ -31,6 +31,12 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
   if (kind === "financialStatement") for (const key of ["revenueCents", "expensesCents", "netAssetsCents"]) if (!Number.isSafeInteger(raw[key])) safeIssues.push(`${key} is unknown. Do not post a financial statement with invented zero totals.`);
   if (kind === "rightsholdingTransfer" && (!Number.isFinite(raw.quantity ?? raw.shares) || (raw.quantity ?? raw.shares) <= 0)) safeIssues.push("A source-supported positive transfer quantity is required.");
   if (kind === "insurancePolicy") for (const key of ["startDate", "renewalDate"]) if (raw[key] != null && !exactDay(raw[key])) safeIssues.push(`${key} requires an exact day or must remain in review.`);
+  if (kind === "insurancePolicy" && raw.declarationExternalId && raw.sourceExternalIds?.includes(raw.declarationExternalId)) {
+    const terms = await ctx.db.query("insurancePolicies").withIndex("by_society", (q:any) => q.eq("societyId", societyId)).collect();
+    if (terms.some((term:any) => term.sourceExternalIds?.includes(raw.declarationExternalId) && term.policyNumber === raw.policyNumber && term.startDate === raw.startDate)) {
+      safeIssues.push("This declaration already has a policy term. Open that term in Insurance to revise its reviewed fields.");
+    }
+  }
   if (kind === "rightsholdingTransfer") {
     // A ledger row must post against its share class and holders: wait until those records are applied.
     if (namesRightsClass(raw) && !await importedRightsClassId(ctx, societyId, raw)) {

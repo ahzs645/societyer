@@ -1,9 +1,11 @@
+import { Segmented } from "../components/primitives";
+import { InsuranceDialogAction } from "../features/insurance/InsuranceDialogAction";
 import { EvidenceRowsEditor, type EvidenceColumn } from "../components/EvidenceRowsEditor";
 import { InsuranceOperationsCard } from "../components/InsuranceOperationsCard";
 import { currentRenewalPolicies } from "../../shared/insuranceOperations";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -12,7 +14,7 @@ import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
-import { ArrowLeft, FileSearch, Pencil, Plus, Shield, Trash2 } from "lucide-react";
+import { ArrowLeft, FileSearch, Pencil, Plus, Shield, Archive } from "lucide-react";
 import { centsToDollarInput, daysUntilDate, dollarInputToCents, formatDate, money, todayDateOnly } from "../lib/format";
 import { CitationBadge } from "../components/CitationTooltip";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -20,6 +22,7 @@ import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty
 import {
   RecordTable,
   RecordTableScope,
+  RecordTablePhoneCard,
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
@@ -31,9 +34,13 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { hasErrors, validateInsurancePolicyInput, type FieldErrors } from "../../shared/recordValidation";
+import { policyCellBadges, coverageCodes, insuranceAmount, insuranceTermTextFields, limitBases, optionalPolicyFields } from "../../shared/insuranceRegister";
+import { usePermissions } from "@/hooks/usePermissions";
+import { InsuranceRenewalImport } from "../components/InsuranceRenewalImport";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { StatTile } from "../components/StatTile";
 
-const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "Other"];
+const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "ProfessionalLiability", "Other"];
 const STATUSES = ["NeedsReview", "Active", "Lapsed", "Cancelled"];
 
 export function InsurancePage() {
@@ -43,6 +50,9 @@ export function InsurancePage() {
   const items = useQuery(api.insurance.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.insurance.create);
   const update = useMutation(api.insurance.update);
+  const { can } = usePermissions();
+  const docs = useQuery(api.documents.listSummaries, society && can("documents:read") ? { societyId: society._id } : "skip");
+  const [showArchived, setShowArchived] = useState(false);
   const remove = useMutation(api.insurance.remove);
   const confirm = useConfirm();
   const toast = useToast();
@@ -51,6 +61,16 @@ export function InsurancePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drawerMode, setDrawerMode] = useState<"view" | "edit" | "new">("view");
   const [form, setForm] = useState<any>(null);
+  const [editView, setEditView] = useState("Policy");
+  const editorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const problem = editorRef.current?.querySelector<HTMLElement>(".field__error");
+    if (!problem || !hasErrors(errors)) return;
+    const view = problem.closest<HTMLElement>("[data-edit-view]")?.dataset.editView;
+    if (view) setEditView(view);
+    const frame = requestAnimationFrame(() => problem.scrollIntoView({ block: "nearest" }));
+    return () => cancelAnimationFrame(frame);
+  }, [errors]);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -62,19 +82,21 @@ export function InsurancePage() {
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const rows = (items ?? []) as any[];
-  const summary = useMemo(() => summarizePolicies(rows), [rows]);
+  const activeRows = useMemo(() => rows.filter(row => !row.archivedAtISO), [rows]);
+  const summary = useMemo(() => summarizePolicies(activeRows), [activeRows]);
   const records = useMemo(
-    () => rows.map((r) => ({
+    () => (showArchived ? rows : activeRows).map((r) => ({
       ...r,
       period: `${formatDate(r.startDate)} – ${formatDate(r.endDate)}`,
     })),
-    [rows],
+    [rows, activeRows, showArchived],
   );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    setEditView("Policy");
     setEditingId(null);
     setDrawerMode("new");
     setForm({
@@ -120,6 +142,9 @@ export function InsurancePage() {
   };
 
   const formFromPolicy = (row: any) => ({
+    ...row,
+    claimsMadeTermsRows: row.claimsMadeTerms ? [row.claimsMadeTerms] : [],
+    grossReceiptsDollars: centsToDollarInput(row.grossReceiptsCents),
     kind: row.kind ?? "Other",
     insurer: row.insurer ?? "",
     broker: row.broker ?? "",
@@ -135,19 +160,8 @@ export function InsurancePage() {
     deductibleDollars: centsToDollarInput(row.deductibleCents),
     coverageSummary: row.coverageSummary ?? "",
     additionalInsuredsInput: (row.additionalInsureds ?? []).join(", "),
-    coveredPartiesInput: serializeCoveredParties(row.coveredParties),
-    coverageItemsInput: serializeCoverageItems(row.coverageItems),
-    coveredLocationsInput: serializeCoveredLocations(row.coveredLocations),
-    policyDefinitionsInput: serializePolicyDefinitions(row.policyDefinitions),
     policyExclusions: row.policyExclusions ?? [],
     assessmentRates: row.assessmentRates ?? [],
-    declinedCoveragesInput: serializeDeclinedCoverages(row.declinedCoverages),
-    certificatesInput: serializeCertificates(row.certificatesOfInsurance),
-    insuranceRequirementsInput: serializeInsuranceRequirements(row.insuranceRequirements),
-    claimsMadeTermsInput: serializeClaimsMadeTerms(row.claimsMadeTerms),
-    claimIncidentsInput: serializeClaimIncidents(row.claimIncidents),
-    annualReviewsInput: serializeAnnualReviews(row.annualReviews),
-    complianceChecksInput: serializeComplianceChecks(row.complianceChecks),
     startDate: dateInput(row.startDate),
     endDate: dateInput(row.endDate),
     renewalDate: dateInput(row.renewalDate) || dateInput(row.endDate),
@@ -155,11 +169,12 @@ export function InsurancePage() {
     sourceExternalIdsInput: (row.sourceExternalIds ?? []).join(", "),
     confidence: row.confidence ?? "",
     sensitivity: row.sensitivity ?? "",
-    riskFlagsInput: riskFlagsForPolicy(row).join(", "),
+    riskFlagsInput: (row.riskFlags ?? []).join(", "),
     notes: row.notes ?? "",
   });
 
   const openEdit = (row: any) => {
+    setEditView("Policy");
     setEditingId(row._id);
     setDrawerMode("edit");
     setForm(formFromPolicy(row));
@@ -176,7 +191,9 @@ export function InsurancePage() {
     }
     try {
       if (editingId) {
-        await update({ id: editingId as any, patch: payload });
+        const original = rows.find(row => row._id === editingId);
+        const clearFields = Object.entries(payload).filter(([key, value]) => optionalPolicyFields.has(key) && value == null && original?.[key] != null).map(([key]) => key);
+        await update({ id: editingId as any, patch: payload, clearFields });
         toast.success("Policy updated");
       } else {
         await create({ societyId: society._id, ...payload });
@@ -191,32 +208,38 @@ export function InsurancePage() {
   const confirmRemove = async (row: any) => {
     const label = [row.insurer, row.policyNumber].filter(Boolean).join(" · ") || "this policy";
     const approved = await confirm({
-      title: "Delete insurance policy?",
-      message: `${label} (${kindLabel(row.kind)}, ${formatDate(row.startDate)} to ${formatDate(row.endDate)}) will be permanently removed, including its coverage items, certificates, claims and review history. To keep the history, set the status to Lapsed or Cancelled instead.`,
-      confirmLabel: "Delete policy",
+      title: "Archive insurance policy?",
+      message: `${label} (${kindLabel(row.kind)}, ${formatDate(row.startDate)} to ${formatDate(row.endDate)}) will move to the archive. Its policy file and renewal history stay available.`,
+      confirmLabel: "Archive policy",
       tone: "danger",
     });
     if (!approved) return;
     try {
       await remove({ id: row._id });
-      toast.success("Policy deleted", label);
+      toast.success("Policy archived", label);
     } catch (error: any) {
-      toast.error("Could not delete policy", error?.message);
+      toast.error("Could not archive policy", error?.message);
     }
   };
 
   return (
-    <div className="page">
+    <div className="page insurance-register">
       <PageHeader
         title="Insurance"
         icon={<Shield size={16} />}
         iconColor="green"
         subtitle="Policy records, renewal dates, source references, and restricted import flags."
         actions={
-          <div className="row" style={{ gap: 8 }}>
-            <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>
-            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
-              <Plus size={12} /> New policy
+          <div className="insurance-toolbar">
+            <label className="insurance-toolbar__desktop"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Include archived</label>
+            {canWrite && can("documents:read") && can("settings:write") && can("documents:write") && <InsuranceRenewalImport key={society._id} society={society} />}
+            <Link className="btn-action insurance-toolbar__desktop" to="/app/imports"><FileSearch size={12} /> Review imports</Link>
+            <span className="insurance-toolbar__mobile"><MoreActionsMenu label="" items={[
+              { id: "imports", label: "Review imports", icon: <FileSearch size={16} />, onSelect: () => navigate("/app/imports") },
+              { id: "archive", label: showArchived ? "Hide archived policies" : "Include archived policies", icon: <Archive size={16} />, onSelect: () => setShowArchived(!showArchived) },
+            ]} /></span>
+            <button className="btn-action btn-action--primary" aria-label="New policy" title="New policy" onClick={openNew} disabled={!canWrite}>
+              <Plus size={16} /><span className="insurance-action-label">New policy</span>
             </button>
           </div>
         }
@@ -253,12 +276,18 @@ export function InsurancePage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || items === undefined}
+            renderPhoneCard={(row, { open, selecting }) => (
+              <RecordTablePhoneCard title={String(row.insurer || "Insurance policy")} wrapTitle onOpen={open} selecting={selecting}
+                meta={[kindLabel(String(row.kind ?? "")), row.policyNumber ? String(row.policyNumber) : null]}
+                detail={[<span key="review" className="insurance-policy-detail"><PolicyBadges row={row} />{row.renewalDate ? <span>Renewal {formatDate(String(row.renewalDate))}</span> : null}</span>]} />
+            )}
             renderCell={({ record, field }) => {
+              if (field.name === "status" && record.archivedAtISO) return <Badge>Archived</Badge>;
               if (field.name === "kind") return <span className="cell-tag">{kindLabel(record.kind)}</span>;
               if (field.name === "insurer") return <PolicyCell row={record} />;
               if (field.name === "policyNumber") return <span>{record.policyNumber}</span>;
-              if (field.name === "coverageCents") return <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(record.coverageCents)}</span>;
-              if (field.name === "premiumCents") return <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(record.premiumCents)}</span>;
+              if (field.name === "coverageCents") return <span style={{ fontVariantNumeric: "tabular-nums" }}>{record.coverageCents != null ? insuranceAmount(record.coverageCents, record.currency) : record.coverageItems?.length ? `${record.coverageItems.length} coverage line${record.coverageItems.length === 1 ? "" : "s"}` : "—"}</span>;
+              if (field.name === "premiumCents") return <span style={{ fontVariantNumeric: "tabular-nums" }}>{insuranceAmount(record.premiumCents, record.currency)}</span>;
               if (field.name === "period") return <span style={{ whiteSpace: "nowrap" }} title={`${formatDate(record.startDate)} – ${formatDate(record.endDate)}`}>{formatDate(record.startDate, "MMM d, yyyy")} – {formatDate(record.endDate, "MMM d, yyyy")}</span>;
               if (field.name === "renewalDate") return <RenewalCell date={record.renewalDate} />;
               return undefined;
@@ -268,8 +297,8 @@ export function InsurancePage() {
                 <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(r); }} disabled={!canWrite}>
                   <Pencil size={12} /> Edit
                 </button>
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); void confirmRemove(r); }} disabled={!canWrite}>
-                  <Trash2 size={12} />
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Archive insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); void confirmRemove(r); }} disabled={!canWrite || Boolean(r.archivedAtISO)}>
+                  <Archive size={12} />
                 </button>
               </>
             )}
@@ -304,7 +333,9 @@ export function InsurancePage() {
           drawerMode === "view" ? (
             <PolicyStructuredDetails row={normalizePolicyDraft(form)} />
           ) : (
-          <div>
+          <div className="insurance-edit" ref={editorRef}>
+            <Segmented aria-label="Policy editor views" className="insurance-segments" value={editView} onChange={setEditView} items={["Policy","Coverage","Costs","Evidence"].map(id => ({id, label:id}))} />
+            <section data-edit-view="Policy" hidden={editView !== "Policy"}>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Kind" hint="D&O = Directors & Officers liability" required error={errors.kind}>
                 <Select value={form.kind} onChange={(value) => setForm({ ...form, kind: value })}
@@ -316,14 +347,26 @@ export function InsurancePage() {
               </Field>
             </div>
             <Field label="Insurer" required error={errors.insurer}><input className="input" value={form.insurer} onChange={(e) => setForm({ ...form, insurer: e.target.value })} /></Field>
-            <Field label="Broker"><input className="input" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} /></Field>
             <Field label="Policy number" required error={errors.policyNumber}><input className="input" value={form.policyNumber} onChange={(e) => setForm({ ...form, policyNumber: e.target.value })} /></Field>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Start" required error={errors.startDate}><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
+              <Field label="End" error={errors.endDate}><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
+              <Field label="Renewal" required error={errors.renewalDate}><DatePicker value={form.renewalDate} onChange={(value) => setForm({ ...form, renewalDate: value })} /></Field>
+            </div>
+            </section>
+            <section data-edit-view="Policy" hidden={editView !== "Policy"}><h3>Insured organization and policy term</h3>
+            <Field label="Broker"><input className="input" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} /></Field>
+            {insuranceTermTextFields.map(([key, label]) => <Field label={label} key={key} error={errors[key]}><input className="input" value={form[key] ?? ""} onChange={e => setForm({ ...form, [key]: e.target.value })} /></Field>)}
             <div className="row" style={{ gap: 12 }}>
               <Field label="Policy series key" hint="An identifier you choose to link this policy to its future renewals, e.g. the insurer's account number"><input className="input" value={form.policySeriesKey ?? ""} onChange={(e) => setForm({ ...form, policySeriesKey: e.target.value })} /></Field>
               <Field label="Policy term"><input className="input" value={form.policyTermLabel ?? ""} onChange={(e) => setForm({ ...form, policyTermLabel: e.target.value })} /></Field>
               <Field label="Version type" hint="e.g. New, Renewal, or Amendment"><input className="input" value={form.versionType ?? ""} onChange={(e) => setForm({ ...form, versionType: e.target.value })} /></Field>
             </div>
             <Field label="Renewal of policy number"><input className="input" value={form.renewalOfPolicyNumber ?? ""} onChange={(e) => setForm({ ...form, renewalOfPolicyNumber: e.target.value })} /></Field>
+            </section>
+            <section data-edit-view="Costs" hidden={editView !== "Costs"}><h3>Premium, fees and rating</h3>
+            <Field label="Gross receipts used for rating" hint="Dollars" error={errors.grossReceiptsCents}><input className="input" type="number" min="0" step="0.01" value={form.grossReceiptsDollars ?? ""} onChange={e => setForm({ ...form, grossReceiptsDollars: e.target.value })} /></Field>
+            <Field label="Minimum retained premium (%)" error={errors.minimumRetainedPremiumPercent}><input className="input" type="number" min="0" max="100" step="any" value={form.minimumRetainedPremiumPercent ?? ""} onChange={e => setForm({ ...form, minimumRetainedPremiumPercent: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Coverage" hint="Dollars, only when explicit" error={errors.coverageCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.coverageDollars} onChange={(e) => setForm({ ...form, coverageDollars: e.target.value })} /></Field>
               <Field label="Premium" hint="Dollars, only when explicit" error={errors.premiumCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
@@ -333,26 +376,30 @@ export function InsurancePage() {
               <Field label="Policy fee" hint="Dollars, from invoice" error={errors.policyFeeCents}><input className="input" type="number" min="0" step="0.01" value={form.policyFeeDollars ?? ""} onChange={(e) => setForm({ ...form, policyFeeDollars: e.target.value })} /></Field>
               <Field label="Total invoiced cost" hint="Dollars, including documented fees/taxes" error={errors.totalCostCents}><input className="input" type="number" min="0" step="0.01" value={form.totalCostDollars ?? ""} onChange={(e) => setForm({ ...form, totalCostDollars: e.target.value })} /></Field>
             </div>
+            <AssessmentRatesEditor rows={form.assessmentRates ?? []} onChange={(assessmentRates) => setForm({ ...form, assessmentRates })} />
+            </section>
+            <section data-edit-view="Coverage" hidden={editView !== "Coverage"}><h3>Coverage lines and wording</h3>
+            <EvidenceRowsEditor title="Coverage items and limits" rows={form.coverageItems ?? parseCoverageItems(form.coverageItemsInput)} columns={INSURANCE_ROW_COLUMNS.coverageItems} onChange={rows => setForm({ ...form, coverageItems: rows })} />
             <Field label="Coverage summary"><MarkdownEditor rows={4} value={form.coverageSummary ?? ""} onChange={(markdown) => setForm({ ...form, coverageSummary: markdown })} /></Field>
             <Field label="Additional insureds" hint="Comma-separated"><input className="input" value={form.additionalInsuredsInput ?? ""} onChange={(e) => setForm({ ...form, additionalInsuredsInput: e.target.value })} /></Field>
             <EvidenceRowsEditor title="Covered parties/classes" rows={form.coveredParties ?? parseCoveredParties(form.coveredPartiesInput)} columns={INSURANCE_ROW_COLUMNS.coveredParties} onChange={rows => setForm({ ...form, coveredParties: rows })} />
-            <EvidenceRowsEditor title="Coverage items and limits" rows={form.coverageItems ?? parseCoverageItems(form.coverageItemsInput)} columns={INSURANCE_ROW_COLUMNS.coverageItems} onChange={rows => setForm({ ...form, coverageItems: rows })} />
             <EvidenceRowsEditor title="Covered rooms/locations" rows={form.coveredLocations ?? parseCoveredLocations(form.coveredLocationsInput)} columns={INSURANCE_ROW_COLUMNS.coveredLocations} onChange={rows => setForm({ ...form, coveredLocations: rows })} />
             <EvidenceRowsEditor title="Policy definitions" rows={form.policyDefinitions ?? parsePolicyDefinitions(form.policyDefinitionsInput)} columns={INSURANCE_ROW_COLUMNS.policyDefinitions} onChange={rows => setForm({ ...form, policyDefinitions: rows })} />
-            <AssessmentRatesEditor rows={form.assessmentRates ?? []} onChange={(assessmentRates) => setForm({ ...form, assessmentRates })} />
             <PolicyExclusionsEditor rows={form.policyExclusions ?? []} onChange={(policyExclusions) => setForm({ ...form, policyExclusions })} />
             <EvidenceRowsEditor title="Declined coverages" rows={form.declinedCoverages ?? parseDeclinedCoverages(form.declinedCoveragesInput)} columns={INSURANCE_ROW_COLUMNS.declinedCoverages} onChange={rows => setForm({ ...form, declinedCoverages: rows })} />
+            </section>
+            <section data-edit-view="Evidence" hidden={editView !== "Evidence"}><h3>Certificates and agreement requirements</h3>
             <EvidenceRowsEditor title="Certificates of insurance" rows={form.certificatesOfInsurance ?? parseCertificates(form.certificatesInput)} columns={INSURANCE_ROW_COLUMNS.certificatesOfInsurance} onChange={rows => setForm({ ...form, certificatesOfInsurance: rows })} />
             <EvidenceRowsEditor title="Event / room insurance requirements" rows={form.insuranceRequirements ?? parseInsuranceRequirements(form.insuranceRequirementsInput)} columns={INSURANCE_ROW_COLUMNS.insuranceRequirements} onChange={rows => setForm({ ...form, insuranceRequirements: rows })} />
+            </section>
+            <section data-edit-view="Evidence" hidden={editView !== "Evidence"}><h3>Claims and policy reviews</h3>
             <EvidenceRowsEditor title="D&O claims-made terms" rows={form.claimsMadeTermsRows ?? (parseClaimsMadeTerms(form.claimsMadeTermsInput) ? [parseClaimsMadeTerms(form.claimsMadeTermsInput)] : [])} columns={INSURANCE_ROW_COLUMNS.claimsMadeTerms} onChange={rows => setForm({ ...form, claimsMadeTermsRows: rows })} />
             <EvidenceRowsEditor title="Claims / incident register" rows={form.claimIncidents ?? parseClaimIncidents(form.claimIncidentsInput)} columns={INSURANCE_ROW_COLUMNS.claimIncidents} onChange={rows => setForm({ ...form, claimIncidents: rows })} />
             <EvidenceRowsEditor title="Annual insurance reviews" rows={form.annualReviews ?? parseAnnualReviews(form.annualReviewsInput)} columns={INSURANCE_ROW_COLUMNS.annualReviews} onChange={rows => setForm({ ...form, annualReviews: rows })} />
             <EvidenceRowsEditor title="Compliance checks" rows={form.complianceChecks ?? parseComplianceChecks(form.complianceChecksInput)} columns={INSURANCE_ROW_COLUMNS.complianceChecks} onChange={rows => setForm({ ...form, complianceChecks: rows })} />
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Start" required error={errors.startDate}><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
-              <Field label="End" error={errors.endDate}><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
-              <Field label="Renewal" required error={errors.renewalDate}><DatePicker value={form.renewalDate} onChange={(value) => setForm({ ...form, renewalDate: value })} /></Field>
-            </div>
+            </section>
+            <section data-edit-view="Evidence" hidden={editView !== "Evidence"}><h3>Sources and notes</h3>
+            {docs && <Field label="Source documents"><select multiple className="input" value={form.sourceDocumentIds ?? []} onChange={e => setForm({ ...form, sourceDocumentIds: Array.from(e.target.selectedOptions, o => o.value) })}>{docs.map((doc: any) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}</select></Field>}
             <Field label="Source external IDs" hint="Comma-separated Paperless or external IDs"><input className="input" value={form.sourceExternalIdsInput ?? ""} onChange={(e) => setForm({ ...form, sourceExternalIdsInput: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Sensitivity">
@@ -374,6 +421,7 @@ export function InsurancePage() {
             </div>
             <Field label="Risk flags" hint="Comma-separated"><input className="input" value={form.riskFlagsInput ?? ""} onChange={(e) => setForm({ ...form, riskFlagsInput: e.target.value })} /></Field>
             <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
+            </section>
           </div>
           )
         )}
@@ -407,7 +455,7 @@ export function InsurancePolicyDetailPage() {
   const noteSummary = displayPolicyNotes(policy.notes);
 
   return (
-    <div className="page">
+    <div className="page insurance-policy-page">
       <Link to="/app/insurance" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
         <ArrowLeft size={12} /> Insurance policies
       </Link>
@@ -438,11 +486,13 @@ export function InsurancePolicyDetailPage() {
         }}>Save renewal</button>
       </>}>
         {renewal && <>
-          <p>The prior term stays in history. The new term starts as NeedsReview; add its coverage, exclusions and evidence from the new policy documents.</p>
+          <p>The new term starts in review. Its coverage and evidence come from the renewal documents.</p>
           <Field label="Renewal policy number"><input className="input" value={renewal.policyNumber} onChange={(e) => setRenewal({ ...renewal, policyNumber: e.target.value })} /></Field>
           <Field label="Start"><DatePicker value={renewal.startDate} onChange={(startDate) => setRenewal({ ...renewal, startDate })} /></Field>
           <Field label="End"><DatePicker value={renewal.endDate} onChange={(endDate) => setRenewal({ ...renewal, endDate })} /></Field>
-          {[["Premium", "premiumDollars"], ["Policy fee", "policyFeeDollars"], ["Total invoiced cost", "totalCostDollars"]].map(([label, key]) => <Field key={key} label={label} hint="Dollars, only when explicit"><input className="input" type="number" min="0" step="0.01" value={renewal[key]} onChange={(e) => setRenewal({ ...renewal, [key]: e.target.value })} /></Field>)}
+          <section><h3>Renewal costs (optional)</h3>
+          {[["Premium", "premiumDollars"], ["Policy fee", "policyFeeDollars"], ["Total invoiced cost", "totalCostDollars"]].map(([label, key]) => <Field key={key} label={label + " (dollars)"}><input className="input" type="number" min="0" step="0.01" value={renewal[key]} onChange={(e) => setRenewal({ ...renewal, [key]: e.target.value })} /></Field>)}
+          </section>
           {renewalError && <p role="alert">{renewalError}</p>}
         </>}
       </Drawer>
@@ -454,10 +504,13 @@ export function InsurancePolicyDetailPage() {
           <InsuranceOperationsCard policy={policy} />
         </div>
         <aside className="insurance-full-layout__side">
-          <div className="card">
-            <div className="card__head"><h2 className="card__title">Policy file</h2></div>
+          <InsuranceDialogAction label="View policy file" title="Policy file">
             <div className="card__body col">
               <DetailRow label="Kind">{kindLabel(policy.kind)}</DetailRow>
+              {policy.archivedAtISO && <DetailRow label="Archived">{formatDate(policy.archivedAtISO)}</DetailRow>}
+              {insuranceTermTextFields.map(([key,label]) => policy[key] && <DetailRow key={key} label={label}>{policy[key]}</DetailRow>)}
+              {policy.grossReceiptsCents != null && <DetailRow label="Gross receipts used for rating">{insuranceAmount(policy.grossReceiptsCents, policy.currency)}</DetailRow>}
+              {policy.minimumRetainedPremiumPercent != null && <DetailRow label="Minimum retained premium">{policy.minimumRetainedPremiumPercent}%</DetailRow>}
               <DetailRow label="Policy #">{policy.policyNumber}</DetailRow>
               {policy.policySeriesKey && (
                 <DetailRow label="Series">
@@ -469,7 +522,7 @@ export function InsurancePolicyDetailPage() {
               <DetailRow label="Renewal">{formatDate(policy.renewalDate)}</DetailRow>
               {policy.confidence && <DetailRow label="Confidence">{policy.confidence}</DetailRow>}
             </div>
-          </div>
+          </InsuranceDialogAction>
 
           <PolicyHistoryCard versions={versions} />
 
@@ -483,12 +536,11 @@ export function InsurancePolicyDetailPage() {
           )}
 
           {noteSummary && (
-            <div className="card">
-              <div className="card__head"><h2 className="card__title">Notes</h2></div>
+            <InsuranceDialogAction label="Read notes" title="Notes">
               <div className="card__body">
                 <p className="muted" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{noteSummary}</p>
               </div>
-            </div>
+            </InsuranceDialogAction>
           )}
         </aside>
       </div>
@@ -511,32 +563,32 @@ function InsuranceInsightCards({ policy }: { policy: any }) {
   const locations = policy.coveredLocations ?? [];
   const certificates = policy.certificatesOfInsurance ?? [];
   const checks = policy.complianceChecks ?? [];
-  const largestLimit = largestCoverageLimit(policy);
+
   const openChecks = checks.filter((check: any) => {
     const status = String(check.status ?? "").toLowerCase();
     return status === "open" || status.includes("review") || status.includes("todo");
   }).length;
   const coveredLabel = parties.length
-    ? `${parties.length} covered ${parties.length === 1 ? "party/class" : "parties/classes"}`
+    ? `${parties.length} ${parties.length === 1 ? "party or class" : "parties or classes"}`
     : "No covered parties entered";
   const evidenceCount = sourceIdsForPolicy(policy).length;
 
   return (
-    <div className="insurance-insights" aria-label="Insurance policy quick answers" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
+    <div className="insurance-insights" aria-label="Insurance policy quick answers">
       <div className="insurance-insight-card">
         <span>What it covers</span>
-        <strong>{largestLimit != null ? money(largestLimit) : money(policy.coverageCents)}</strong>
-        <small>{coverageItems.length ? `${coverageItems.length} limit item${coverageItems.length === 1 ? "" : "s"} captured` : "Policy-level coverage"}</small>
+        <strong>{policy.coverageCents != null ? insuranceAmount(policy.coverageCents, policy.currency) : `${coverageItems.length} coverage line${coverageItems.length === 1 ? "" : "s"}`}</strong>
+
       </div>
       <div className="insurance-insight-card">
         <span>Who it covers</span>
         <strong>{coveredLabel}</strong>
-        <small>{policy.additionalInsureds?.length ? `${policy.additionalInsureds.length} additional insured${policy.additionalInsureds.length === 1 ? "" : "s"}` : "Named insured/classes"}</small>
+        {!!policy.additionalInsureds?.length && <small>{policy.additionalInsureds.length} additional insured</small>}
       </div>
       <div className="insurance-insight-card">
         <span>Rooms / COIs</span>
         <strong>{locations.length || certificates.length ? `${locations.length + certificates.length} record${locations.length + certificates.length === 1 ? "" : "s"}` : "None captured"}</strong>
-        <small>{locations.length ? "Premises coverage present" : "No room schedule found"}</small>
+
       </div>
       <div className="insurance-insight-card">
         <span>Review state</span>
@@ -569,6 +621,13 @@ function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hide
   const checks = row.complianceChecks ?? [];
   const allSourceIds = sourceIdsForPolicy(row);
   const hasDetails = parties.length || items.length || locations.length || definitions.length || assessments.length || exclusions.length || declined.length || certificates.length || requirements.length || claimsTerms || incidents.length || reviews.length || checks.length;
+  const views = [
+    {id: "Coverage", available: parties.length || items.length || locations.length},
+    {id: "Terms", available: definitions.length || assessments.length || exclusions.length || declined.length || claimsTerms},
+    {id: "Records", available: certificates.length || requirements.length || incidents.length || reviews.length || checks.length},
+  ].filter(view => view.available).map(({id}) => ({id,label:id}));
+  const [selection, setSelection] = useState("Coverage");
+  const activeView = views.find(view => view.id === selection)?.id ?? views[0]?.id;
   if (!hasDetails) {
     return (
       <div className="insurance-brief">
@@ -588,14 +647,16 @@ function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hide
       )}
 
       <div className="insurance-brief__grid">
-        <BriefMetric label="Policy" value={row.policyNumber || "Not set"} sub={[row.policyTermLabel, row.versionType].filter(Boolean).join(" · ")} />
-        <BriefMetric label="Coverage" value={money(row.coverageCents)} sub={row.deductibleCents != null ? `Deductible ${money(row.deductibleCents)}` : ""} />
-        <BriefMetric label="Premium" value={money(row.premiumCents)} sub={`Fee ${money(row.policyFeeCents)} · Total invoiced ${money(row.totalCostCents)}`} />
+        {!hideIdentity && <BriefMetric label="Policy" value={row.policyNumber || "Not set"} sub={[row.policyTermLabel, row.versionType].filter(Boolean).join(" · ")} />}
+        {row.coverageCents != null && <BriefMetric label="Coverage" value={insuranceAmount(row.coverageCents, row.currency)} sub={row.deductibleCents != null ? `Deductible ${insuranceAmount(row.deductibleCents, row.currency)}` : ""} />}
+        <BriefMetric label="Premium" value={insuranceAmount(row.premiumCents, row.currency)} sub={[row.policyFeeCents != null && `Fee ${insuranceAmount(row.policyFeeCents, row.currency)}`, row.totalCostCents != null && `Invoiced ${insuranceAmount(row.totalCostCents, row.currency)}`].filter(Boolean).join(" · ")} />
         <BriefMetric label="Renewal" value={formatDate(row.renewalDate)} sub={`${formatDate(row.startDate)} – ${formatDate(row.endDate)}`} />
       </div>
 
-      {row.coverageSummary && <div className="insurance-brief__summary">{row.coverageSummary}</div>}
+      {row.coverageSummary && <InsuranceDialogAction label="Read coverage wording" title="Coverage wording and notes"><p className="insurance-original-text">{row.coverageSummary}</p></InsuranceDialogAction>}
 
+      {views.length > 1 && <Segmented className="insurance-segments" aria-label="Policy detail views" value={activeView} onChange={setSelection} items={views} />}
+      {activeView === "Coverage" && <>
       <DetailSection title="Who is covered" rows={parties} render={(party) => (
         <BriefItem
           title={party.name}
@@ -608,12 +669,12 @@ function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hide
       <DetailSection title="Coverage items" rows={items} render={(item) => (
         <BriefItem
           title={item.label}
-          meta={[item.coverageType, item.coveredClass]}
-          amount={item.limitCents != null ? money(item.limitCents) : undefined}
-          subAmount={item.deductibleCents != null ? `Deductible ${money(item.deductibleCents)}` : undefined}
+          meta={[item.coverageType || coverageCodes[item.coverageCode] || item.coverageCode, item.limitBasis, item.coveredClass, item.formNumber, item.effectiveDate, item.expiryDate]}
+          amount={item.limitCents != null ? insuranceAmount(item.limitCents, item.currency || row.currency) : undefined}
+          subAmount={item.deductibleCents != null ? `Deductible ${insuranceAmount(item.deductibleCents, item.currency || row.currency)}` : undefined}
           sourceIds={item.sourceExternalIds}
           citationId={item.citationId}
-          notes={item.summary}
+          notes={[item.summary, item.allocatedPremiumCents != null && `Allocated premium ${insuranceAmount(item.allocatedPremiumCents, item.currency || row.currency)}`].filter(Boolean).join(" · ")}
         />
       )} />
       <DetailSection title="Rooms / locations" rows={locations} render={(location) => (
@@ -626,6 +687,8 @@ function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hide
           notes={location.notes}
         />
       )} />
+      </>}
+      {activeView === "Terms" && <>
       <DetailSection title="Definitions" rows={definitions} render={(definition) => (
         <BriefItem
           title={definition.term}
@@ -658,6 +721,20 @@ function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hide
           notes={[coverage.reason, coverage.notes].filter(Boolean).join(" · ")}
         />
       )} />
+      {claimsTerms && (
+        <DetailSection title="D&O claims-made terms" rows={[claimsTerms]} render={(terms) => (
+          <BriefItem
+            title="Claims-made reporting"
+            meta={[terms.retroactiveDate && `Retro ${formatDate(terms.retroactiveDate)}`, terms.reportingDeadline && `Report by ${formatDate(terms.reportingDeadline)}`, terms.defenseCostsInsideLimit != null ? (terms.defenseCostsInsideLimit ? "Defence inside limit" : "Defence outside limit") : undefined, terms.territory]}
+            amount={terms.retentionCents != null ? `Retention ${money(terms.retentionCents)}` : undefined}
+            sourceIds={terms.sourceExternalIds}
+            citationId={terms.citationId}
+            notes={[terms.continuityDate && `Continuity ${formatDate(terms.continuityDate)}`, terms.extendedReportingPeriod, terms.claimsNoticeContact, terms.notes].filter(Boolean).join(" · ")}
+          />
+        )} />
+      )}
+      </>}
+      {activeView === "Records" && <>
       <DetailSection title="Certificates of insurance" rows={certificates} render={(certificate) => (
         <BriefItem
           title={certificate.holderName}
@@ -689,18 +766,6 @@ function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hide
             ].filter(Boolean).join(" · ")}
         />
       )} />
-      {claimsTerms && (
-        <DetailSection title="D&O claims-made terms" rows={[claimsTerms]} render={(terms) => (
-          <BriefItem
-            title="Claims-made reporting"
-            meta={[terms.retroactiveDate && `Retro ${formatDate(terms.retroactiveDate)}`, terms.reportingDeadline && `Report by ${formatDate(terms.reportingDeadline)}`, terms.defenseCostsInsideLimit != null ? (terms.defenseCostsInsideLimit ? "Defence inside limit" : "Defence outside limit") : undefined, terms.territory]}
-            amount={terms.retentionCents != null ? `Retention ${money(terms.retentionCents)}` : undefined}
-            sourceIds={terms.sourceExternalIds}
-            citationId={terms.citationId}
-            notes={[terms.continuityDate && `Continuity ${formatDate(terms.continuityDate)}`, terms.extendedReportingPeriod, terms.claimsNoticeContact, terms.notes].filter(Boolean).join(" · ")}
-          />
-        )} />
-      )}
       <DetailSection title="Claims / incidents" rows={incidents} render={(incident) => (
         <BriefItem
           title={incident.incidentDate ? formatDate(incident.incidentDate) : "Incident"}
@@ -728,6 +793,7 @@ function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hide
           notes={[check.completedAt && `Completed ${formatDate(check.completedAt)}`, check.notes].filter(Boolean).join(" · ")}
         />
       )} />
+      </>}
     </div>
   );
 }
@@ -736,10 +802,10 @@ function DetailSection({ title, rows, render }: { title: string; rows: any[]; re
   if (!rows.length) return null;
   return (
     <section className="insurance-brief__section">
-      <div className="insurance-brief__section-head">
-        <h3>{title}</h3>
+      <header className="insurance-brief__section-head">
+        <strong>{title}</strong>
         <span>{rows.length}</span>
-      </div>
+      </header>
       <div className="insurance-brief__items">
         {rows.map((row, index) => (
           <div key={`${title}-${index}`} className="insurance-brief__item">
@@ -839,18 +905,6 @@ function sourceIdsForPolicy(row: any) {
   return Array.from(ids);
 }
 
-function largestCoverageLimit(row: any) {
-  const values = [
-    row.coverageCents,
-    ...(row.coverageItems ?? []).map((item: any) => item.limitCents),
-    ...(row.coveredLocations ?? []).map((location: any) => location.coverageCents),
-    ...(row.certificatesOfInsurance ?? []).map((certificate: any) => certificate.requiredLimitCents),
-  ]
-    .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value) && value > 0);
-  return values.length ? Math.max(...values) : null;
-}
-
 function shortPolicySeries(series?: string) {
   if (!series) return "Not grouped";
   const parts = series.split("|").map((part) => part.trim()).filter(Boolean);
@@ -889,16 +943,21 @@ function PolicyCitation({ id }: { id?: string }) {
   return id ? <CitationBadge citationId={id} iconOnly /> : null;
 }
 
+function PolicyBadges({ row }: { row: any }) {
+  const badges = policyCellBadges(row.status, riskFlagsForPolicy(row));
+  if (!badges.length && !row.archivedAtISO) return null;
+  return <span className="insurance-policy-badges">
+    {row.archivedAtISO && <Badge>Archived</Badge>}
+    {badges.map(({ label, tone }) => <Badge key={label} tone={tone === "status" ? statusTone(row.status) : tone}>{label}</Badge>)}
+  </span>;
+}
+
 function PolicyCell({ row }: { row: any }) {
-  const flags = riskFlagsForPolicy(row);
   const details = [row.broker || "Broker not set", row.policyTermLabel, row.versionType].filter(Boolean).join(" · ");
   return (
-    <span title={details} style={{ display: "inline-flex", gap: 6, alignItems: "center", maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden" }}>
-      <strong style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{row.insurer}</strong>
-      {row.status && row.status !== "Active" && <Badge tone={statusTone(row.status)}>{row.status}</Badge>}
-      {flags.map((flag) => (
-        <Badge key={flag} tone={flag === "restricted" ? "danger" : "warn"}>{flag}</Badge>
-      ))}
+    <span title={details} style={{ display: "inline-flex", flexDirection: "column", gap: 3, maxWidth: "100%", overflow: "hidden" }}>
+      <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.insurer}</strong>
+      <PolicyBadges row={row} />
     </span>
   );
 }
@@ -932,13 +991,15 @@ function summarizePolicies(rows: any[]) {
 
 function normalizePolicyDraft(form: any) {
   const riskFlags = splitList(form.riskFlagsInput);
-  if (form.sensitivity === "restricted" && !riskFlags.includes("restricted")) riskFlags.push("restricted");
-  if (form.confidence === "Review" && !riskFlags.includes("needs review")) riskFlags.push("needs review");
   return {
     kind: form.kind || "Other",
     // Required fields stay empty when blank so validation can flag them
     // (they used to be filled with "Needs review", creating blank policies).
     insurer: cleanOptional(form.insurer) ?? "",
+    ...Object.fromEntries(insuranceTermTextFields.map(([key]) => [key, key === "currency" ? cleanOptional(form[key])?.toUpperCase() : cleanOptional(form[key])])),
+    grossReceiptsCents: dollarInputToCents(form.grossReceiptsDollars),
+    minimumRetainedPremiumPercent: form.minimumRetainedPremiumPercent === "" || form.minimumRetainedPremiumPercent == null ? undefined : Number(form.minimumRetainedPremiumPercent),
+    sourceDocumentIds: form.sourceDocumentIds ?? [],
     broker: cleanOptional(form.broker),
     policyNumber: cleanOptional(form.policyNumber) ?? "",
     policySeriesKey: cleanOptional(form.policySeriesKey),
@@ -953,7 +1014,7 @@ function normalizePolicyDraft(form: any) {
     coverageSummary: cleanOptional(form.coverageSummary),
     additionalInsureds: splitList(form.additionalInsuredsInput),
     coveredParties: form.coveredParties ? form.coveredParties.map(stripEditorId) : parseCoveredParties(form.coveredPartiesInput),
-    coverageItems: form.coverageItems ? form.coverageItems.map(stripEditorId) : parseCoverageItems(form.coverageItemsInput),
+    coverageItems: form.coverageItems ? form.coverageItems.map((row: any) => ({ ...stripEditorId(row), lineId: row.lineId || row.id })) : parseCoverageItems(form.coverageItemsInput),
     coveredLocations: form.coveredLocations ? form.coveredLocations.map(stripEditorId) : parseCoveredLocations(form.coveredLocationsInput),
     policyDefinitions: form.policyDefinitions ? form.policyDefinitions.map(stripEditorId) : parsePolicyDefinitions(form.policyDefinitionsInput),
     assessmentRates: (form.assessmentRates ?? []).filter((item: any) => item.classificationCode?.trim() && item.assessmentYear?.trim()).map((item: any) => compact(item)),
@@ -1194,71 +1255,6 @@ function parseComplianceChecks(value: unknown) {
   }).filter((row) => row.label);
 }
 
-function serializeCoveredParties(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.name, row.partyType, row.coveredClass, (row.sourceExternalIds ?? []).join(", "), row.citationId, row.notes])).join("\n");
-}
-
-function serializeCoverageItems(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.label, row.coverageType, row.coveredClass, centsToDollarInput(row.limitCents), centsToDollarInput(row.deductibleCents), row.summary, (row.sourceExternalIds ?? []).join(", "), row.citationId])).join("\n");
-}
-
-function serializeCoveredLocations(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.label, row.address, row.room, centsToDollarInput(row.coverageCents), (row.sourceExternalIds ?? []).join(", "), row.citationId, row.notes])).join("\n");
-}
-
-function serializePolicyDefinitions(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.term, row.definition, (row.sourceExternalIds ?? []).join(", "), row.citationId])).join("\n");
-}
-
-function serializeDeclinedCoverages(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.label, row.reason, centsToDollarInput(row.offeredLimitCents), centsToDollarInput(row.premiumCents), row.declinedAt, (row.sourceExternalIds ?? []).join(", "), row.citationId, row.notes])).join("\n");
-}
-
-function serializeCertificates(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.holderName, row.additionalInsuredLegalName, row.eventName, row.eventDate, centsToDollarInput(row.requiredLimitCents), row.issuedAt, row.expiresAt, row.status, (row.sourceExternalIds ?? []).join(", "), row.citationId, row.notes])).join("\n");
-}
-
-function serializeInsuranceRequirements(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([
-    row.context,
-    row.requirementType,
-    row.coverageSource,
-    centsToDollarInput(row.cglLimitRequiredCents),
-    centsToDollarInput(row.cglLimitConfirmedCents),
-    booleanText(row.additionalInsuredRequired),
-    row.additionalInsuredLegalName,
-    row.coiStatus,
-    row.coiDueDate,
-    centsToDollarInput(row.tenantLegalLiabilityLimitCents),
-    row.hostLiquorLiability,
-    booleanText(row.indemnityRequired),
-    booleanText(row.waiverRequired),
-    booleanText(row.vendorCoiRequired),
-    booleanText(row.studentEventChecklistRequired),
-    (row.riskTriggers ?? []).join(", "),
-    (row.sourceExternalIds ?? []).join(", "),
-    row.citationId,
-    row.notes,
-  ])).join("\n");
-}
-
-function serializeClaimsMadeTerms(row?: any) {
-  if (!row) return "";
-  return joinPiped([row.retroactiveDate, row.continuityDate, row.reportingDeadline, row.extendedReportingPeriod, booleanText(row.defenseCostsInsideLimit), row.territory, centsToDollarInput(row.retentionCents), row.claimsNoticeContact, (row.sourceExternalIds ?? []).join(", "), row.citationId, row.notes]);
-}
-
-function serializeClaimIncidents(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.incidentDate, row.claimNoticeDate, row.status, booleanText(row.privacyFlag), row.insurerNotifiedAt, row.brokerNotifiedAt, (row.sourceExternalIds ?? []).join(", "), row.citationId, row.notes])).join("\n");
-}
-
-function serializeAnnualReviews(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.reviewDate, row.boardMeetingDate, row.reviewer, row.outcome, row.nextReviewDate, (row.sourceExternalIds ?? []).join(", "), row.citationId, row.notes])).join("\n");
-}
-
-function serializeComplianceChecks(rows?: any[]) {
-  return (rows ?? []).map((row) => joinPiped([row.label, row.status, row.dueDate, row.completedAt, (row.sourceExternalIds ?? []).join(", "), row.citationId, row.notes])).join("\n");
-}
-
 function lineRows(value: unknown) {
   return String(value ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
@@ -1267,9 +1263,6 @@ function splitPiped(line: string) {
   return line.split("|").map((part) => cleanOptional(part) ?? "");
 }
 
-function joinPiped(parts: unknown[]) {
-  return parts.map((part) => String(part ?? "").trim()).join(" | ").replace(/( \|)+\s*$/g, "");
-}
 
 function compact<T extends Record<string, any>>(row: T) {
   const out: Record<string, any> = {};
@@ -1311,9 +1304,6 @@ function parseBoolean(value: unknown) {
   return undefined;
 }
 
-function booleanText(value: unknown) {
-  return typeof value === "boolean" ? (value ? "yes" : "no") : "";
-}
 
 function cleanOptional(value: unknown) {
   const text = String(value ?? "").trim();
@@ -1342,7 +1332,8 @@ function kindLabel(kind: string) {
   return ({
     DirectorsOfficers: "D&O",
     GeneralLiability: "General liability",
-    PropertyCasualty: "Property",
+    PropertyCasualty: "Property and casualty",
+    ProfessionalLiability: "Professional liability",
     CyberLiability: "Cyber",
     Other: "Other",
   } as Record<string, string>)[kind] ?? kind;
@@ -1388,12 +1379,12 @@ function PolicyHistoryCard({ versions }: { versions: any[] }) {
           return (
             <div key={version._id} className="insurance-version-link" style={{ flexWrap: "wrap" }}>
               <Link to={`/app/insurance/${version._id}`}>{version.policyTermLabel || formatDate(version.startDate)}</Link>
-              <Badge tone={statusTone(version.status)}>{version.status}</Badge>
-              <span>Premium {money(version.premiumCents)}</span>
-              <span>Fee {money(version.policyFeeCents)} · Total invoiced {money(version.totalCostCents)}</span>
-              <span>Coverage {money(version.coverageCents)}</span>
-              <span>Deductible {money(version.deductibleCents)}</span>
-              {previous && <div style={{ width: "100%" }} className="muted">
+              <Badge tone={statusTone(version.status)}>{version.archivedAtISO ? "Archived" : version.status}</Badge>
+              <span>Premium {insuranceAmount(version.premiumCents, version.currency)}</span>
+              <span>Fee {insuranceAmount(version.policyFeeCents, version.currency)} · Total invoiced {insuranceAmount(version.totalCostCents, version.currency)}</span>
+              <span>Coverage {insuranceAmount(version.coverageCents, version.currency)}</span>
+              <span>Deductible {insuranceAmount(version.deductibleCents, version.currency)}</span>
+              {previous && (previous.currency ?? "") === (version.currency ?? "") && <div style={{ width: "100%" }} className="muted">
                 Changes from prior record: premium {changeLabel(version.premiumCents, previous.premiumCents)}, total invoiced {changeLabel(version.totalCostCents, previous.totalCostCents)}, coverage {changeLabel(version.coverageCents, previous.coverageCents)}, deductible {changeLabel(version.deductibleCents, previous.deductibleCents)}.
                 <div>Coverage items in the recorded schedules:</div>
                 {policyCoverageChanges(previous.coverageItems, version.coverageItems).length === 0 ? <div>Known item limits unchanged.</div> :
@@ -1468,6 +1459,13 @@ const INSURANCE_ROW_COLUMNS: Record<string, EvidenceColumn[]> = {
     }
   ],
   "coverageItems": [
+    { key: "coverageCode", label: "Coverage code", choices: Object.entries(coverageCodes).map(([value, label]) => ({value, label})), emptyLabel: "Unclassified" },
+    { key: "allocatedPremiumCents", label: "Allocated share of term premium (cents)", type: "number" },
+    { key: "limitBasis", label: "Limit basis", choices: limitBases.map(value => ({value, label:value})), emptyLabel: "Unknown" },
+    { key: "currency", label: "Currency" },
+    { key: "formNumber", label: "Coverage form" },
+    { key: "effectiveDate", label: "Effective date", type: "date" },
+    { key: "expiryDate", label: "Expiry date", type: "date" },
     {
       "key": "label",
       "label": "Label"

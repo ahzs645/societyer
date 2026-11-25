@@ -10,6 +10,7 @@ import { toPortableMutationCtx } from "./lib/portable";
  */
 
 const AGENT_KEY = "record_filter";
+const INSURANCE_KEY = "insurance_clause_extraction";
 /** Suggestions one person may request per minute in a workspace. */
 export const FILTER_SUGGESTIONS_PER_MINUTE = 12;
 
@@ -17,6 +18,7 @@ export const _beginFilterSuggestion = internalMutation({
   args: {
     societyId: v.id("societies"),
     objectNameSingular: v.string(),
+    purpose: v.optional(v.literal("insurance_clauses")),
     fieldCount: v.number(),
     queryLength: v.number(),
     provider: v.string(),
@@ -25,27 +27,28 @@ export const _beginFilterSuggestion = internalMutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const actor = await requirePermissionPortable(await toPortableMutationCtx(ctx), args.societyId, "tasks:write");
+    const agentKey = args.purpose ? INSURANCE_KEY : AGENT_KEY;
     const now = Date.now();
     const since = new Date(now - 60_000).toISOString();
     const recent = await ctx.db
       .query("aiAgentAuditEvents")
-      .withIndex("by_society_agent", (q: any) => q.eq("societyId", args.societyId).eq("agentKey", AGENT_KEY))
+      .withIndex("by_society_agent", (q: any) => q.eq("societyId", args.societyId).eq("agentKey", agentKey))
       .order("desc")
       .take(200);
     const mine = recent.filter((event: any) => event.actorUserId === actor._id && event.createdAtISO >= since);
     if (mine.length >= FILTER_SUGGESTIONS_PER_MINUTE) return { limited: true };
     const eventId = await ctx.db.insert("aiAgentAuditEvents", {
       societyId: args.societyId,
-      agentKey: AGENT_KEY,
+      agentKey,
       eventType: "run_requested",
-      summary: `Requested an AI filter suggestion for ${args.objectNameSingular}.`,
+      summary: args.purpose ? "Requested insurance clause labels from source text." : `Requested an AI filter suggestion for ${args.objectNameSingular}.`,
       metadata: {
         objectNameSingular: args.objectNameSingular,
         fieldCount: args.fieldCount,
         queryLength: args.queryLength,
         provider: args.provider,
         modelId: args.modelId,
-        rowDataSent: false,
+        ...(args.purpose ? { sourceTextSent: true, insuranceRegisterSent: false } : { rowDataSent: false }),
       },
       createdAtISO: new Date(now).toISOString(),
       actorUserId: actor._id,
@@ -68,7 +71,7 @@ export const _finishFilterSuggestion = internalMutation({
   handler: async (ctx, args) => {
     const actor = await requirePermissionPortable(await toPortableMutationCtx(ctx), args.societyId, "tasks:write");
     const event = await ctx.db.get(args.eventId);
-    if (!event || event.societyId !== args.societyId || event.agentKey !== AGENT_KEY || event.actorUserId !== actor._id) {
+    if (!event || event.societyId !== args.societyId || ![AGENT_KEY, INSURANCE_KEY].includes(event.agentKey) || event.actorUserId !== actor._id) {
       throw new Error("Record not found.");
     }
     await ctx.db.patch(args.eventId, {

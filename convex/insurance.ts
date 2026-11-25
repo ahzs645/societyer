@@ -6,6 +6,10 @@ import { listPortable, createPortable, updatePortable, removePortable, createRen
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import * as insuranceModule from "../shared/functions/insurance";
 
+import * as clauseChecks from "../shared/functions/insuranceClauses";
+import { clauseOriginArgs, clauseFields, clauseSource, evidenceSelection } from "./validators/insuranceClause";
+import { coverageItem, insuranceTermFields } from "./validators/insurance";
+
 const coveredParty = v.object({
   name: v.string(),
   partyType: v.optional(v.string()),
@@ -22,17 +26,6 @@ export const createRenewal = authorizedMutation("insurance:createRenewal", mutat
   },
   returns: v.any(),
   handler: async (ctx, args) => createRenewalPortable(await toPortableMutationCtx(ctx), args),
-});
-
-const coverageItem = v.object({
-  label: v.string(),
-  coverageType: v.optional(v.string()),
-  coveredClass: v.optional(v.string()),
-  limitCents: v.optional(v.number()),
-  deductibleCents: v.optional(v.number()),
-  summary: v.optional(v.string()),
-  sourceExternalIds: v.optional(v.array(v.string())),
-  citationId: v.optional(v.string()),
 });
 
 const coveredLocation = v.object({
@@ -179,6 +172,7 @@ export const create = authorizedMutation("insurance:create", mutation)({
     societyId: v.id("societies"),
     kind: v.string(),
     insurer: v.string(),
+    ...insuranceTermFields,
     broker: v.optional(v.string()),
     policyNumber: v.string(),
     policySeriesKey: v.optional(v.string()),
@@ -223,9 +217,11 @@ export const create = authorizedMutation("insurance:create", mutation)({
 export const update = authorizedMutation("insurance:update", mutation)({
   args: {
     id: v.id("insurancePolicies"),
+    clearFields: v.optional(v.array(v.string())),
     patch: v.object({
       kind: v.optional(v.string()),
       insurer: v.optional(v.string()),
+      ...insuranceTermFields,
       broker: v.optional(v.string()),
       policyNumber: v.optional(v.string()),
       policySeriesKey: v.optional(v.string()),
@@ -276,3 +272,15 @@ export const remove = authorizedMutation("insurance:remove", mutation)({
 
 export const appendOperations = authorizedMutation('insurance:appendOperations', mutation)({args:{id:v.id('insurancePolicies'),moneyEntries:v.optional(v.array(v.any())),amendments:v.optional(v.array(v.any())),requirementChecks:v.optional(v.array(v.any()))},returns:v.any(),handler:async(ctx,args)=>insuranceModule.appendOperations(await toPortableMutationCtx(ctx),args)});
 export const ensureRenewalTasks = authorizedMutation('insurance:ensureRenewalTasks', mutation)({args:{societyId:v.id('societies'),asOf:v.string(),ownerUserId:v.optional(v.id('users'))},returns:v.any(),handler:async(ctx,args)=>insuranceModule.ensureRenewalTasks(await toPortableMutationCtx(ctx),args)});
+
+export const clauseChecksFor = authorizedQuery("insurance:clauseChecksFor",query)({
+  args:clauseOriginArgs, returns:v.any(), handler:async(ctx,args)=>clauseChecks.readChecks(await toPortableQueryCtx(ctx),args),
+});
+export const saveClause = authorizedMutation("insurance:saveClause",mutation)({
+  args:{...clauseOriginArgs,source:clauseSource,clause:clauseFields,id:v.optional(v.id("insuranceClauseChecks")),revision:v.optional(v.number())},returns:v.any(),
+  handler:async(ctx,args)=>clauseChecks.saveCheck(await toPortableMutationCtx(ctx),args),
+});
+export const confirmClause = authorizedMutation("insurance:confirmClause",mutation)({
+  args:{...clauseOriginArgs,id:v.id("insuranceClauseChecks"),revision:v.number(),...evidenceSelection},returns:v.any(),
+  handler:async(ctx,args)=>clauseChecks.confirmCheck(await toPortableMutationCtx(ctx),args),
+});

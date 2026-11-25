@@ -47,7 +47,7 @@ export const TRANSFER_COPY_TABLES = [
   "fieldProvenance", "filingBotRuns", "filings", "financeTagGroups", "financeTags", "financialAccounts", "financialConnections", "financialStatementImportLines",
   "financialStatementImports", "financialTransactions", "financialVersionSelections", "financials", "formationRecords", "fundRestrictions", "fundingSourceEvents", "fundingSources",
   "generatedLegalDocuments", "goals", "governanceExpectations", "grantApplications", "grantEmployeeLinks", "grantOpportunityCandidates", "grantReports", "grantSourceProfiles",
-  "grantSources", "grantTransactions", "grants", "importTargets", "inspections", "insurancePolicies", "intakeClusters", "intakeExtractions",
+  "grantSources", "grantTransactions", "grants", "importTargets", "inspections", "insuranceClauseChecks", "insurancePolicies", "intakeClusters", "intakeExtractions",
   "intakeExtracts", "intakeFieldReviews", "intakeFiles", "intakeProcessingLog", "intakeRuns", "inventoryBalances", "inventoryCandidates", "inventoryConnections",
   "inventoryCountLines", "inventoryCounts", "inventoryItems", "inventoryLocations", "inventoryLots", "investmentHoldings", "invoiceCatalogItems", "invoicePriceLists",
   "invoiceDocumentRevisions", "invoiceSeries", "invoiceSettings", "invoiceTemplates", "invoices", "journalEntries", "journalLines", "legalPrecedentRuns", "legalPrecedents",

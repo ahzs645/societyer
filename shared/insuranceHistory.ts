@@ -34,13 +34,13 @@ export function estimatePayrollAssessment(assessedPayrollCents?: number, netRate
   return Number.isSafeInteger(estimatedCents) ? estimatedCents : undefined;
 }
 
-type CoverageItem = { label: string; coverageType?: string; coveredClass?: string; limitCents?: number };
+type CoverageItem = { label: string; coverageType?: string; coveredClass?: string; limitBasis?: string; currency?: string; limitCents?: number };
 export type CoverageItemChange = { label: string; status: "changed" | "added" | "removed" | "unknown"; previousCents?: number; currentCents?: number };
 
 export function policyCoverageChanges(previous?: CoverageItem[], current?: CoverageItem[]): CoverageItemChange[] {
   // Empty/absent schedules mean no item-level evidence was captured.
   if (!previous?.length || !current?.length) return [{ label: "Coverage schedule", status: "unknown" }];
-  const key = (item: CoverageItem) => [item.label, item.coverageType, item.coveredClass].map(value => String(value ?? "").trim().toLowerCase()).join("|");
+  const key = (item: CoverageItem) => [item.label, item.coverageType, item.coveredClass, item.limitBasis, item.currency].map(value => String(value ?? "").trim().toLowerCase()).join("|");
   const before = new Map<string, CoverageItem[]>();
   const after = new Map<string, CoverageItem[]>();
   for (const [rows, map] of [[previous, before], [current, after]] as const) {

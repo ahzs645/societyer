@@ -68,9 +68,10 @@ export function extractInsurance(input: ClassExtractorInput & { asOfISO?: string
         : /\bendorsement\b/i.test(`${fileName} ${text.slice(0, 300)}`) && !/declarations page/i.test(text) ? "endorsement"
           : /renewal/i.test(`${fileName} ${text.slice(0, 1200)}`) ? "renewal" : /declarations? page|policy/i.test(text) ? "policy" : "unknown";
   // Policy number.
-  const policyLine = head.find((line) => /policy (?:number|no\.?|#)\s*:?\s*#?[A-Z0-9-]{4,}/i.test(line.text)) ?? head.find((line) => /document no\.?\s*[A-Z]{1,4}\d{3,}[A-Z0-9-]*/i.test(line.text));
-  const policyMatch = policyLine ? /policy (?:number|no\.?|#)\s*:?\s*#?([A-Z]{0,4}-?\d[A-Z0-9-]{3,})|document no\.?\s*([A-Z]{1,4}\d{3,}[A-Z0-9-]*)/i.exec(policyLine.text) : undefined;
-  const policyNumber = policyMatch && policyLine ? at(policyMatch[1] ?? policyMatch[2], policyLine, policyMatch[1] ?? policyMatch[2], 0.85) : undefined;
+  const numberPattern = /\b(?:policy\s+(?:(?:number|no\.?)\s*)?|document no\.?\s*)[:#]?\s*([A-Z]{0,6}-?\d[A-Z0-9-]{3,})\b/i;
+  const policyLine = head.find(line => numberPattern.test(line.text));
+  const number = policyLine?.text.match(numberPattern)?.[1];
+  const policyNumber = number && policyLine ? at(number, policyLine, number, 0.85) : undefined;
   // Parties.
   const brokerHeader = head.findIndex((line) => /agent or broker/i.test(line.text));
   let broker: FieldValue<string> | undefined;
@@ -91,12 +92,14 @@ export function extractInsurance(input: ClassExtractorInput & { asOfISO?: string
   const insurerFromLine = insurerLine ? clean(insurerLine.text.replace(/^\s*(?:insurer|insurance company|underwriter|insurance manager)\s*:\s*/i, "").split(/,\s*\d|\t|\s+(?:broker|agent(?: or broker)?|named insured|policy (?:number|no\.?))\s*:/i)[0]) : undefined;
   const insurerNext = insurerLine && !/\b(?:company|co\.|ltd|limited|inc)\s*$/i.test(insurerLine.text) && /(?:insurance|assurance)\s*$/i.test(insurerLine.text) && /^\s*(?:company|co\.|corporation|limited|ltd)\b/i.test(lines[lines.indexOf(insurerLine) + 1]?.text ?? "") ? lines[lines.indexOf(insurerLine) + 1] : undefined;
   const coiInsurer = isCertificate ? head.map((line) => ({ line, match: /((?:[A-Z][\w&.']*\s?){1,3}),\s*Policy\s*#/.exec(line.text) })).find((hit) => hit.match) : undefined;
-  const insurer: FieldValue<string> = insurerLine && insurerFromLine
+  const explicitInsurer = head.map(line => ({line, name: line.text.match(/^(.+?) hereinafter called the insurer/i)?.[1] ?? line.text.match(/effected with (.+?) ["“]the insurer/i)?.[1]})).find(hit => hit.name);
+  const insurer: FieldValue<string> = explicitInsurer?.name ? at(explicitInsurer.name, explicitInsurer.line, explicitInsurer.name, 0.9) : insurerLine && insurerFromLine
     ? at(insurerNext ? `${insurerFromLine} ${clean(insurerNext.text)}` : insurerFromLine, insurerLine, undefined, /insurance manager/i.test(insurerLine.text) ? 0.6 : 0.8, /insurance manager/i.test(insurerLine.text) ? "Managing general agent named; the subscribing insurer is listed separately." : undefined)
     : coiInsurer ? at(clean(coiInsurer.match![1].replace(/^(?:(?:Commercial|General|Liability|Errors|Omissions|&|Coverage|Directors|Officers|Automobile|Property|Cyber)\s+)+/, "")), coiInsurer.line, coiInsurer.match![1], 0.7) : notStated("No insurer named.");
-  const insuredLabel = head.find((line) => /named insured/i.test(line.text));
+  const insuredLabel = head.find((line) => /named insured|insured name and postal/i.test(line.text));
   const insuredNext = insuredLabel ? lines.slice(lines.indexOf(insuredLabel) + 1, lines.indexOf(insuredLabel) + 3).find((line) => /\b(?:society|roundtable|association|inc|ltd|foundation)\b/i.test(line.text)) : head.find((line) => /\bcontractor name\b/i.test(line.text)) ? lines[lines.indexOf(head.find((line) => /\bcontractor name\b/i.test(line.text))!) + 1] : undefined;
-  const insured = insuredNext ? at(clean(insuredNext.text.split("\t")[0]), insuredNext, insuredNext.text.split("\t")[0].trim(), 0.75) : undefined;
+  const inlineInsured = insuredLabel?.text.match(/^named insured(?:\(s\))?\s*:\s*([^\t]+)/i)?.[1]?.trim();
+  const insured = inlineInsured && insuredLabel ? at(inlineInsured, insuredLabel, inlineInsured, 0.85) : insuredNext ? at(clean(insuredNext.text.split("\t")[0]), insuredNext, insuredNext.text.split("\t")[0].trim(), 0.75) : undefined;
   // Term.
   const term = termIn(head);
   const termStart = term.start && term.line ? at(term.start, term.line, term.startText, 0.85) : undefined;
@@ -112,7 +115,7 @@ export function extractInsurance(input: ClassExtractorInput & { asOfISO?: string
   const coverages: any[] = [];
   const kinds = new Set<string>();
   for (const line of head) {
-    for (const [re, kind] of KIND_RULES) if (re.test(line.text)) kinds.add(kind);
+    for (const [re, kind] of KIND_RULES) if (!/exclusion|excluded/i.test(line.text) && re.test(line.text)) kinds.add(kind);
     const aggregate = /(?:maximum aggregate|aggregate limit of|each claim limit|limit of liability)[^$]*?(\$\s?\d[\d, ]*)/i.exec(line.text);
     if (aggregate) {
       const money = moneyText(aggregate[1]);
@@ -140,8 +143,9 @@ export function extractInsurance(input: ClassExtractorInput & { asOfISO?: string
     });
     if (coverages.length > 40) break;
   }
-  const kind = kinds.has("directors_officers") ? "directors_officers" : kinds.has("errors_omissions") ? "errors_omissions" : kinds.has("general_liability") ? "general_liability" : kinds.has("property") ? "property" : kinds.has("cyber") ? "cyber" : "other";
-  const kindLine = head.find((line) => KIND_RULES.some(([re]) => re.test(line.text)));
+  const managementClause = head.find(line => /operating.*clause.*management liability/i.test(line.text));
+  const kind = managementClause ? "directors_officers" : kinds.has("directors_officers") ? "directors_officers" : kinds.has("errors_omissions") ? "errors_omissions" : kinds.has("general_liability") ? "general_liability" : kinds.has("property") ? "property" : kinds.has("cyber") ? "cyber" : "other";
+  const kindLine = managementClause ?? head.find((line) => KIND_RULES.some(([re]) => re.test(line.text)));
   // Explicit reviewed status: never Active by default.
   const asOf = input.asOfISO ?? new Date().toISOString().slice(0, 10);
   const lapsed = term.end ? term.end.iso < asOf : false;

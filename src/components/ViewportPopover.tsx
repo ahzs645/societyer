@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { useDialogFocus } from "../lib/useDialogFocus";
+import { AUTOFOCUS_SELECTOR, getDialogFocusables, useDialogFocus } from "../lib/useDialogFocus";
 import { useFloatingLayerStack } from "../lib/overlayStack";
 import { isOutsidePointerEvent } from "../lib/floatingLayer";
 
@@ -68,7 +68,21 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, al
       document.removeEventListener("pointerdown", onDown);
     };
   }, [open, anchorRef, onClose, ref, align]);
+  // The dialog starts hidden until measured. A focus attempt during that frame
+  // can leave focus on the trigger inside its parent sheet.
+  useLayoutEffect(() => {
+    const panel = ref.current;
+    if (!open || !panel || placement.visibility !== "visible" || document.activeElement !== anchorRef.current) return;
+    const target = panel.querySelector<HTMLElement>(AUTOFOCUS_SELECTOR) ?? getDialogFocusables(panel)[0] ?? panel;
+    target.focus({ preventScroll: true });
+  }, [open, placement.visibility, anchorRef, ref]);
   if (!open) return null;
   return <div ref={ref} className={className} role="dialog" aria-label={label} tabIndex={-1}
+    onKeyDown={event => {
+      if (event.key !== "Escape" || event.defaultPrevented || !layer.isTop()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    }}
     style={{ maxHeight: "calc(100dvh - 16px)", ...placement, ...layer.panel, position: "fixed", right: "auto", maxWidth: "calc(100vw - 16px)", minWidth: "min(240px, calc(100vw - 16px))", overflowY: "auto" }}>{children}</div>;
 }

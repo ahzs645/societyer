@@ -41,6 +41,7 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   // Record-table "Ask AI" through the workspace AI provider. The demo and local
   // runtimes never offer it (local/desktop use a device key in the browser instead).
   "aiFilterActions:suggestRecordFilter",
+  "aiFilterActions:extractInsuranceClauses",
   // AI connector tokens for the hosted MCP endpoint. The local runtimes have no endpoint
   // and never show the AI connectors card.
   "agentConnectors:mintToken",
