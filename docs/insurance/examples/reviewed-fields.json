@@ -1,0 +1,73 @@
+{
+  "insurancePolicies": [
+    {
+      "kind": "GeneralLiability",
+      "policyNumber": "CGL-4100",
+      "insurer": "Example Mutual",
+      "namedInsured": "Juniper Hall Society",
+      "currency": "CAD",
+      "startDate": "2027-01-01",
+      "endDate": "2028-01-01",
+      "premiumCents": 90000,
+      "sourceExternalIds": [
+        "local:sha256:f0debaa63a46a2b6d687651420345ceec292666bc6b43c5c4305ee69d2dede5e",
+        "local:sha256:dad7d68d46d22cf984f7cddb84ba42d9d92d372f18c3bcb5eb4ca92700df4e8a"
+      ],
+      "coverageSummary": "Commercial general liability coverage. See the declarations page for the limit and basis of each line.",
+      "coverageItems": [
+        {
+          "lineId": "line-1",
+          "label": "General liability",
+          "coverageCode": "CGL",
+          "limitBasis": "Each occurrence",
+          "limitCents": 200000000,
+          "currency": "CAD",
+          "citationId": "p. 1",
+          "sourceExternalIds": [
+            "local:sha256:f0debaa63a46a2b6d687651420345ceec292666bc6b43c5c4305ee69d2dede5e"
+          ]
+        },
+        {
+          "lineId": "line-2",
+          "label": "General aggregate",
+          "coverageCode": "CGL",
+          "limitBasis": "Aggregate",
+          "limitCents": 500000000,
+          "currency": "CAD",
+          "citationId": "p. 1",
+          "sourceExternalIds": [
+            "local:sha256:f0debaa63a46a2b6d687651420345ceec292666bc6b43c5c4305ee69d2dede5e"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "DirectorsOfficers",
+      "policyNumber": "DO-5200",
+      "insurer": "Sample Assurance",
+      "namedInsured": "Juniper Hall Society",
+      "currency": "CAD",
+      "startDate": "2027-01-01",
+      "endDate": "2028-01-01",
+      "premiumCents": 65000,
+      "sourceExternalIds": [
+        "local:sha256:3c41ef68dcef4746fa5146e56cae75e6d20fcc6f1dfbfadb6111be3e3ff2bb04"
+      ],
+      "coverageSummary": "Directors and officers liability coverage. See the declarations page for the limit and basis of each line.",
+      "coverageItems": [
+        {
+          "lineId": "line-1",
+          "label": "Management liability",
+          "coverageCode": "ManagementLiability",
+          "limitBasis": "Per claim and aggregate",
+          "limitCents": 100000000,
+          "currency": "CAD",
+          "citationId": "p. 1",
+          "sourceExternalIds": [
+            "local:sha256:3c41ef68dcef4746fa5146e56cae75e6d20fcc6f1dfbfadb6111be3e3ff2bb04"
+          ]
+        }
+      ]
+    }
+  ]
+}

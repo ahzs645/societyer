@@ -219,7 +219,7 @@ Settings → Modules can enable or hide optional surfaces by society. Current mo
 
 - **Engagement**: Communications, volunteer management, and grant management.
 - **Governance**: voting and resolutions, elections, proxies, auditors, director attestations, and court orders.
-- **Compliance**: filing pre-fill, records retention/inspection, PIPA training, insurance, access custody, and public transparency.
+- **Compliance**: filing pre-fill, records retention/inspection, PIPA training, insurance, access custody, and public transparency. [Insurance register and evidence guide](docs/insurance/README.md)
 - **Finance**: reconciliation, donation receipts, membership billing, employee records, and grant finance workflows.
 - **Integrations**: Paperless-ngx, browser connectors, and workflow automation.
 
