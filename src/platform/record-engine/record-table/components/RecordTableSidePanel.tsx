@@ -55,6 +55,7 @@ export function RecordTableSidePanel({
   onClose,
   onOpenRecord,
   onUpdate,
+  details,
   stack,
 }: {
   record: any;
@@ -64,6 +65,7 @@ export function RecordTableSidePanel({
   /** Omitted when the record has no fuller surface to open. */
   onOpenRecord?: () => void;
   onUpdate?: RecordTableContextValue["onUpdate"];
+  details?: ReactNode;
   /** Card stack state; RecordTableScope owns it so the URL can follow it. */
   stack: RecordPanelStack;
 }) {
@@ -271,6 +273,8 @@ export function RecordTableSidePanel({
                 <StickyNote size={15} /> Notes
               </PanelTabButton>
             </nav>
+
+            {activeTab === "home" && details}
 
             {activeTab === "home" && (
               <section className="record-side-panel__widget" aria-labelledby="record-side-panel-fields">

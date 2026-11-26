@@ -24,6 +24,8 @@ import { matchDirectoryPerson } from "../../../../shared/meetingAttendanceGrid";
 import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../lib/actionItemTidy";
 import { Tooltip } from "../../../components/Tooltip";
 import { TranscriptTimeChip } from "../transcript/TranscriptTimeChip";
+import { useLinkedActionFocus } from "../lib/actionTaskLink";
+import { taskDetailHref } from "../../tasks/taskLinks";
 
 const STATUS_OPTIONS = ACTION_ITEM_STATUSES.map((value) => ({ value, label: ACTION_ITEM_STATUS_LABELS[value] }));
 
@@ -83,6 +85,7 @@ export function MeetingActionItemsCard({
   const [savingDraft, setSavingDraft] = useState(false);
   const confirm = useConfirm();
   const undoable = useUndoableAction();
+  const linkedAction = useLinkedActionFocus<HTMLDivElement>();
   // Undo runs after later renders; it re-inserts into the latest lists.
   const latest = useRef({ sections, topLevelItems });
   latest.current = { sections, topLevelItems };
@@ -346,8 +349,10 @@ export function MeetingActionItemsCard({
             const status = actionItemStatus(row.item) as ActionItemStatus;
             const task = row.item.taskId ? taskById.get(String(row.item.taskId)) : undefined;
             const editing = editingKey === key;
+            const isLinkedAction = linkedAction.taskId !== null && row.item.taskId === linkedAction.taskId;
             return (
-              <div className="action-item action-item--rich" key={key} data-testid="action-item">
+              <div className="action-item action-item--rich" key={key} data-testid="action-item"
+                ref={isLinkedAction ? linkedAction.ref : undefined} tabIndex={isLinkedAction ? -1 : undefined}>
                 <span className={`action-item__text${status === "completed" ? " done" : ""}`}>
                   {rewording?.key === key ? (
                     <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
@@ -417,7 +422,7 @@ export function MeetingActionItemsCard({
                   )}
                   {row.item.dueDate && <span className="action-item__due" title={String(row.item.dueDate)}>{formatDueDate(row.item.dueDate)}</span>}
                   {task ? (
-                    <Link className="btn-action" to="/app/tasks" title={`Task: ${task.title}`}>
+                    <Link className="btn-action" to={taskDetailHref(String(task._id))} title={`Task: ${task.title}`}>
                       <ClipboardList size={12} /> {task.status}
                     </Link>
                   ) : row.item.taskId ? (

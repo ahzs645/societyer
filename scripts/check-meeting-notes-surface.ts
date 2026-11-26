@@ -112,11 +112,11 @@ console.log("✓ recorder: safe file names and elapsed time");
 
 // ---------- quote in notes -------------------------------------------------------------
 const quoteHref = notesTranscriptLink(54, 61.5, { pathname: "/app/meetings/m1", search: "?tab=notes&view=transcript" });
-assert.equal(quoteHref, "/app/meetings/m1?tab=notes&view=transcript&t=54-61.5", "an app path: works on the web and in the desktop app");
+assert.equal(quoteHref, "/app/meetings/m1?tab=transcript&t=54-61.5", "a legacy notes query produces the current Transcript URL");
 assert.equal(
   notesTranscriptLink(3, 4, { pathname: "/app/meetings/m1", search: "?tab=transcript&t=1-2" }),
-  "/app/meetings/m1?tab=notes&view=transcript&t=3-4",
-  "from the Transcript tab it still opens the notes surface at that moment",
+  "/app/meetings/m1?tab=transcript&t=3-4",
+  "on the Transcript tab the link updates the selected time range",
 );
 assert.equal(
   transcriptQuoteMarkdown({ text: "  \"Small pilots are\n where we learn.\" ", speaker: "Priya Raman", start: 54, end: 61.5 }, quoteHref),

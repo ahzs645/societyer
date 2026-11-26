@@ -30,6 +30,8 @@ import { useToast } from "../components/Toast";
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
 import { TaskEditDrawer } from "../features/tasks/TaskEditDrawer";
+import { HistoricalActionSource } from "../features/tasks/HistoricalActionSource";
+import { TASK_DETAIL_PARAM } from "../features/tasks/taskLinks";
 import { useTaskAttachmentKinds, withAttachmentKinds } from "../features/tasks/TaskAttachments";
 import { TASK_STATUSES, useTaskFormData } from "../features/tasks/TaskFormFields";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -116,7 +118,8 @@ export function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedGoalId = searchParams.get("goalId") ?? "";
   const requestedCommitteeId = searchParams.get("committeeId") ?? "";
-  const openNewFromUrl = searchParams.get("new") === "1";
+  const requestedTaskId = searchParams.get(TASK_DETAIL_PARAM);
+  const openNewFromUrl = !requestedTaskId && searchParams.get("new") === "1";
   // P2/P4: historical source actions are a separate register, never open work.
   const register: TaskRegister = searchParams.get("register") === "historical" ? "historical" : "current";
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -311,11 +314,26 @@ export function TasksPage() {
     return { historical, current: records.length - historical };
   }, [records]);
 
+  // Keep the linked task in the URL so Back, Forward and reload restore it.
+  // Resolve it before applying list scopes, using only the workspace's readable tasks.
+  const linkedTask = requestedTaskId
+    ? records.find((task) => task._id === requestedTaskId && task.societyId === society?._id)
+    : undefined;
+  const replaceLinkedTask = useCallback((taskId: string | null) => {
+    setSearchParams((previous) => {
+      const params = new URLSearchParams(previous);
+      if (taskId) params.set(TASK_DETAIL_PARAM, taskId);
+      else params.delete(TASK_DETAIL_PARAM);
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
+
   const openNew = useCallback(() => {
     if (!canManage) return;
+    if (requestedTaskId) replaceLinkedTask(null);
     setEditingTask(null);
     setOpen(true);
-  }, [requestedCommitteeId, requestedGoalId, canManage]);
+  }, [canManage, requestedTaskId, replaceLinkedTask]);
 
   // "N" starts a new task while the page has focus (not while typing or in a dialog).
   useEffect(() => {
@@ -362,6 +380,10 @@ export function TasksPage() {
   };
 
   const openEdit = (task: TaskRecord) => {
+    if (requestedTaskId) {
+      replaceLinkedTask(task._id);
+      return;
+    }
     setEditingTask(task);
     setOpen(true);
   };
@@ -768,6 +790,9 @@ export function TasksPage() {
           hydratedView={hydratedView}
           records={pageFilteredRecords}
           onRecordClick={(_recordId, record) => openEdit(record as TaskRecord)}
+          renderRecordDetails={(task: TaskRecord) => task.meetingId && (
+            <HistoricalActionSource task={task} meetingTitle={task.meetingIdLabel} />
+          )}
           onUpdate={canManage ? ({ recordId, fieldName, value }) =>
             updateInlineField(recordId, fieldName, value)
           : undefined}
@@ -930,13 +955,16 @@ export function TasksPage() {
         </div>
       )}
 
-      {open && <TaskEditDrawer
-        task={editingTask}
+      {(requestedTaskId ? linkedTask !== undefined : open) && <TaskEditDrawer
+        task={requestedTaskId ? linkedTask : editingTask}
         societyId={society._id}
         data={formData}
         canManage={canManage}
         initialValues={{ committeeId: requestedCommitteeId || undefined, goalId: requestedGoalId || undefined }}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          if (requestedTaskId) replaceLinkedTask(null);
+        }}
         onPromote={promoteToCurrent}
         onOpenTask={(id) => {
           const next = records.find((record) => String(record._id) === id);

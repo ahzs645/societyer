@@ -20,6 +20,8 @@ import { newNoteActionId, type NoteActionItem } from "../../../../shared/meeting
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { notesTranscriptSearch } from "../transcript/transcriptQuote";
 import { formatClock } from "../../../../shared/ai/notesDraft";
+import { useLinkedActionFocus } from "../lib/actionTaskLink";
+import { taskDetailHref } from "../../tasks/taskLinks";
 
 type LinkedTask = { _id: string; title: string; status: string };
 
@@ -48,7 +50,8 @@ export function MeetingNoteActionsCard({
   const setItems = usePermissionedMutation(api.meetings.setNoteActionItems, canWrite);
   const createTask = usePermissionedMutation(api.meetings.createTaskFromNoteAction, canWrite && canCreateTasks);
   const [newText, setNewText] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
+  const [pendingTaskIds, setPendingTaskIds] = useState<ReadonlySet<string>>(() => new Set());
+  const linkedAction = useLinkedActionFocus<HTMLLIElement>();
   const taskById = useMemo(() => new Map((tasks ?? []).map((task) => [String(task._id), task])), [tasks]);
   const goalOptions = useMemo(
     () => [{ value: "", label: "No goal" }, ...(goals ?? []).map((goal) => ({ value: String(goal._id), label: goal.title }))],
@@ -87,14 +90,18 @@ export function MeetingNoteActionsCard({
   };
 
   const makeTask = async (item: NoteActionItem) => {
-    setBusy(item.id);
+    setPendingTaskIds((pending) => new Set(pending).add(item.id));
     try {
       const result = (await createTask({ id: meetingId, itemId: item.id })) as { created: boolean } | undefined;
       toast.success(result?.created === false ? "Already on the task board." : "Task created.", item.text);
     } catch (error) {
       toast.error("Could not create the task", error instanceof Error ? error.message : String(error));
     } finally {
-      setBusy(null);
+      setPendingTaskIds((pending) => {
+        const next = new Set(pending);
+        next.delete(item.id);
+        return next;
+      });
     }
   };
 
@@ -120,13 +127,14 @@ export function MeetingNoteActionsCard({
               key={item.id}
               item={item}
               task={item.taskId ? taskById.get(String(item.taskId)) : undefined}
+              focusRef={linkedAction.taskId !== null && item.taskId === linkedAction.taskId ? linkedAction.ref : undefined}
               people={people}
               goalOptions={goalOptions}
               goalsLoaded={Boolean(goals)}
               committeeOptions={committeeOptions}
               canWrite={canWrite}
               canCreateTasks={canCreateTasks}
-              creating={busy === item.id}
+              creating={pendingTaskIds.has(item.id)}
               onPatch={(change) => { void patch(item.id, change); }}
               onRemove={() => { void send([{ op: "remove", itemId: item.id }]); }}
               onCreateTask={() => { void makeTask(item); }}
@@ -160,6 +168,7 @@ type Option = { value: string; label: string };
 function NoteActionRow({
   item,
   task,
+  focusRef,
   people,
   goalOptions,
   goalsLoaded,
@@ -173,6 +182,7 @@ function NoteActionRow({
 }: {
   item: NoteActionItem;
   task: LinkedTask | undefined;
+  focusRef?: (row: HTMLLIElement | null) => void;
   people?: DirectoryPerson[];
   goalOptions: Option[];
   goalsLoaded: boolean;
@@ -190,7 +200,8 @@ function NoteActionRow({
   const goal = item.goalId ? goalOptions.find((option) => option.value === item.goalId)?.label : undefined;
   const committee = item.committeeId ? committeeOptions.find((option) => option.value === item.committeeId)?.label : undefined;
   return (
-    <li className={`meeting-note-action${item.done ? " is-done" : ""}${open ? " is-open" : ""}`}>
+    <li className={`meeting-note-action${item.done ? " is-done" : ""}${open ? " is-open" : ""}`}
+      ref={focusRef} tabIndex={focusRef ? -1 : undefined}>
       <div className="meeting-note-action__main">
         <input
           type="checkbox"
@@ -223,7 +234,7 @@ function NoteActionRow({
               className="meeting-note-action__tool"
               aria-label="Details"
               aria-expanded={open}
-              title={open ? "Close details" : "Owner, due date, goal, committee, task"}
+              title={open ? "Close details" : "Owner, due date, goal and committee"}
               onClick={() => setOpen((value) => !value)}
             >
               {open ? <ChevronUp size={14} aria-hidden="true" /> : <SlidersHorizontal size={14} aria-hidden="true" />}
@@ -258,7 +269,7 @@ function NoteActionRow({
           </Link>
         )}
         {task ? (
-          <Link className="notes-meta-item is-link" to="/app/tasks" title={`Task: ${task.title}`}>
+          <Link className="notes-meta-item is-link" to={taskDetailHref(task._id)} title={`Task: ${task.title}`}>
             <CheckSquare size={12} aria-hidden="true" /> Task · {taskStatusLabel(task.status)}
           </Link>
         ) : item.taskId ? (
@@ -266,6 +277,11 @@ function NoteActionRow({
         ) : null}
         {item.origin === "ai" && (
           <MetaItem icon={<Sparkles size={12} aria-hidden="true" />} label="Suggested by the AI notes; any edit makes it yours">Suggested</MetaItem>
+        )}
+        {!task && !item.taskId && canWrite && canCreateTasks && (
+          <button type="button" className="btn-action" disabled={creating} onClick={onCreateTask}>
+            <Plus size={12} aria-hidden="true" /> {creating ? "Creating…" : "Create task"}
+          </button>
         )}
       </div>
       {open && canWrite && (
@@ -296,11 +312,6 @@ function NoteActionRow({
           <div className="meeting-note-action__select">
             <Select aria-label="Committee" value={item.committeeId ?? ""} options={committeeOptions} onChange={(value) => { onPatch({ committeeId: value || undefined }); }} />
           </div>
-          {!task && !item.taskId && canCreateTasks && (
-            <button type="button" className="btn-action" disabled={creating} onClick={onCreateTask}>
-              {creating ? "Creating…" : "Create task"}
-            </button>
-          )}
         </div>
       )}
     </li>

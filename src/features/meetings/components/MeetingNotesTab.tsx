@@ -182,7 +182,7 @@ export function MeetingNotesTab({
   // While recording you write notes; afterwards the AI notes come first once drafted.
   // Chosen once when the tab opens, so a draft arriving never pulls you away from your notes.
   const [fallbackView] = useState<NotesView>(() => (recordingHere ? "notes" : meeting.notesDraft ? "ai" : "notes"));
-  const notesView: NotesView = isNotesView(requested) && (requested !== "actions" || phone) ? requested : fallbackView;
+  const notesView: NotesView = isNotesView(requested) ? requested : fallbackView;
   const view: NotesView | "transcript" = section === "transcript" ? "transcript" : notesView;
   /** Shows `next` in the Notes tab, leaving the Transcript tab if that's open. */
   const setView = (next: NotesView) => {
@@ -242,7 +242,7 @@ export function MeetingNotesTab({
       mine={myNotes}
       others={othersShared}
       hasDraft={Boolean(meeting.notesDraft)}
-      actionCount={phone ? actionItems.filter((item) => !item.done).length : undefined}
+      actionCount={actionItems.filter((item) => !item.done && item.status !== "cancelled").length}
       onAddMine={myNotes === null ? () => { void startMine(); } : undefined}
       adding={addingMine}
     />

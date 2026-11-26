@@ -9,12 +9,18 @@ import { Link } from "react-router-dom";
 import { ArrowUpRight, History } from "lucide-react";
 import { Badge } from "../../components/ui";
 import { isHistoricalSourceAction, taskStatusLabel } from "../../../shared/taskStatus";
+import { meetingActionHref } from "../meetings/lib/actionTaskLink";
 
 export function HistoricalActionSource({ task, meetingTitle, onPromote }: { task: any; meetingTitle?: string; onPromote?: () => void | Promise<void> }) {
   const historical = isHistoricalSourceAction(task);
   const observations: any[] = [...(task.sourceObservations ?? [])].sort((a, b) => String(a.observedDate ?? "").localeCompare(String(b.observedDate ?? "")));
   const first = observations[0]?.observedDate;
   const last = observations.at(-1)?.observedDate;
+  const fromNotes = task.tags?.includes("meeting-notes");
+  const fromAction = (fromNotes || task.tags?.includes("minutes-action")) && !task.recurrencePreviousTaskId;
+  const meetingHref = task.meetingId && (fromAction
+    ? meetingActionHref(task.meetingId, String(task._id), fromNotes ? "notes" : "minutes")
+    : `/app/meetings/${encodeURIComponent(task.meetingId)}?tab=minutes`);
   return (
     <section className="card task-source" aria-label="Source of this task" style={{ marginBottom: 12 }}>
       <div className="card__head">
@@ -34,13 +40,13 @@ export function HistoricalActionSource({ task, meetingTitle, onPromote }: { task
             Status: {taskStatusLabel(task.status)}.
           </p>
         )}
-        {task.meetingId && (
+        {meetingHref && (
           <div>
-            Meeting: <Link to={`/app/meetings/${task.meetingId}?tab=minutes`}>{meetingTitle ?? "Open source meeting"}</Link>
+            {fromAction ? "Action in " : "Meeting: "}<Link className="text-link" to={meetingHref}>{meetingTitle ?? "Open source meeting"}</Link>
             {task.transcriptRef && (
               <>
                 {" · "}
-                <Link to={`/app/meetings/${task.meetingId}?tab=transcript&t=${task.transcriptRef.startSec}-${task.transcriptRef.endSec}`}>
+                <Link className="text-link" to={`/app/meetings/${encodeURIComponent(task.meetingId)}?tab=transcript&t=${task.transcriptRef.startSec}-${task.transcriptRef.endSec}`}>
                   Recording at {formatTranscriptTime(task.transcriptRef.startSec)}
                 </Link>
               </>

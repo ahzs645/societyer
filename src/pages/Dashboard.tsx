@@ -137,9 +137,9 @@ export function Dashboard() {
       description: id === "setup"
         ? `Setup progress stays ${isMobile ? "in the top bar" : "in the sidebar"}. Bring the card back any time from Customize.`
         : "Bring it back any time from Customize.",
-      dedupeKey: `dashboard-hide-${id}`,
+      dedupeKey: `dashboard-hide-${society._id}-${id}`,
       run: () => dashboardLayout.setHidden(id, true),
-      undo: () => showModule(id),
+      undo: () => dashboardLayout.setHidden(id, false),
       undoneMessage: false,
     });
 

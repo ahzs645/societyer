@@ -3,8 +3,8 @@
  * notes others have shared. Handlers: shared/functions/meetingPersonalNotes.ts.
  *
  * The notes bar's "Which notes" select: Team notes, then My notes once you've
- * added them, then each person who shared theirs, then AI notes (and Action
- * items on phones). A "My notes" button sits beside it until you add yours.
+ * added them, then each person who shared theirs, then AI notes and Action
+ * items. A "My notes" button sits beside it until you add yours.
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { useMutation } from "convex/react";
@@ -42,8 +42,8 @@ export function NotesDocSwitcher({
   mine: PersonalNotes | null | undefined;
   others: readonly PersonalNotes[];
   hasDraft: boolean;
-  /** Open action items; set on phones, where they get their own entry. */
-  actionCount?: number;
+  /** Open action items. */
+  actionCount: number;
   /** Absent when the person can't keep notes here. */
   onAddMine?: () => void;
   adding?: boolean;
@@ -53,7 +53,7 @@ export function NotesDocSwitcher({
     ...(mine ? [{ value: "mine", label: "My notes", hint: mine.shared ? "Shared with the team" : "Only you", icon: <Lock size={14} /> }] : []),
     ...others.map((row) => ({ value: `shared:${row._id}`, label: `${row.authorName}'s notes`, hint: "Shared", icon: <Users size={14} /> })),
     { value: "ai", label: "AI notes", hint: hasDraft ? "Drafted from the notes and transcript" : "Not drafted yet", icon: <Sparkles size={14} /> },
-    ...(actionCount !== undefined ? [{ value: "actions", label: actionCount ? `Action items (${actionCount})` : "Action items", hint: "Who does what", icon: <ListChecks size={14} /> }] : []),
+    { value: "actions", label: actionCount ? `Action items (${actionCount})` : "Action items", hint: "Who does what", icon: <ListChecks size={14} /> },
   ];
   const pick = (value: string) => {
     if (value === "ai" || value === "actions") return onView(value);

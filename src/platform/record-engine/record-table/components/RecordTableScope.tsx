@@ -60,6 +60,7 @@ export function RecordTableScope({
   recordPreview = false,
   highlightedRecordId = null,
   renderSidePanel,
+  renderRecordDetails,
   cellPreviews = true,
   defaultDisplayMode = "continuous",
   defaultPageSize = DEFAULT_RECORD_TABLE_PAGE_SIZE,
@@ -93,6 +94,8 @@ export function RecordTableScope({
    * panel's drawer the `record-side-panel` class so its arrow keys count.
    */
   renderSidePanel?: (panel: { record: any; onClose: () => void; onNavigate: (record: any) => void }) => ReactNode;
+  /** Additional details on the base record's Home tab. */
+  renderRecordDetails?: (record: any) => ReactNode;
   /**
    * Hover cards on the cells the object opts into (its name cell, payees…).
    * Pass false for a table where the preview would repeat the row.
@@ -376,6 +379,7 @@ export function RecordTableScope({
             objectMetadata={objectMetadata}
             onClose={closeSidePanel}
             onUpdate={!canEditRecord || canEditRecord(currentSidePanelRecord) ? onUpdate : undefined}
+            details={renderRecordDetails?.(currentSidePanelRecord)}
             stack={panelStack}
             onOpenRecord={onRecordClick ? () =>
               handleRecordClick(activeSidePanelRecord.recordId, currentSidePanelRecord, {

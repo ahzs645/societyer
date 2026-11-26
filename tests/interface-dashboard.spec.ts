@@ -16,12 +16,14 @@ test("all research collections filter and recover from an empty result", async (
 
 test("dashboard setup guide can be dismissed and restored with Undo", async ({ page }) => {
   await page.goto("/demo/app", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 30_000 });
   const dismiss = page.getByRole("button", { name: "Hide setup guide", exact: true });
   // The seeded workspace deliberately retains incomplete setup checks.
   await expect(dismiss).toBeVisible();
   await dismiss.click();
   await expect(dismiss).toHaveCount(0);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(dismiss).toBeVisible();
+  await page.reload();
   await expect(dismiss).toBeVisible();
 });

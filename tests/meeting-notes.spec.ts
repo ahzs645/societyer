@@ -15,7 +15,7 @@ test.use({
   launchOptions: { ...(chromiumLaunchOptions() ?? {}), args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
 });
 
-/** The notes bar's "Which notes" select: Team notes, My notes, shared notes, AI notes (and Action items on phones). */
+/** The notes bar's "Which notes" select: Team notes, My notes, shared notes, AI notes and Action items. */
 const whichNotes = (page: Page) => page.getByRole("button", { name: "Which notes" });
 async function showNotes(page: Page, name: string | RegExp) {
   await whichNotes(page).click();
@@ -38,6 +38,108 @@ async function seed(page: Page) {
     await client.mutation("peopleDirectory:upsert", { societyId, fullName: "Sam Rivera", nowISO });
     await client.mutation("committees:create", { societyId, name: "Finance Committee", description: "Synthetic", cadence: "Monthly", color: "blue" });
     return { societyId };
+  });
+}
+
+for (const surface of [
+  { name: "desktop", viewport: { width: 1440, height: 900 }, phone: false },
+  { name: "compact desktop", viewport: { width: 1024, height: 768 }, phone: false },
+  { name: "phone", viewport: { width: 390, height: 844 }, phone: true },
+]) {
+  test.describe(`meeting task links on ${surface.name}`, () => {
+    test.use({ viewport: surface.viewport, isMobile: surface.phone, hasTouch: surface.phone });
+
+    test("restores the same task through Back and Forward from notes and minutes", async ({ page }) => {
+      const { societyId } = await seed(page);
+      const meetings = await page.evaluate(async (id) => {
+        const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+        const scheduledAt = "2026-11-12T17:00:00.000Z";
+        const draftMeeting = { societyId: id, scheduledAt, electronic: true, status: "Held", attendeeIds: [] };
+        const notesId = await client.mutation("meetings:create", {
+          ...draftMeeting, type: "Working", title: "Funder call", recordKind: "notes",
+        });
+        await client.mutation("meetings:saveNotesDraft", {
+          id: notesId, template: "external_call", generatedBy: "Test", usedNotes: true, usedTranscript: true,
+          draft: { summary: "Follow-up agreed.", actionItems: [{ text: "Send the funder the report", atSec: 30 }] },
+        });
+
+        const formalId = await client.mutation("meetings:create", {
+          ...draftMeeting, type: "Board", title: "Board review", recordKind: "minutes",
+        });
+        const minutes = await client.query("minutes:getByMeeting", { meetingId: formalId });
+        const formalActions = [{ text: "Circulate the approved budget", done: false, status: "open", transcriptRef: { startSec: 30, endSec: 45 } }];
+        if (minutes) {
+          await client.mutation("minutes:update", {
+            id: minutes._id, patch: { discussion: "Budget follow-up agreed.", actionItems: formalActions },
+          });
+        } else {
+          await client.mutation("minutes:create", {
+            societyId: id, meetingId: formalId, heldAt: scheduledAt, attendees: [], absent: [], quorumMet: false,
+            discussion: "Budget follow-up agreed.", decisions: [], motions: [], actionItems: formalActions,
+          });
+        }
+        for (const meetingId of [notesId, formalId]) {
+          await client.mutation("transcripts:importTimed", {
+            societyId: id, meetingId, provider: "vtt", durationSeconds: 60,
+            segments: [{ speaker: "Sam Rivera", text: "We agreed on the follow-up.", startSec: 30, endSec: 45 }],
+          });
+        }
+        return [
+          { id: notesId, title: "Funder call", action: "Send the funder the report", tab: "notes" },
+          { id: formalId, title: "Board review", action: "Circulate the approved budget", tab: "minutes" },
+        ];
+      }, societyId);
+
+      for (const meeting of meetings) {
+        await test.step(meeting.tab, async () => {
+          const notes = meeting.tab === "notes";
+          await page.goto(`/app/meetings/${meeting.id}?tab=${meeting.tab}`);
+          if (notes) {
+            await showNotes(page, /Action items/);
+          }
+          const action = notes
+            ? page.getByRole("region", { name: "Action items" }).getByRole("listitem").filter({ has: page.getByRole("checkbox", { name: `Mark done: ${meeting.action}` }) })
+            : page.getByTestId("action-item").filter({ hasText: meeting.action });
+          if (notes) await expect(action.getByRole("button", { name: "Details" })).toHaveAttribute("aria-expanded", "false");
+          await action.getByRole("button", { name: "Create task" }).click();
+          const taskLink = action.getByTitle(`Task: ${meeting.action}`);
+          await expect(taskLink).toHaveAttribute("href", /^\/app\/tasks\?task=.+/);
+          const taskId = new URL((await taskLink.getAttribute("href"))!, page.url()).searchParams.get("task");
+          await taskLink.click();
+
+          const panel = page.getByRole("dialog", { name: "Edit task" });
+          const title = panel.getByRole("textbox", { name: "Title", exact: true });
+          await expect(title).toHaveValue(meeting.action, { timeout: 30_000 });
+          if (notes) {
+            await page.reload();
+            await expect(title).toHaveValue(meeting.action, { timeout: 30_000 });
+          }
+          const source = panel.getByRole("region", { name: "Source of this task" });
+          await expect(source.getByRole("link", { name: "Recording at 0:30" })).toBeVisible();
+          await expect(source.getByRole("link", { name: meeting.title })).toBeInViewport();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(surface.viewport.width);
+
+          await source.getByRole("link", { name: meeting.title }).click();
+          await expect(page).toHaveURL((url) => url.searchParams.get("tab") === meeting.tab && url.searchParams.get("actionTask") === taskId);
+          await expect(action).toBeFocused();
+          await expect(action).toBeInViewport();
+
+          await page.goBack();
+          await expect(title).toHaveValue(meeting.action, { timeout: 30_000 });
+          await page.goForward();
+          await expect(action).toBeFocused();
+          await page.goBack();
+          await source.getByRole("link", { name: "Recording at 0:30" }).click({ timeout: 30_000 });
+          await expect(page).toHaveURL((url) => url.searchParams.get("tab") === "transcript" && url.searchParams.get("t") === "30-45");
+          await expect(page.getByText("We agreed on the follow-up.", { exact: true })).toBeVisible();
+          await page.goBack();
+          await expect(title).toHaveValue(meeting.action, { timeout: 30_000 });
+          await panel.getByRole("button", { name: "Close drawer", exact: true }).click();
+          await expect(panel).toBeHidden();
+          await expect(page).toHaveURL((url) => !url.searchParams.has("task"));
+        });
+      }
+    });
   });
 }
 
@@ -134,7 +236,7 @@ test("working meeting notes: AI notes, action items and a task", async ({ page }
 
   // A working meeting keeps no quorum and stays out of the minute book.
   await page.goto("/app/meetings");
-  await expect(page.getByText("Funder call — Example Foundation")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Funder call — Example Foundation", exact: true })).toBeVisible({ timeout: 30_000 });
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/meetings-page.png` });
   expect(errors).toEqual([]);
 });

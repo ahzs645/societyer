@@ -85,6 +85,7 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controller]);
   const dirty = controller.dirty();
+  const hasSource = Boolean(task && (isHistoricalSourceAction(task) || task.sourceObservations?.length || task.meetingId));
   const close = useDirtyCloseGuard(dirty, () => { controller.discard(); onClose(); }, "task edits");
   const guardedClose = () => { if (!inFlight.current) void close(); };
   const family = useTaskFamily(societyId, task ? String(task._id) : undefined);
@@ -167,11 +168,12 @@ function TaskEditor({ task, societyId, data, canManage, initialValues, presentat
     {task && <TaskStateBanner task={{ ...task, status: form.status, dueDate: form.dueDate }} canManage={canManage && !saving}
       onReopen={() => patch({ status: "Todo" })}
       onRescheduleToday={() => patch({ dueDate: isoDay(startOfToday()) })} />}
-    {task && (isHistoricalSourceAction(task) || task.sourceObservations?.length || task.meetingId) &&
+    {task && hasSource &&
       <HistoricalActionSource task={task} meetingTitle={task.meetingIdLabel}
         onPromote={canManage && !dirty && !saving && isHistoricalSourceAction(task) && onPromote ? async () => { await onPromote(task); controller.discard(); onClose(); } : undefined} />}
     <fieldset disabled={!canManage || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-      <TaskFormFields readOnly={!canManage || saving} value={form} onChange={patch} data={data} mode={task ? "edit" : "create"} />
+      <TaskFormFields readOnly={!canManage || saving} value={form} onChange={patch} data={data} mode={task ? "edit" : "create"}
+        autoFocusTitle={!hasSource} />
       <TaskChecklist draft={form.checklistDraft} onDraftChange={(checklistDraft) => patch({ checklistDraft })} items={form.checklist} onChange={(checklist) => patch({ checklist })} readOnly={!canManage || saving} />
     </fieldset>
     {task && <TaskSubtasksSection societyId={societyId} task={task} family={family} canManage={canManage && !saving} onOpenTask={openOtherTask} />}

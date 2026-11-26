@@ -71,6 +71,8 @@ export function modulePlacement(layout: DashboardLayout, id: DashboardModuleId):
 }
 
 const STORAGE_PREFIX = "societyer.dashboard.layout";
+const LAYOUT_CHANGE_EVENT = "societyer:dashboard-layout-changed";
+const fallbackLayouts = new Map<string, DashboardLayout>();
 
 function storageKey(userId: string | null | undefined, societyId: string | null | undefined) {
   return `${STORAGE_PREFIX}:${userId ?? "anonymous"}:${societyId ?? "none"}`;
@@ -100,6 +102,8 @@ export function normalizeLayout(value: unknown): DashboardLayout {
 }
 
 function readLayout(key: string): DashboardLayout {
+  const fallback = fallbackLayouts.get(key);
+  if (fallback) return fallback;
   try {
     const raw = window.localStorage.getItem(key);
     return normalizeLayout(raw ? JSON.parse(raw) : null);
@@ -112,27 +116,33 @@ function writeLayout(key: string, layout: DashboardLayout | null) {
   try {
     if (layout) window.localStorage.setItem(key, JSON.stringify(layout));
     else window.localStorage.removeItem(key);
+    fallbackLayouts.delete(key);
   } catch {
-    // Storage unavailable: the change still applies for this visit.
+    fallbackLayouts.set(key, layout ?? normalizeLayout(null));
   }
+  window.dispatchEvent(new CustomEvent(LAYOUT_CHANGE_EVENT, { detail: key }));
 }
 
 export function useDashboardLayout(userId: string | null | undefined, societyId: string | null | undefined) {
   const key = storageKey(userId, societyId);
-  const [layout, setLayoutState] = useState<DashboardLayout>(() => readLayout(key));
+  const [snapshot, setSnapshot] = useState(() => ({ key, layout: readLayout(key) }));
+  const layout = snapshot.key === key ? snapshot.layout : readLayout(key);
 
-  // Switching user or workspace loads that pair's layout.
   useEffect(() => {
-    setLayoutState(readLayout(key));
+    const sync = () => setSnapshot({ key, layout: readLayout(key) });
+    const onChange = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === key) sync();
+    };
+    sync();
+    window.addEventListener(LAYOUT_CHANGE_EVENT, onChange);
+    return () => window.removeEventListener(LAYOUT_CHANGE_EVENT, onChange);
   }, [key]);
 
+  // Undo may run after navigation or a workspace switch. Update the original
+  // layout on disk, then let its current reader refresh if it is on screen.
   const setLayout = useCallback(
     (update: (current: DashboardLayout) => DashboardLayout) => {
-      setLayoutState((current) => {
-        const next = normalizeLayout(update(current));
-        writeLayout(key, next);
-        return next;
-      });
+      writeLayout(key, normalizeLayout(update(readLayout(key))));
     },
     [key],
   );
@@ -146,10 +156,7 @@ export function useDashboardLayout(userId: string | null | undefined, societyId:
     [setLayout],
   );
 
-  const reset = useCallback(() => {
-    writeLayout(key, null);
-    setLayoutState(normalizeLayout(null));
-  }, [key]);
+  const reset = useCallback(() => writeLayout(key, null), [key]);
 
   const replace = useCallback((next: DashboardLayout) => setLayout(() => next), [setLayout]);
 

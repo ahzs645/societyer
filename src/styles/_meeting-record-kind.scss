@@ -435,6 +435,10 @@
   padding: token("s-2") 0;
   border-bottom: 1px solid token("border");
   min-width: 0;
+  &:focus {
+    outline: 2px solid token("accent");
+    outline-offset: 2px;
+  }
   &:last-child {
     border-bottom: 0;
   }

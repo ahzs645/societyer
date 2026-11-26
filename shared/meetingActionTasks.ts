@@ -3,6 +3,7 @@
  * action"). Pure module.
  */
 import { actionItemStatus, type ActionItemStatus } from "./actionItemStatus";
+import { validateTranscriptRef, type TranscriptRef } from "./transcriptModel";
 
 /** The task board status for an action's status. */
 export function taskStatusForActionStatus(status: ActionItemStatus): string {
@@ -26,6 +27,7 @@ export type ActionItemLike = {
   status?: string;
   sourceStatus?: string;
   taskId?: string;
+  transcriptRef?: TranscriptRef;
 };
 
 /** Task fields for "Create task from action". */
@@ -38,6 +40,14 @@ export function taskDraftFromActionItem(item: ActionItemLike, context: { meeting
     context.meetingTitle ? `From the minutes of ${context.meetingTitle}${context.sectionTitle ? ` — ${context.sectionTitle}` : ""}.` : "",
     item.sourceStatus ? `Status as written in the source: ${item.sourceStatus}.` : "",
   ].filter(Boolean).join("\n\n");
+  let transcriptRef: TranscriptRef | undefined;
+  if (item.transcriptRef) {
+    try {
+      transcriptRef = validateTranscriptRef(item.transcriptRef.startSec, item.transcriptRef.endSec);
+    } catch {
+      // Older minutes can contain a timestamp that tasks cannot store.
+    }
+  }
   return {
     title: shortTitle || "Action item",
     description: description || undefined,
@@ -47,5 +57,6 @@ export function taskDraftFromActionItem(item: ActionItemLike, context: { meeting
     assigneePersonId: item.assigneePersonId || undefined,
     sourceAssignee: item.assignee?.trim() || undefined,
     dueDate: /^\d{4}-\d{2}-\d{2}$/.test(String(item.dueDate ?? "")) ? item.dueDate : undefined,
+    ...(transcriptRef ? { transcriptRef } : {}),
   };
 }
